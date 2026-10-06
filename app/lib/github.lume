@@ -1,0 +1,305 @@
+// lib/github.lume — pure analysis helpers over a GitHub repo snapshot.
+//
+// All functions are stateless: the snapshot (`snap`) and repo list are passed
+// in explicitly by the entry module, because Lume module exports do NOT
+// propagate mutations made inside an imported function back to the importer.
+//
+// `snap` is the parsed data/github/snapshot.json:
+//   { fetched_at, owner, profile, count, non_fork_count,
+//     repos: [ { name, full_name, language, stargazers_count,
+//                forks_count, open_issues_count, fork, archived,
+//                created_at, updated_at, pushed_at, html_url,
+//                description, license: {spdx_id}|null, topics, size,
+//                // pre-computed by scripts/fetch-github.sh:
+//                created_year, updated_year, age_days,
+//                days_since_push, days_since_updated,
+//                recency,           // active|recent|dormant|stale|unknown
+//                _is_fork } ] }
+
+// ------------------------------------------------ repo view
+export func repo_view(r) {
+  let lic = get(r, "license", null);
+  let lic_id = "None";
+  if (lic != null) {
+    let v = str(get(lic, "spdx_id", null));
+    if (v == "NOASSERTION" or v == "null" or v == "") { lic_id = "Custom"; }
+    else { lic_id = v; }
+  }
+  // `desc` and `topics` are pre-trimmed in the fetch script so views stay
+  // lean under the framework's 65536-byte HTTP response cap.
+  let lang = str(get(r, "language", null));
+  if (lang == "null") { lang = ""; }
+  return {
+    name: str(get(r, "name", "")),
+    full_name: str(get(r, "full_name", "")),
+    lang: lang,
+    stars: int(get(r, "stargazers_count", 0)),
+    forks: int(get(r, "forks_count", 0)),
+    issues: int(get(r, "open_issues_count", 0)),
+    is_fork: bool(get(r, "fork", false)),
+    archived: bool(get(r, "archived", false)),
+    license: lic_id,
+    desc: str(get(r, "description", "")),
+    url: str(get(r, "html_url", "")),
+    topics: get(r, "topics", []),
+    created: str(get(r, "created_at", "")),
+    updated: str(get(r, "updated_at", "")),
+    pushed: str(get(r, "pushed_at", "")),
+    created_year: int(get(r, "created_year", 0)),
+    days_since_push: int(get(r, "days_since_push", -1)),
+    days_since_updated: int(get(r, "days_since_updated", -1)),
+    recency: str(get(r, "recency", "unknown")),
+    push_month: str(get(r, "push_month", "")),
+    size: int(get(r, "size", 0)),
+  };
+}
+
+// ------------------------------------------------ histograms
+export func lang_histogram(list) {
+  let acc = {};
+  for (let r in list) {
+    let l = str(get(r, "language", null));
+    if (l == "" or l == "null") { l = "None"; }
+    let n = int(get(acc, l, 0));
+    put(acc, l, n + 1);
+  }
+  return acc;
+}
+
+export func recency_histogram(list) {
+  let acc = {};
+  for (let r in list) {
+    let k = str(get(r, "recency", "unknown"));
+    let n = int(get(acc, k, 0));
+    put(acc, k, n + 1);
+  }
+  return acc;
+}
+
+// creation-year histogram → { "2024": 18, ... }
+export func year_histogram(list) {
+  let acc = {};
+  for (let r in list) {
+    let y = int(get(r, "created_year", 0));
+    if (y <= 0) { continue; }
+    let s = str(y);
+    let n = int(get(acc, s, 0));
+    put(acc, s, n + 1);
+  }
+  return acc;
+}
+
+// push-month histogram → { "2026-09": 5, ... } — which month each repo was
+// last pushed. Drives the recruiter-facing "recent activity" trend.
+export func push_month_histogram(list) {
+  let acc = {};
+  for (let r in list) {
+    let m = str(get(r, "push_month", ""));
+    if (m == "") { continue; }
+    let n = int(get(acc, m, 0));
+    put(acc, m, n + 1);
+  }
+  return acc;
+}
+
+// ------------------------------------------------ totals
+export func total_stars(list) {
+  return reduce((a, r) => a + int(get(r, "stargazers_count", 0)), list, 0);
+}
+
+export func total_forks(list) {
+  return reduce((a, r) => a + int(get(r, "forks_count", 0)), list, 0);
+}
+
+export func total_issues(list) {
+  return reduce((a, r) => a + int(get(r, "open_issues_count", 0)), list, 0);
+}
+
+export func count_archived(list) {
+  return filter((r) => bool(get(r, "archived", false)), list);
+}
+
+export func count_forks(list) {
+  return filter((r) => bool(get(r, "fork", false)), list);
+}
+
+// ------------------------------------------------ talent-signal counters
+// Counts the Lume server can compute reliably (no string ops needed).
+export func count_with_desc(list) {
+  return filter((r) => len(str(get(r, "desc", ""))) > 0, list);
+}
+
+// "Has a license" = license field present and not the "None" placeholder.
+export func count_with_license(list) {
+  return filter((r) => str(get(r, "license", "")) != "None" and len(str(get(r, "license", ""))) > 0, list);
+}
+
+// "Has topics" = topics list is non-empty.
+export func count_with_topics(list) {
+  return filter((r) => len(get(r, "topics", [])) > 0, list);
+}
+
+// Mean days_since_push across repos that have a known push date (>= 0).
+// Returns 0 when no repo has a usable push date.
+export func avg_days_since_push(list) {
+  let known = filter((r) => int(get(r, "days_since_push", -1)) >= 0, list);
+  let n = len(known);
+  if (n == 0) { return 0; }
+  let total = reduce((a, r) => a + int(get(r, "days_since_push", 0)), known, 0);
+  return total / n;
+}
+
+// ------------------------------------------------ sort + slice
+// sort a list of maps by a numeric field, descending.
+// Lume has no in-place list index assignment (`put` is map-only),
+// so each pass builds a NEW list with `push` only. O(n²) — fine for
+// portfolios of a few hundred repos.
+export func sort_desc(list, key) {
+  let out = [];
+  for (let r in list) {
+    let val = int(get(r, key, 0));
+    let placed = false;
+    let newout = [];
+    for (let x in out) {
+      if (not placed and val >= int(get(x, key, 0))) {
+        push(newout, r);
+        placed = true;
+      }
+      push(newout, x);
+    }
+    if (not placed) {
+      push(newout, r);
+    }
+    out = newout;
+  }
+  return out;
+}
+
+// first k elements
+export func first_n(list, k) {
+  let out = [];
+  for (let i = 0; i < k; i = i + 1) {
+    let r = get(list, i, null);
+    if (r != null) { push(out, r); }
+  }
+  return out;
+}
+
+// list slice: elements [start, start+count). O(count), list index via get().
+// The HTTP framework caps a response body at 65536 bytes, so callers page the
+// full repo list instead of shipping it in one shot.
+export func slice(list, start, count) {
+  let out = [];
+  for (let i = 0; i < count; i = i + 1) {
+    let r = get(list, start + i, null);
+    if (r == null) { break; }
+    push(out, r);
+  }
+  return out;
+}
+
+// ------------------------------------------------ master bundle
+export func analyze(repos, snap) {
+  let all = map(repo_view, repos);
+  let originals = filter((r) => not bool(get(r, "fork", false)), repos);
+
+  // 10 per list — enough for the dashboard, keeps analyze_lite comfortably
+  // under the HTTP response cap. Sort the VIEWS once (repo_view already ran)
+  // so each repo is projected exactly once.
+  let top_by_stars = first_n(sort_desc(all, "stars"), 10);
+  let top_by_activity = first_n(sort_desc(all, "created_year"), 10);
+
+  return {
+    owner: str(get(snap, "owner", "unknown")),
+    fetched_at: str(get(snap, "fetched_at", "")),
+    profile: get(snap, "profile", {}),
+    count: len(repos),
+    non_fork_count: len(originals),
+    totals: {
+      stars: total_stars(repos),
+      forks: total_forks(repos),
+      issues: total_issues(repos),
+      archived: len(count_archived(repos)),
+      forked: len(count_forks(repos)),
+    },
+    languages: lang_histogram(repos),
+    recency: recency_histogram(repos),
+    years: year_histogram(repos),
+    top_by_stars: top_by_stars,
+    top_by_activity: top_by_activity,
+    all: all,
+    talent: {
+      with_desc: len(count_with_desc(all)),
+      with_license: len(count_with_license(all)),
+      with_topics: len(count_with_topics(all)),
+      avg_days_since_push: avg_days_since_push(all),
+    },
+    push_trend: push_month_histogram(all),
+  };
+}
+
+// Compact bundle WITHOUT the full `all` array — safe under the 65536-byte
+// HTTP response cap. The full list is paged via /api/repos?offset=&limit=.
+export func analyze_lite(repos, snap) {
+  let a = analyze(repos, snap);
+  return {
+    owner: a.owner,
+    fetched_at: a.fetched_at,
+    profile: a.profile,
+    count: a.count,
+    non_fork_count: a.non_fork_count,
+    totals: a.totals,
+    languages: a.languages,
+    recency: a.recency,
+    years: a.years,
+    top_by_stars: a.top_by_stars,
+    top_by_activity: a.top_by_activity,
+    talent: a.talent,
+    push_trend: a.push_trend,
+  };
+}
+
+// ------------------------------------------------ agent-tool insight
+export func insight(repos, snap) {
+  let a = analyze(repos, snap);
+  let langs = a.languages;
+  let top_lang = "";
+  let top_n = 0;
+  let top2_n = 0;
+  for (let k in langs) {
+    let n = int(get(langs, k, 0));
+    if (n > top_n) { top_n = n; top_lang = str(k); }
+    else if (n > top2_n) { top2_n = n; }
+  }
+  let top = get(a.top_by_stars, 0, {});
+  let n_total = int(a.count);
+  if (n_total <= 0) { n_total = 1; }
+  let active90 = int(get(a.recency, "active", 0));
+  let t = get(a, "talent", {});
+  return {
+    owner: a.owner,
+    fetched_at: a.fetched_at,
+    summary: {
+      total_repos: a.count,
+      non_fork: a.non_fork_count,
+      top_language: top_lang,
+      top_language_count: top_n,
+      most_starred: str(get(top, "name", "")),
+      most_starred_stars: int(get(top, "stars", 0)),
+      active_within_90d: active90,
+      total_stars: int(get(a.totals, "stars", 0)),
+      total_forks: int(get(a.totals, "forks", 0)),
+      // recruiting-facing talent signals (same pipeline as the dashboard):
+      active_ratio: active90 / n_total,
+      with_desc_ratio: int(get(t, "with_desc", 0)) / n_total,
+      with_license_ratio: int(get(t, "with_license", 0)) / n_total,
+      with_topics_ratio: int(get(t, "with_topics", 0)) / n_total,
+      avg_days_since_push: int(get(t, "avg_days_since_push", -1)),
+      top2_language_share: (top_n + top2_n) / n_total,
+      followers: int(get(get(snap, "profile", {}), "followers", 0)),
+    },
+    languages: langs,
+    recency: a.recency,
+    top_repos: a.top_by_stars,
+  };
+}

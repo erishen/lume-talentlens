@@ -1,0 +1,17 @@
+# node (frontend/node_modules is a symlink into ../research/lume/frontend —
+# match both the link and any real directory)
+frontend/node_modules
+www/github/app.js
+
+# runtime logs
+.lume-*.log
+.lume-github.log
+logs/
+
+# generated snapshot (regenerate via `make fetch`)
+data/github/
+
+# local dev
+.env
+*.swp
+.DS_Store

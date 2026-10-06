@@ -1,0 +1,102 @@
+// lib/ui.lume — server-side page components for the github analysis app.
+//
+// Pure components: el()/html() builtins only, no server state — the analogue
+// of a frontend React component library. Untyped (loose) on purpose: a vnode
+// tree is a dynamic structure and render()/html() know how to walk it.
+//
+// The entry module imports this as `ui` and calls ui.page(...) as the outer
+// shell for every SSR route. The matching React client is the one mounted
+// under <body data-page='...'> by /invest/app.js (the shared chat bundle the
+// framework already ships) or the app's own dashboard bundle.
+
+// ------------------------------------------------ shared shell
+// {0} title, {1} page_id, {2} nav, {3} main body slots, {4} footer note
+export func page(title, page_id, body) {
+  return html("<!doctype html><html><head>"
+    + "<meta charset='utf-8'>"
+    + "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+    + "<title>{0} · lume-talentlens</title>"
+    + "<link rel='stylesheet' href='/app.css'>"
+    + "</head>"
+    + "<body data-page='{1}'>"
+    + "{2}"
+    + "<main id='top'>{3}</main>"
+    + "<footer>{4}</footer>"
+    + "</body></html>",
+    title, page_id, nav(page_id), body,
+    " — server-rendered view of a candidate's GitHub talent signals");
+}
+
+export func cls(active: string, name: string): string {
+  let c: string = "nav";
+  if (active == name) { c = c + " active"; }
+  return c;
+}
+
+export func nav(active) {
+  // Keep labels + hrefs in sync with the React shells (www/github/*.html):
+  // "/" is the React dashboard, the SSR pages live on /overview, /repos, /api.
+  return el("nav", { class: "gh-nav" },
+    el("a", { class: "brand", href: "/" }, "lume-talentlens"),
+    el("a", { href: "/" }, "Dashboard"),
+    el("a", { class: cls(active, "home"), href: "/overview" }, "SSR Overview"),
+    el("a", { class: cls(active, "repos"), href: "/repos" }, "SSR Repos"),
+    el("a", { class: cls(active, "api"), href: "/api" }, "API"),
+    el("a", { class: cls(active, "chat"), href: "/chat" }, "Agent"));
+}
+
+export func card(icon, title, body, color) {
+  return el("div", { class: "card" },
+    el("span", { class: "dot", style: "background:" + color }),
+    el("h3", {}, icon + " " + title),
+    el("p", {}, body));
+}
+
+// a simple "KPI" tile: big number + label
+export func kpi(value, label) {
+  return el("div", { class: "kpi" },
+    el("div", { class: "kpi-num" }, value),
+    el("div", { class: "kpi-label" }, label));
+}
+
+// a horizontal bar row for a histogram entry: label, value, relative width
+export func bar(label, value, max) {
+  let pct = 0;
+  if (max > 0) { pct = value * 100 / max; }
+  return el("div", { class: "bar-row" },
+    el("span", { class: "bar-label" }, label),
+    el("div", { class: "bar-track" },
+      el("div", { class: "bar-fill", style: "width:" + str(pct) + "%" })),
+    el("span", { class: "bar-val" }, str(value)));
+}
+
+// build a list of bar rows from a { key: n } histogram
+export func bars(hist) {
+  let out = [];
+  let m = 0;
+  for (let k in hist) {
+    let n = int(get(hist, k, 0));
+    if (n > m) { m = n; }
+  }
+  for (let k in hist) {
+    push(out, bar(str(k), int(get(hist, k, 0)), m));
+  }
+  return out;
+}
+
+// a repo row for a "top" list
+export func repo_row(r, rank) {
+  let lang = str(get(r, "lang", null));
+  let lang_html = "—";
+  if (lang == "null" or lang == "") { lang_html = "no language"; }
+  else { lang_html = lang; }
+  return el("li", { class: "repo-row" },
+    el("span", { class: "rank" }, str(rank)),
+    el("a", { class: "repo-name", href: str(get(r, "url", "")), target: "_blank", rel: "noopener noreferrer" },
+      str(get(r, "name", ""))),
+    el("span", { class: "chip" }, lang_html),
+    el("span", { class: "chip" }, "★ " + str(int(get(r, "stars", 0)))),
+    el("span", { class: "chip" }, "⑂ " + str(int(get(r, "forks", 0)))),
+    el("span", { class: "chip recency-" + str(get(r, "recency", "unknown")) },
+      str(get(r, "recency", "unknown"))));
+}

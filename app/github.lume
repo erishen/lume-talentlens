@@ -1,0 +1,668 @@
+// ============================================================================
+// github.lume — recruit-facing talent signals from a GitHub owner, on Lume.
+//
+// The owner is chosen in the UI (or via ?owner=) and every route/tool
+// resolves that owner's local snapshot under data/github/<owner>/. Snapshots
+// are produced offline by scripts/fetch-github.sh (OWNER=foo make fetch);
+// the server itself never calls the live GitHub API.
+//
+// Run:  make dev   /  make run
+//
+// Routes:
+//   /             — React SPA dashboard (static, views dir)
+//   /overview     — SSR overview (?owner=)
+//   /repos        — SSR full repo list (?owner=)
+//   /api          — SSR API reference
+//   /chat         — React agent chat shell (static)
+//   /api/owners   — JSON: list of locally-cached owners
+//   /api/overview — JSON: aggregates for ?owner= (404 + hint when no snapshot)
+//   /api/repos    — JSON: paged repos for ?owner= (&offset=&limit=)
+//   /api/top /api/langs /api/recency /api/year /api/search
+//   /discovery    — GET: boot-time tool/skill/MCP catalog
+//
+// Agent tools (all accept an optional { owner } param, default = last owner
+// fetched; repo_search also takes { q }):
+//   repo_insights / repo_search / repo_language / repo_recency /
+//   repo_year / repo_stats / github_owners
+//
+// When an owner has no local snapshot, JSON routes answer
+//   { "status": 404, "error": "no_snapshot", "owner": …, "hint": "run: make fetch OWNER=…" }
+// ============================================================================
+
+// port is env-overridable (LUME_GITHUB_PORT) so a dev can shift it if the
+// default 8091 is taken.
+func server_port() {
+  let v = env("LUME_GITHUB_PORT");
+  if (v == null) { return 8091; }
+  let p = int(v, 8091);
+  if (p <= 0) { return 8091; }
+  return p;
+}
+
+server {
+  port = server_port();
+  workers = 2;
+  bind = "127.0.0.1";
+  docroot = "./www";
+  views = "github";
+}
+
+import "lib/github.lume" as gh;
+import "lib/ui.lume" as ui;
+
+// ------------------------------------------------ owner resolution
+// Lume module exports do not propagate mutations into the importer, so every
+// route/tool resolves its owner + snapshot locally and passes them into the
+// pure gh.* helpers.
+
+// read data/github/last_owner (written by scripts/fetch-github.sh); fallback
+// owner when a route/tool carries no ?owner=.
+func default_owner() {
+  let raw = read_file("data/github/last_owner");
+  if (raw == null) { return "erishen"; }
+  let s = replace(raw, "\n", "");
+  s = replace(s, " ", "");
+  if (s == "") { return "erishen"; }
+  return s;
+}
+
+// A safe owner is a single path component (GitHub logins): <= 39 chars, and
+// must not contain any of . / % space # ? — these keep snapshot lookups from
+// ever escaping data/github/<owner>/.
+func sanitize_owner(s) {
+  if (s == null) { return ""; }
+  s = str(s);
+  if (s == "") { return ""; }
+  if (len(s) > 39) { return ""; }
+  if (contains(s, ".") or contains(s, "/") or contains(s, "%")
+      or contains(s, " ") or contains(s, "#") or contains(s, "?")
+      or contains(s, "\n")) {
+    return "";
+  }
+  return s;
+}
+
+// owner from ?owner= (req-based); empty string when the param is absent.
+// (Lume `.` member access requires the field to exist; use get() with a
+// default so a missing owner param yields "".)
+func owner_param(req) {
+  let qp = get(req, "query_params", {});
+  return sanitize_owner(get(qp, "owner", ""));
+}
+
+// owner from a tool argument map; empty string when the arg is absent.
+func owner_arg(arg) {
+  return sanitize_owner(get(arg, "owner", ""));
+}
+
+// snapshot for one owner, or null when that owner has not been fetched yet.
+func load_snap(owner) {
+  let raw = read_file("data/github/" + owner + "/snapshot.json");
+  if (raw == null) { return null; }
+  let s = json(raw);
+  if (s == null) { return null; }
+  return s;
+}
+
+// shared no-snapshot JSON error shape (JSON routes)
+func no_snapshot(owner) {
+  return {
+    status: 404,
+    error: "no_snapshot",
+    owner: owner,
+    hint: "run: OWNER=" + owner + " make fetch   (or make fetch OWNER=" + owner + ")",
+  };
+}
+
+func bundle(repos, snap) {
+  return gh.analyze(repos, snap);
+}
+
+// ------------------------------------------------ local string helpers
+// Lume has no lower/contains builtins; implement them over `replace`.
+func lower(x) {
+  x = replace(x, "A", "a"); x = replace(x, "B", "b"); x = replace(x, "C", "c");
+  x = replace(x, "D", "d"); x = replace(x, "E", "e"); x = replace(x, "F", "f");
+  x = replace(x, "G", "g"); x = replace(x, "H", "h"); x = replace(x, "I", "i");
+  x = replace(x, "J", "j"); x = replace(x, "K", "k"); x = replace(x, "L", "l");
+  x = replace(x, "M", "m"); x = replace(x, "N", "n"); x = replace(x, "O", "o");
+  x = replace(x, "P", "p"); x = replace(x, "Q", "q"); x = replace(x, "R", "r");
+  x = replace(x, "S", "s"); x = replace(x, "T", "t"); x = replace(x, "U", "u");
+  x = replace(x, "V", "v"); x = replace(x, "W", "w"); x = replace(x, "X", "x");
+  x = replace(x, "Y", "y"); x = replace(x, "Z", "z");
+  return x;
+}
+func contains(s, needle) {
+  if (needle == "") { return true; }
+  return len(replace(s, needle, "")) < len(s);
+}
+func join_topics(topics) {
+  return reduce((acc, t) => acc + str(t) + " ", topics, "");
+}
+func haystack(v) {
+  return lower(str(get(v, "name", "")) + " "
+    + str(get(v, "desc", "")) + " "
+    + str(get(v, "lang", "")) + " "
+    + join_topics(get(v, "topics", [])));
+}
+
+// ------------------------------------------------ JSON APIs
+// NOTE: the HTTP framework caps a single response body, so the "overview"
+// endpoint ships aggregates only (no full list). The full list is paged via
+// /api/repos?owner=&offset=&limit=.
+
+// locally-cached owners = sub-directories of data/github (files() marks dirs
+// with a trailing "/"; a bare "last_owner" file has no slash).
+func cached_owners() {
+  let entries = files("data/github");
+  let out = [];
+  for (let e in entries) {
+    let s = str(e);
+    let stripped = replace(s, "/", "");
+    if (s != stripped and stripped != "") {
+      push(out, stripped);
+    }
+  }
+  return out;
+}
+
+get "/api/owners", (req) => {
+  return {
+    owners: cached_owners(),
+    current: default_owner(),
+  };
+};
+
+get "/api/overview", (req) => {
+  let owner = owner_param(req);
+  if (owner == "") { owner = default_owner(); }
+  let snap = load_snap(owner);
+  if (snap == null) { return no_snapshot(owner); }
+  let repos = get(snap, "repos", []);
+  return gh.analyze_lite(repos, snap);
+};
+
+get "/api/repos", (req) => {
+  let qp = get(req, "query_params", {});
+  let owner = sanitize_owner(get(qp, "owner", ""));
+  if (owner == "") { owner = default_owner(); }
+  let snap = load_snap(owner);
+  if (snap == null) { return no_snapshot(owner); }
+  let repos = get(snap, "repos", []);
+  let offset = int(get(qp, "offset", 0), 0);
+  let limit = int(get(qp, "limit", 25), 25);
+  if (offset < 0) { offset = 0; }
+  if (limit <= 0) { limit = 25; }
+  // clamp to 50: at 50/page the response is ~30KB, safely under the 65536-byte
+  // response cap (100/page hit ~54KB and would silently truncate larger owners).
+  if (limit > 50) { limit = 50; }
+  let page_src = gh.slice(repos, offset, limit);
+  let page = map(gh.repo_view, page_src);
+  return {
+    owner: owner,
+    offset: offset,
+    limit: limit,
+    total: len(repos),
+    count: len(page),
+    repos: page,
+  };
+};
+
+get "/api/top", (req) => {
+  let owner = owner_param(req);
+  if (owner == "") { owner = default_owner(); }
+  let snap = load_snap(owner);
+  if (snap == null) { return no_snapshot(owner); }
+  let a = gh.analyze_lite(get(snap, "repos", []), snap);
+  return { owner: owner, top_by_stars: a.top_by_stars, top_by_activity: a.top_by_activity };
+};
+
+get "/api/langs", (req) => {
+  let owner = owner_param(req);
+  if (owner == "") { owner = default_owner(); }
+  let snap = load_snap(owner);
+  if (snap == null) { return no_snapshot(owner); }
+  return gh.lang_histogram(get(snap, "repos", []));
+};
+
+get "/api/recency", (req) => {
+  let owner = owner_param(req);
+  if (owner == "") { owner = default_owner(); }
+  let snap = load_snap(owner);
+  if (snap == null) { return no_snapshot(owner); }
+  return gh.recency_histogram(get(snap, "repos", []));
+};
+
+get "/api/year", (req) => {
+  let owner = owner_param(req);
+  if (owner == "") { owner = default_owner(); }
+  let snap = load_snap(owner);
+  if (snap == null) { return no_snapshot(owner); }
+  return gh.year_histogram(get(snap, "repos", []));
+};
+
+// people.json for one owner, or null when absent (pre-people snapshots).
+func load_people(owner) {
+  let raw = read_file("data/github/" + owner + "/people.json");
+  if (raw == null) { return null; }
+  let s = json(raw);
+  if (s == null) { return null; }
+  return s;
+}
+
+get "/api/people", (req) => {
+  let owner = owner_param(req);
+  if (owner == "") { owner = default_owner(); }
+  let snap = load_snap(owner);
+  if (snap == null) { return no_snapshot(owner); }
+  let people = load_people(owner);
+  let people_missing = (people == null);
+  if (people == null) { people = {}; }
+  let followers = get(people, "followers", []);
+  let following = get(people, "following", []);
+  let totals = get(people, "totals", {});
+  // fall back to the profile counts when people.json predates the capture
+  let prof = get(snap, "profile", {});
+  if (get(totals, "followers", null) == null) {
+    put(totals, "followers", int(get(prof, "followers", 0), 0));
+  }
+  if (get(totals, "following", null) == null) {
+    put(totals, "following", int(get(prof, "following", 0), 0));
+  }
+  let note = str(get(people, "note", ""));
+  if (people_missing) {
+    note = "run OWNER=" + owner + " make fetch to capture the full people lists";
+  }
+  return {
+    owner: owner,
+    followers: followers,
+    following: following,
+    totals: totals,
+    note: note,
+  };
+};
+
+get "/api/search", (req) => {
+  let qp = get(req, "query_params", {});
+  let owner = sanitize_owner(get(qp, "owner", ""));
+  if (owner == "") { owner = default_owner(); }
+  let snap = load_snap(owner);
+  if (snap == null) { return no_snapshot(owner); }
+  let repos = get(snap, "repos", []);
+  let q = get(qp, "q", "");
+  let out = [];
+  if (q == "") {
+    out = map(gh.repo_view, repos);
+  } else {
+    let needle = lower(q);
+    for (let r in repos) {
+      let v = gh.repo_view(r);
+      if (contains(haystack(v), needle)) {
+        push(out, v);
+      }
+    }
+  }
+  // contract with the client (types.ts SearchResult) + agent tool repo_search:
+  // { owner, q, total, shown } — shown capped so the body stays small.
+  let shown = gh.first_n(out, 10);
+  return { owner: owner, q: q, total: len(out), shown: shown };
+};
+
+// ------------------------------------------------ live GitHub proxy
+// The browser can reach the Lume server (same origin) but often has no route
+// to api.github.com (no CORS / no network egress). This route fetches a
+// user-scoped GitHub path server-side via the built-in http_get() (outbound
+// TLS via libssl) and returns a uniform envelope:
+//   { ok: bool, status: <upstream HTTP or 0>, data: <JSON text>, err: <..> }
+// The caller does JSON.parse(data) on ok. Unauthenticated GitHub allows
+// ~60 req/h per shared server IP; set GH_TOKEN to raise it to 5000/h.
+func live_safe_path(p) {
+  if (p == "" or len(p) > 512) { return false; }
+  // must be a user-scoped sub-path; the fixed "https://api.github.com" prefix
+  // plus these guards mean p can never smuggle another host or scheme.
+  if (not contains(p, "/users/")) { return false; }
+  if (contains(p, ":") or contains(p, "//") or contains(p, " ")) { return false; }
+  return true;
+}
+
+// null-safe stringify for fields that may be null in the raw API payload.
+func s(v) {
+  if (v == null) { return ""; }
+  return str(v);
+}
+
+// Slim a GitHub API body to only the fields the app consumes. Raw 100-repo
+// pages are ~150-250KB of JSON — far past the framework's response-size cap —
+// so the proxy must project before returning, or live fetch breaks for any
+// owner with more than a handful of repos. `str()` re-serializes the
+// projected map/array back to JSON text for the same `data` envelope.
+func slim_body(p, body) {
+  if (body == "" or body == "null") { return body; }
+  let d = json(body);
+  if (d == null) { return body; }
+  if (contains(p, "/repos")) {
+    let out = [];
+    for (let r in d) {
+      push(out, {
+        name: s(get(r, "name", null)),
+        full_name: s(get(r, "full_name", null)),
+        language: s(get(r, "language", null)),
+        stargazers_count: int(get(r, "stargazers_count", 0)),
+        forks_count: int(get(r, "forks_count", 0)),
+        open_issues_count: int(get(r, "open_issues_count", 0)),
+        fork: bool(get(r, "fork", false)),
+        archived: bool(get(r, "archived", false)),
+        description: s(get(r, "description", null)),
+        html_url: s(get(r, "html_url", null)),
+        topics: get(r, "topics", []),
+        created_at: s(get(r, "created_at", null)),
+        updated_at: s(get(r, "updated_at", null)),
+        pushed_at: s(get(r, "pushed_at", null)),
+        size: int(get(r, "size", 0)),
+        license: get(r, "license", null),
+      });
+    }
+    return str(out);
+  }
+  if (contains(p, "/followers") or contains(p, "/following")) {
+    let out = [];
+    for (let u in d) {
+      push(out, {
+        login: s(get(u, "login", null)),
+        name: s(get(u, "name", null)),
+        avatar_url: s(get(u, "avatar_url", null)),
+        url: s(get(u, "html_url", null)),
+        type: s(get(u, "type", null)),
+      });
+    }
+    return str(out);
+  }
+  // profile (or any other user-scoped path): keep only the fields the app
+  // reads; null -> "" so the client's truthiness fallbacks don't show "null".
+  return str({
+    login: s(get(d, "login", null)),
+    name: s(get(d, "name", null)),
+    avatar_url: s(get(d, "avatar_url", null)),
+    bio: s(get(d, "bio", null)),
+    company: s(get(d, "company", null)),
+    location: s(get(d, "location", null)),
+    blog: s(get(d, "blog", null)),
+    twitter_username: s(get(d, "twitter_username", null)),
+    hireable: bool(get(d, "hireable", false)),
+    followers: int(get(d, "followers", 0)),
+    following: int(get(d, "following", 0)),
+    public_repos: int(get(d, "public_repos", 0)),
+    public_gists: int(get(d, "public_gists", 0)),
+    created_at: s(get(d, "created_at", null)),
+    html_url: s(get(d, "html_url", null)),
+  });
+}
+
+get "/api/live/github", (req) => {
+  let qp = get(req, "query_params", {});
+  let p = str(get(qp, "path", ""));
+  if (not live_safe_path(p)) {
+    return { ok: false, status: 400, data: "", err: "blocked GitHub path" };
+  }
+  let headers = { "Accept": "application/vnd.github+json", "User-Agent": "lume-talentlens" };
+  let tok = env("GH_TOKEN");
+  if (tok != null and tok != "") { put(headers, "Authorization", "Bearer " + str(tok)); }
+  let url = "https://api.github.com" + p;
+  let r = http_get(url, { headers: headers, timeout: 30, max_bytes: 4194304 });
+  let up = int(get(r, "status", 0), 0);
+  let body = str(get(r, "body", ""));
+  let herr = str(get(r, "err", ""));
+  let ok = (up >= 200 and up < 300) and (herr == "");
+  // project big payloads down before returning (see slim_body)
+  if (ok and body != "") { body = slim_body(p, body); }
+  return { ok: ok, status: up, data: body, err: herr };
+};
+
+// ------------------------------------------------ SSR pages
+// "/" is owned by the React SPA (static, views dir). SSR pages use distinct
+// paths and accept ?owner=; unknown/invalid owners fall back to the default.
+
+func ssr_owner(req) {
+  let o = owner_param(req);
+  if (o == "") { return default_owner(); }
+  return o;
+}
+
+func ssr_block(owner) {
+  // owner page with a hint card when its snapshot is missing
+  return el("section", { class: "panel error" },
+    el("h2", {}, "No local snapshot for " + owner),
+    el("p", {}, "Fetch it first, then retry this page: "),
+    el("code", {}, "OWNER=" + owner + " make fetch"),
+    el("p", {}, "Locally cached owners: "
+      + str(reduce((acc, e) => acc + str(e) + " ", files("data/github"), ""))));
+}
+
+get "/overview", (req) => {
+  let owner = ssr_owner(req);
+  let snap = load_snap(owner);
+  if (snap == null) {
+    return ui.page("Overview · " + owner, "home", [ssr_block(owner)]);
+  }
+  let a = bundle(get(snap, "repos", []), snap);
+  let tot = a.totals;
+  let body = [
+    el("section", { class: "hero" },
+            el("h1", {}, str(get(a.profile, "name", "")) + "'s GitHub talent profile (" + owner + ")"),
+      el("p", {}, "Server-rendered by Lume from a local snapshot of "
+        + str(a.count) + " public repos · fetched " + a.fetched_at
+        + ". Interact with the JSON APIs or ask the agent via /chat.")),
+
+    el("section", { class: "kpis" },
+      ui.kpi(str(a.count), "repos"),
+      ui.kpi(str(a.non_fork_count), "original (non-fork)"),
+      ui.kpi(str(int(get(tot, "stars", 0))), "stars total"),
+      ui.kpi(str(int(get(tot, "forks", 0))), "forks total")),
+
+    el("section", { class: "grid" },
+      el("div", { class: "panel" },
+        el("h2", {}, "Languages"),
+        el("div", { class: "bars" }, ui.bars(a.languages))),
+      el("div", { class: "panel" },
+        el("h2", {}, "Recency"),
+        el("div", { class: "bars" }, ui.bars(a.recency)))),
+
+    el("section", { class: "panel" },
+      el("h2", {}, "Top 10 by stars"),
+      el("ol", { class: "top-list" }, top_list(a.top_by_stars))),
+
+    el("section", { class: "links" },
+      el("a", { class: "btn", href: "/repos" }, "Browse all →"),
+      el("a", { class: "btn", href: "/api" }, "JSON API →"),
+      el("a", { class: "btn", href: "/chat" }, "Ask the agent →")),
+  ];
+  return ui.page("Overview · " + owner, "home", body);
+};
+
+func top_list(rows) {
+  let out = [];
+  let i = 0;
+  for (let r in rows) {
+    push(out, ui.repo_row(r, i + 1));
+    i = i + 1;
+  }
+  return out;
+}
+
+get "/repos", (req) => {
+  let owner = ssr_owner(req);
+  let snap = load_snap(owner);
+  if (snap == null) {
+    return ui.page("Repos · " + owner, "repos", [ssr_block(owner)]);
+  }
+  let all = map(gh.repo_view, get(snap, "repos", []));
+  let rows = [];
+  let i = 0;
+  for (let r in all) {
+    push(rows, ui.repo_row(r, i + 1));
+    i = i + 1;
+  }
+  let body = [
+    el("section", { class: "hero" },
+      el("h1", {}, "All repos · " + owner + " (" + str(len(all)) + ")"),
+      el("p", {}, "Full data: /api/repos?owner=" + owner
+        + ". Switch owner in the dashboard (React) at /.")),
+    el("ol", { class: "top-list all" }, rows),
+  ];
+  return ui.page("Repos · " + owner, "repos", body);
+};
+
+get "/api", (req) => {
+  let rows = [
+    el("li", {}, el("code", {}, "GET /api/owners"),
+      " — locally-cached owners + the current default"),
+    el("li", {}, el("code", {}, "GET /api/people?owner=x"),
+      " — followers / following for x (first page of each, up to 100)"),
+    el("li", {}, el("code", {}, "GET /api/overview?owner=x"),
+      " — full analysis bundle for x (404 + hint when not fetched)"),
+    el("li", {}, el("code", {}, "GET /api/repos?owner=x&offset=0&limit=25"),
+      " — paged normalized repo views for x"),
+    el("li", {}, el("code", {}, "GET /api/top?owner=x"),
+      " — top-10 by stars and top-10 by creation year"),
+    el("li", {}, el("code", {}, "GET /api/langs?owner=x"),
+      " — language histogram for x ({lang: n})"),
+    el("li", {}, el("code", {}, "GET /api/recency?owner=x"),
+      " — recency histogram for x (active/recent/dormant/stale/unknown)"),
+    el("li", {}, el("code", {}, "GET /api/year?owner=x"),
+      " — creation-year histogram for x"),
+    el("li", {}, el("code", {}, "GET /api/search?owner=x&q=rust"),
+      " — filter x's repos by name/desc/topic/language substring"),
+  ];
+  let body = [
+    el("section", { class: "hero" },
+      el("h1", {}, "JSON API"),
+      el("p", {}, "All routes take an optional ?owner= (default: the last "
+        + "owner fetched, via data/github/last_owner). Loopback-only, no auth.")),
+    el("section", { class: "panel" },
+      el("h2", {}, "Endpoints"),
+      el("ul", {}, rows)),
+    el("section", { class: "panel" },
+      el("h2", {}, "Agent tools"),
+      el("ul", {},
+        el("li", {}, "repo_insights / repo_language / repo_recency / repo_year / repo_stats — optional { owner }"),
+        el("li", {}, "repo_search — { owner?, q } substring across name/desc/topics/lang"),
+        el("li", {}, "github_owners — list locally-cached owners")
+      )
+    ),
+    el("section", { class: "panel" },
+      el("h2", {}, "Adding another owner"),
+      el("p", {}, el("code", {}, "OWNER=acme make fetch"),
+        " — snapshots acme's public repos into data/github/acme/.")),
+  ];
+  return ui.page("API", "api", body);
+};
+
+// ------------------------------------------------ agent tools
+// Optional { owner } param on every repo tool: when absent (""), the default
+// owner (last fetched) is used. Tools run on a forked worker — snapshot reads
+// are per-call, so no stale shared state.
+
+func tool_owner(arg) {
+  let o = owner_arg(arg);
+  if (o == "") { return default_owner(); }
+  return o;
+}
+// shared no-snapshot error shape for agent tools
+func tool_no_snapshot(arg) {
+  return { error: "no_snapshot", owner: tool_owner(arg),
+           hint: "run: OWNER=" + tool_owner(arg) + " make fetch" };
+}
+// repo list for a tool arg, or null when that owner has no snapshot. Callers
+// MUST check `== null` and return tool_no_snapshot(arg) in that case.
+func tool_repos(arg) {
+  let snap = load_snap(tool_owner(arg));
+  if (snap == null) { return null; }
+  return get(snap, "repos", []);
+}
+
+tool "repo_insights",
+     "Compact recruiting insight for a GitHub owner: repo/activity totals, top language (incl. top-2 share), most-starred repo, and talent signals (active-within-90d ratio, description/license/topic coverage, avg days since last push, followers). Optional owner.",
+     { owner: string },
+     (arg) => {
+       let repos = tool_repos(arg);
+       if (repos == null) { return tool_no_snapshot(arg); }
+       let snap = load_snap(tool_owner(arg));
+       return gh.insight(repos, snap);
+     };
+
+tool "repo_search",
+     "Case-insensitive substring search across an owner's repo name, description, topics, and language. Params: optional owner, q.",
+     { owner: string, q: string },
+     (arg) => {
+       let repos = tool_repos(arg);
+       if (repos == null) { return tool_no_snapshot(arg); }
+       let q = str(get(arg, "q", ""), "");
+       let needle = lower(q);
+       let out = [];
+       for (let r in repos) {
+         let v = gh.repo_view(r);
+         if (contains(haystack(v), needle)) {
+           push(out, v);
+         }
+       }
+       let capped = gh.first_n(out, 10);
+       return { owner: tool_owner(arg), q: q, total: len(out), shown: capped };
+     };
+
+tool "repo_language",
+     "Language histogram {lang: count} for an owner (optional owner).",
+     { owner: string },
+     (arg) => {
+       let repos = tool_repos(arg);
+       if (repos == null) { return tool_no_snapshot(arg); }
+       return gh.lang_histogram(repos);
+     };
+
+tool "repo_recency",
+     "Recency histogram for an owner: active(≤90d) / recent(≤365d) / dormant(≤2y) / stale(>2y) / unknown.",
+     { owner: string },
+     (arg) => {
+       let repos = tool_repos(arg);
+       if (repos == null) { return tool_no_snapshot(arg); }
+       return gh.recency_histogram(repos);
+     };
+
+tool "repo_year",
+     "Creation-year histogram {year: count} for an owner.",
+     { owner: string },
+     (arg) => {
+       let repos = tool_repos(arg);
+       if (repos == null) { return tool_no_snapshot(arg); }
+       return gh.year_histogram(repos);
+     };
+
+tool "repo_stats",
+     "Global counters for an owner: total stars, forks, open issues, archived, fork counts.",
+     { owner: string },
+     (arg) => {
+       let repos = tool_repos(arg);
+       if (repos == null) { return tool_no_snapshot(arg); }
+       let snap = load_snap(tool_owner(arg));
+       let a = gh.analyze(repos, snap);
+       return a.totals;
+     };
+
+tool "github_owners",
+     "List the GitHub owners whose snapshots are cached locally under data/github/, plus the current default owner.",
+     {},
+     (arg) => {
+       return { owners: cached_owners(), current: default_owner() };
+     };
+
+// ------------------------------------------------ /discovery
+get "/discovery", (req) => {
+  return {
+    endpoints: discovery_endpoints(),
+    skills: skills(),
+    tools: tools(),
+    mcps: mcps(),
+  };
+};
+
+// ------------------------------------------------ run
+run();

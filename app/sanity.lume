@@ -1,0 +1,83 @@
+// sanity.lume — validates the exact Lume constructs the github app relies on.
+// Run:  ../research/lume/bin/lume app/sanity.lume   (from work/lume)
+// and:  ../research/lume/bin/lume --check app/sanity.lume
+
+// 1) read + json + get-with-default. Snapshots live under
+//    data/github/<owner>/ — resolve the same default the app uses
+//    (data/github/last_owner, fallback erishen).
+let raw_owner = read_file("data/github/last_owner");
+if (raw_owner == null) { raw_owner = "erishen"; }
+let owner_name = replace(replace(raw_owner, "\n", ""), " ", "");
+if (owner_name == "") { owner_name = "erishen"; }
+let raw = read_file("data/github/" + owner_name + "/snapshot.json");
+let snap = json(raw);
+let owner = str(get(snap, "owner", "unknown"));
+let repos = get(snap, "repos", []);
+let count = len(repos);
+print("owner=" + owner + " repos=" + str(count));
+
+// 2) language histogram via reduce + put()
+export func lang_histogram(list) {
+  let acc = {};
+  for (let r in list) {
+    let l = str(get(r, "language", null));
+    if (l == "" or l == "null") { l = "None"; }
+    let n = int(get(acc, l, 0));
+    put(acc, l, n + 1);
+  }
+  return acc;
+}
+
+// 3) filter forks + map to a lean view
+func lean_view(r) {
+  return {
+    name: str(get(r, "name", "")),
+    lang: str(get(r, "language", null)),
+    stars: int(get(r, "stargazers_count", 0)),
+    forks: int(get(r, "forks_count", 0)),
+    issues: int(get(r, "open_issues_count", 0)),
+    fork: bool(get(r, "fork", false)),
+    archived: bool(get(r, "archived", false)),
+    updated: str(get(r, "updated_at", "")),
+  };
+}
+let lean = map(lean_view, repos);
+let original = filter((r) => not bool(get(r, "fork", false)), repos);
+print("original(non-fork)=" + str(len(original)));
+
+// 4) total stars + top repo
+let total_stars = reduce((a, r) => a + int(get(r, "stargazers_count", 0)), repos, 0);
+print("total_stars=" + str(total_stars));
+func top_repo(list) {
+  let best = get(list, 0, {});
+  for (let r in list) {
+    if (int(get(r, "stargazers_count", 0)) > int(get(best, "stargazers_count", 0))) {
+      best = r;
+    }
+  }
+  return best;
+}
+let top = top_repo(repos);
+print("top=" + str(get(top, "name", "")));
+
+// 5) SSR el/render
+func page(body) {
+  return html("<!doctype html><html><body><h1>{0}</h1>{1}</body></html>",
+    "Sanity", body);
+}
+get "/sanity", (req) => {
+  let hist = lang_histogram(repos);
+  let rows = [];
+  for (let k in hist) {
+    push(rows, el("li", {}, str(k) + " = " + str(int(get(hist, k, 0)))));
+  }
+  return page(el("ul", {}, rows));
+};
+
+// 6) tool registration
+tool "top_repo", "Return the highest-starred repo", {}, (arg) => {
+  let best = top_repo(repos);
+  return { name: str(get(best, "name", "")), stars: int(get(best, "stargazers_count", 0)) };
+};
+
+print("sanity OK");
