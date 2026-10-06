@@ -118,6 +118,14 @@ func load_snap(owner) {
   return s;
 }
 
+// repos that public views should surface: archived repositories are excluded
+// everywhere (lists, search, histograms, KPIs) — the raw snapshot still keeps
+// them for history, this is purely a display/analysis filter.
+func active_repos(snap) {
+  let all = get(snap, "repos", []);
+  return filter((r) => not bool(get(r, "archived", false)), all);
+}
+
 // shared no-snapshot JSON error shape (JSON routes)
 func no_snapshot(owner) {
   return {
@@ -194,7 +202,7 @@ get "/api/overview", (req) => {
   if (owner == "") { owner = default_owner(); }
   let snap = load_snap(owner);
   if (snap == null) { return no_snapshot(owner); }
-  let repos = get(snap, "repos", []);
+  let repos = active_repos(snap);
   return gh.analyze_lite(repos, snap);
 };
 
@@ -204,7 +212,7 @@ get "/api/repos", (req) => {
   if (owner == "") { owner = default_owner(); }
   let snap = load_snap(owner);
   if (snap == null) { return no_snapshot(owner); }
-  let repos = get(snap, "repos", []);
+  let repos = active_repos(snap);
   let offset = int(get(qp, "offset", 0), 0);
   let limit = int(get(qp, "limit", 25), 25);
   if (offset < 0) { offset = 0; }
@@ -230,7 +238,7 @@ get "/api/top", (req) => {
   if (owner == "") { owner = default_owner(); }
   let snap = load_snap(owner);
   if (snap == null) { return no_snapshot(owner); }
-  let a = gh.analyze_lite(get(snap, "repos", []), snap);
+  let a = gh.analyze_lite(active_repos(snap), snap);
   return { owner: owner, top_by_stars: a.top_by_stars, top_by_activity: a.top_by_activity };
 };
 
@@ -239,7 +247,7 @@ get "/api/langs", (req) => {
   if (owner == "") { owner = default_owner(); }
   let snap = load_snap(owner);
   if (snap == null) { return no_snapshot(owner); }
-  return gh.lang_histogram(get(snap, "repos", []));
+  return gh.lang_histogram(active_repos(snap));
 };
 
 get "/api/recency", (req) => {
@@ -247,7 +255,7 @@ get "/api/recency", (req) => {
   if (owner == "") { owner = default_owner(); }
   let snap = load_snap(owner);
   if (snap == null) { return no_snapshot(owner); }
-  return gh.recency_histogram(get(snap, "repos", []));
+  return gh.recency_histogram(active_repos(snap));
 };
 
 get "/api/year", (req) => {
@@ -255,7 +263,7 @@ get "/api/year", (req) => {
   if (owner == "") { owner = default_owner(); }
   let snap = load_snap(owner);
   if (snap == null) { return no_snapshot(owner); }
-  return gh.year_histogram(get(snap, "repos", []));
+  return gh.year_histogram(active_repos(snap));
 };
 
 // people.json for one owner, or null when absent (pre-people snapshots).
@@ -340,7 +348,7 @@ get "/api/search", (req) => {
   if (owner == "") { owner = default_owner(); }
   let snap = load_snap(owner);
   if (snap == null) { return no_snapshot(owner); }
-  let repos = get(snap, "repos", []);
+  let repos = active_repos(snap);
   let q = get(qp, "q", "");
   let out = [];
   if (q == "") {
@@ -574,7 +582,7 @@ get "/overview", (req) => {
   if (snap == null) {
     return ui.page("Overview · " + owner, "home", [ssr_block(owner, lang)], lang);
   }
-  let a = bundle(get(snap, "repos", []), snap);
+  let a = bundle(active_repos(snap), snap);
   let tot = a.totals;
   let body = [
     el("section", { class: "hero" },
@@ -630,7 +638,7 @@ get "/repos", (req) => {
   if (snap == null) {
     return ui.page("Repos · " + owner, "repos", [ssr_block(owner, lang)], lang);
   }
-  let all = map(gh.repo_view, get(snap, "repos", []));
+  let all = map(gh.repo_view, active_repos(snap));
   let rows = [];
   let i = 0;
   for (let r in all) {
@@ -701,7 +709,7 @@ func tool_no_snapshot(arg) {
 func tool_repos(arg) {
   let snap = load_snap(tool_owner(arg));
   if (snap == null) { return null; }
-  return get(snap, "repos", []);
+  return active_repos(snap);
 }
 
 tool "repo_insights",

@@ -224,7 +224,9 @@ export async function fetchLive(
     page += 1;
   }
 
-  const all = reposRaw.map(toView).sort((a, b) => (a.updated < b.updated ? 1 : -1));
+  // archived repos are excluded from every public view (server parity: the
+  // cached path filters via active_repos() too)
+  const all = reposRaw.map(toView).filter((r) => !r.archived).sort((a, b) => (a.updated < b.updated ? 1 : -1));
   const originals = all.filter((r) => !r.is_fork);
 
   const overview: Overview = {
