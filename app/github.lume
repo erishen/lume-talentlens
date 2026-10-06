@@ -535,6 +535,11 @@ func top_list(rows, lang) {
   return out;
 }
 
+// "erishen's repositories (110 total)" / "erishen 的仓库（110 个）"
+func repos_title(lang, owner, n) {
+  return owner + ui.t(lang, "repos_title_1") + str(n) + ui.t(lang, "repos_title_2");
+}
+
 get "/repos", (req) => {
   let owner = ssr_owner(req);
   let lang = lang_param(req);
