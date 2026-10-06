@@ -8,17 +8,25 @@
 # ranks the owner's followers and flags "expert suspects".
 #
 # Usage:
-#   OWNER=erishen bash scripts/people-scan.sh             # scan all followers
-#   OWNER=erishen bash scripts/people-scan.sh --limit 10  # first 10 only
-#   GH_TOKEN=ghp_... OWNER=erishen bash scripts/people-scan.sh
-#   OWNER=erishen bash scripts/people-scan.sh --kind following
+#   OWNER=alice bash scripts/people-scan.sh             # scan all followers
+#   OWNER=alice bash scripts/people-scan.sh --limit 10  # first 10 only
+#   GH_TOKEN=ghp_... OWNER=alice bash scripts/people-scan.sh
+#   OWNER=alice bash scripts/people-scan.sh --kind following
 #
 # Output: ranked list to stdout (one line per user), plus a summary line.
 # Rate-limit aware: without GH_TOKEN the 60 req/h unauth limit is hit fast
 # on large graphs — use --limit or a token.
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OWNER="${OWNER:-erishen}"
+
+# load CWD .env (OWNER / GH_TOKEN) — already-set env vars win
+if [ -f "$ROOT/.env" ]; then set -a; . "$ROOT/.env"; set +a; fi
+
+OWNER="${OWNER:-}"
+if [ -z "$OWNER" ]; then
+  echo "people-scan: no owner. Set OWNER (e.g. OWNER=alice) or add OWNER= to .env" >&2
+  exit 1
+fi
 LIMIT="${LIMIT:-0}"
 KIND="${KIND:-followers}"   # followers | following
 TOK="${GH_TOKEN:-}"

@@ -55,14 +55,18 @@ import "lib/ui.lume" as ui;
 // route/tool resolves its owner + snapshot locally and passes them into the
 // pure gh.* helpers.
 
-// read data/github/last_owner (written by scripts/fetch-github.sh); fallback
-// owner when a route/tool carries no ?owner=.
+// read data/github/last_owner (written by scripts/fetch-github.sh), or the
+// OWNER env (CWD .env is loaded at server start) — in that order; empty when
+// neither is set, so a public clone without local config shows a clear
+// "no owner" state instead of silently defaulting to someone's login.
 func default_owner() {
+  let me = env("OWNER");
+  if (me != null and str(me) != "") { return str(me); }
   let raw = read_file("data/github/last_owner");
-  if (raw == null) { return "erishen"; }
+  if (raw == null) { return ""; }
   let s = replace(raw, "\n", "");
   s = replace(s, " ", "");
-  if (s == "") { return "erishen"; }
+  if (s == "") { return ""; }
   return s;
 }
 
@@ -293,10 +297,12 @@ get "/api/people", (req) => {
   let following = get(people, "following", []);
   // water-account pre-screen (data/github/<owner>/suspects.json, if present):
   // tag each entry with suspect level + recruiter vocabulary flag.
-  // Owner-scoped: this signal is only maintained for the user's own account.
+  // Owner-scoped: only merged for the configured OWNER (env/.env) — the
+  // pre-screen is only maintained for the user's own account.
+  let me = env("OWNER");
   let suspects_raw = null;
-  if (owner == "erishen") {
-    suspects_raw = read_file("data/github/erishen/suspects.json");
+  if (me != null and str(me) != "" and owner == str(me)) {
+    suspects_raw = read_file("data/github/" + owner + "/suspects.json");
   }
   if (suspects_raw != null) {
     let lookup = {};
@@ -612,7 +618,7 @@ func top_list(rows, lang) {
   return out;
 }
 
-// "erishen's repositories (110 total)" / "erishen 的仓库（110 个）"
+// "owner's repositories (110 total)" / "owner 的仓库（110 个）"
 func repos_title(lang, owner, n) {
   return owner + ui.t(lang, "repos_title_1") + str(n) + ui.t(lang, "repos_title_2");
 }

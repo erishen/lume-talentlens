@@ -3,7 +3,7 @@
 # into data/github/ so the Lume app can analyze them offline.
 #
 # Usage:
-#   scripts/fetch-github.sh                        # defaults: owner erishen
+#   scripts/fetch-github.sh                        # OWNER from .env (or OWNER=)
 #   OWNER=acme scripts/fetch-github.sh             # any public owner
 #   GH_TOKEN=ghp_... scripts/fetch-github.sh       # raise the 60→5000 req/h limit
 #
@@ -14,7 +14,14 @@
 #                   (the only file the Lume server reads)
 set -euo pipefail
 
-OWNER="${OWNER:-erishen}"
+# load CWD .env (OWNER / GH_TOKEN) — already-set env vars win
+if [ -f .env ]; then set -a; . ./.env; set +a; fi
+
+OWNER="${OWNER:-}"
+if [ -z "$OWNER" ]; then
+  echo "fetch: no owner. Set OWNER (e.g. OWNER=acme scripts/fetch-github.sh) or add OWNER= to .env" >&2
+  exit 1
+fi
 # per-owner layout so multiple owners coexist: data/github/<owner>/
 # (sanitize: the Lume server reads data/github/<owner>/snapshot.json, and
 # files() lists owners from data/github — owner must be a safe dir name)

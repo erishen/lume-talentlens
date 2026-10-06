@@ -49,6 +49,26 @@ make run PORT=9000
 Open <http://127.0.0.1:8091/> for the React dashboard, `/chat` for the agent,
 or the JSON below.
 
+## Configuration (`.env`)
+
+Copy `.env.example` to `.env` and set your own values — the file is gitignored,
+so a public clone carries **no personal data** (your snapshots under
+`data/github/` are gitignored too, and no owner is hard-coded anywhere):
+
+```bash
+cp .env.example .env   # then edit OWNER=your-github-login
+```
+
+| Key | Purpose |
+|---|---|
+| `OWNER` | Your GitHub login. Default owner until `data/github/last_owner` exists, and the **only** owner whose follower/following lists get the water-account / recruiter pre-screen (`suspects.json`) merged into `/api/people`. |
+| `GH_TOKEN` | Optional classic PAT (scope `user:follow`): 60 → 5000 req/h for the live proxy (`/api/live/github`), people refresh (`/api/refresh`), `fetch-github.sh`, `people-scan.sh`, `unfollow.sh`. Never commit a real token. |
+| `LUME_GITHUB_PORT` | Optional port override (default 8091). |
+
+The Lume server loads `.env` at startup; the shell/python scripts source it
+too. Any of these can also be passed as a normal env var (e.g.
+`OWNER=acme make fetch`), which always wins.
+
 > The server binds `127.0.0.1` only. The agent and dashboard run against the
 > **local snapshot** for cached owners. Uncached owners are fetched on demand
 > through the server's `/api/live/github` route, which calls GitHub's REST API
@@ -108,7 +128,8 @@ consumes: `created_year`, `age_days`, `days_since_push`, `days_since_updated`,
 "recent activity" trend). The snapshot is projected to ~24 fields/repo so
 the JSON stays small. Snapshots live in `data/github/<owner>/`, so any number
 of owners can coexist; the last one fetched is recorded in
-`data/github/last_owner` and used as the default everywhere.
+`data/github/last_owner` and used as the default owner (after the `OWNER`
+env/`.env` setting) everywhere.
 
 ## Choosing an owner
 

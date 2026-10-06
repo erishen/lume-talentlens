@@ -36,7 +36,7 @@ const zh: Record<string, string> = {
   "owner.cached": "已缓存",
   // candidate pool
   "pool.label": "排名",
-  "pool.placeholder": "候选池——多个账号，逗号/空格分隔（如 erishen, acme, bob）",
+  "pool.placeholder": "候选池——多个账号，逗号/空格分隔（如 alice, bob）",
   "pool.rank": "排名",
   "pool.clear": "清空",
   "pool.loading_title": "候选排名 · 加载中",
@@ -196,7 +196,7 @@ const en: Record<string, string> = {
   "owner.analyze": "Analyze",
   "owner.cached": "cached",
   "pool.label": "rank",
-  "pool.placeholder": "candidate pool — several owners, comma/space separated (e.g. erishen, acme, bob)",
+  "pool.placeholder": "candidate pool — several owners, comma/space separated (e.g. alice, bob)",
   "pool.rank": "Rank",
   "pool.clear": "✕ clear",
   "pool.loading_title": "Candidate ranking · loading",

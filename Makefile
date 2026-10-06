@@ -21,6 +21,11 @@ APP     := app/github.lume
 PORT    ?= 8091
 LOG     := ./.lume-github.log
 
+# local config: OWNER / GH_TOKEN / LUME_GITHUB_PORT from .env (gitignored).
+# `export` makes OWNER visible to the scripts/app child processes too.
+-include .env
+export OWNER
+
 .PHONY: dev check fetch ui run stop logs clean people-scan
 
 dev:
@@ -32,8 +37,8 @@ check:
 	$(LUME) --check app/lib/github.lume app/lib/ui.lume $(APP)
 
 fetch:
-	@echo "== fetching GitHub snapshot (owner: $(or $(OWNER),default)) =="
-	OWNER="$(or $(OWNER),$(shell cat data/github/last_owner 2>/dev/null || echo erishen))" \
+	@echo "== fetching GitHub snapshot (owner: $(or $(OWNER),last_owner)) =="
+	OWNER="$(or $(OWNER),$(shell cat data/github/last_owner 2>/dev/null))" \
 	  bash scripts/fetch-github.sh
 
 ui:
@@ -74,7 +79,7 @@ logs:
 # For --limit / --kind, call the script directly (macOS make can't forward
 # dash-args):  OWNER=foo bash scripts/people-scan.sh --limit 20
 people-scan:
-	@OWNER="$(or $(OWNER),$(shell cat data/github/last_owner 2>/dev/null || echo erishen))" \
+	@OWNER="$(or $(OWNER),$(shell cat data/github/last_owner 2>/dev/null))" \
 	  bash scripts/people-scan.sh
 
 clean:

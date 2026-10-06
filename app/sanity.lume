@@ -4,11 +4,12 @@
 
 // 1) read + json + get-with-default. Snapshots live under
 //    data/github/<owner>/ — resolve the same default the app uses
-//    (data/github/last_owner, fallback erishen).
+//    (OWNER env from .env, then data/github/last_owner).
+let me = env("OWNER");
 let raw_owner = read_file("data/github/last_owner");
-if (raw_owner == null) { raw_owner = "erishen"; }
+if (raw_owner == null) { raw_owner = str(me); }
 let owner_name = replace(replace(raw_owner, "\n", ""), " ", "");
-if (owner_name == "") { owner_name = "erishen"; }
+if (owner_name == "" and me != null) { owner_name = str(me); }
 let raw = read_file("data/github/" + owner_name + "/snapshot.json");
 let snap = json(raw);
 let owner = str(get(snap, "owner", "unknown"));

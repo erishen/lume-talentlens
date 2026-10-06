@@ -14,11 +14,12 @@ carries a `kind` (followers | following | both). The server merges it by
 login into /api/people for BOTH lists, so following suspects now show up too.
 
 Usage:
-  OWNER=erishen python3 scripts/people-suspects.py           # both lists
-  KIND=following OWNER=erishen python3 scripts/people-suspects.py
-  KIND=followers OWNER=erishen python3 scripts/people-suspects.py
-Precise confirmation (followers_count < 5 / repos == 0) still needs the API —
-see scripts/people-scan.sh once quota or GH_TOKEN is available.
+  OWNER=alice python3 scripts/people-suspects.py           # both lists
+  KIND=following OWNER=alice python3 scripts/people-suspects.py
+  KIND=followers OWNER=alice python3 scripts/people-suspects.py
+OWNER may also come from .env (OWNER=...). Precise confirmation
+(followers_count < 5 / repos == 0) still needs the API — see
+scripts/people-scan.sh once quota or GH_TOKEN is available.
 """
 import datetime
 import json
@@ -27,7 +28,29 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OWNER = os.environ.get("OWNER", "erishen")
+
+
+def _load_dotenv(path):
+    """Minimal .env loader (key=value lines; existing env vars win)."""
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                k, v = k.strip(), v.strip().strip('"').strip("'")
+                if k and k not in os.environ:
+                    os.environ[k] = v
+    except OSError:
+        pass
+
+
+_load_dotenv(os.path.join(ROOT, ".env"))
+OWNER = os.environ.get("OWNER", "")
+if not OWNER:
+    print("people-suspects: no owner. Set OWNER (e.g. OWNER=alice) or add OWNER= to .env", file=sys.stderr)
+    sys.exit(1)
 KIND = os.environ.get("KIND", "all")  # all | followers | following
 PEOPLE = os.path.join(ROOT, "data", "github", OWNER, "people.json")
 
