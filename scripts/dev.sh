@@ -60,7 +60,7 @@ WATCH_PID=""
 ESB="$ROOT/frontend/node_modules/.bin/esbuild"
 if [ -x "$ESB" ]; then
   ( cd "$ROOT/frontend" && "$ESB" src/main.tsx --bundle --format=esm \
-      --jsx=automatic --outfile=../www/github/app.js --watch ) &
+      --jsx=automatic --outfile=../www/github/app.js --watch=forever ) &
   WATCH_PID=$!
   echo "dev: esbuild watching frontend (pid $WATCH_PID)"
 fi
