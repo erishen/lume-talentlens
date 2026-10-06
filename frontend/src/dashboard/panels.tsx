@@ -1,5 +1,6 @@
 import React from "react";
 import type { Overview, TalentSignals } from "../types";
+import { useLang, useT } from "../i18n";
 import {
   deriveTalent, cadence, pct, healthScore, toHrNote, downloadHrNote,
   DEFAULT_HEALTH_WEIGHTS, type HealthWeights,
@@ -15,11 +16,12 @@ import { SignalBar } from "./bars";
 // snapshot meta. Rendered first so a recruiter sees the "who are they" before
 // the numbers.
 function ProfileCard({ ov }: { ov: Overview }) {
+  const tr = useT();
   const p = ov.profile;
   const year = p?.created_at ? new Date(p.created_at).getFullYear() : null;
   const social: { label: string; href: string; icon: string }[] = [];
   if (p?.html_url) social.push({ label: "GitHub", href: p.html_url, icon: "🐙" });
-  if (p?.blog) social.push({ label: "Website", href: /^https?:/.test(p.blog) ? p.blog : "https://" + p.blog, icon: "🔗" });
+  if (p?.blog) social.push({ label: tr("pc.website"), href: /^https?:/.test(p.blog) ? p.blog : "https://" + p.blog, icon: "🔗" });
   if (p?.twitter_username) social.push({ label: "@" + p.twitter_username, href: "https://twitter.com/" + p.twitter_username, icon: "🐦" });
 
   return (
@@ -36,12 +38,12 @@ function ProfileCard({ ov }: { ov: Overview }) {
             {p?.name || ov.owner}
             <span className="muted"> @{ov.owner}</span>
           </h2>
-          <p className="pc-bio">{p?.bio || "No bio."}</p>
+          <p className="pc-bio">{p?.bio || tr("pc.no_bio")}</p>
           <div className="pc-badges">
-            {p?.hireable ? <span className="chip o2w" title="hireable flag on the GitHub profile">open to work</span> : null}
+            {p?.hireable ? <span className="chip o2w" title={tr("pc.o2w_title")}>{tr("pc.open_to_work")}</span> : null}
             {p?.location ? <span className="chip">📍 {p.location}</span> : null}
             {p?.company ? <span className="chip">🏢 {p.company}</span> : null}
-            {year ? <span className="chip">member since {year}</span> : null}
+            {year ? <span className="chip">{tr("pc.since", { year })}</span> : null}
           </div>
         </div>
       </div>
@@ -57,14 +59,14 @@ function ProfileCard({ ov }: { ov: Overview }) {
           </div>
         )}
         <div className="pc-stats muted">
-          <span><b>{p?.followers ?? 0}</b> followers</span>
-          <span><b>{p?.following ?? 0}</b> following</span>
-          <span><b>{p?.public_repos ?? ov.count}</b> repos</span>
-          <span><b>{p?.public_gists ?? 0}</b> gists</span>
+          <span><b>{p?.followers ?? 0}</b> {tr("pc.followers")}</span>
+          <span><b>{p?.following ?? 0}</b> {tr("pc.following")}</span>
+          <span><b>{p?.public_repos ?? ov.count}</b> {tr("pc.repos")}</span>
+          <span><b>{p?.public_gists ?? 0}</b> {tr("pc.gists")}</span>
         </div>
       </div>
 
-      <p className="pc-snapshot muted">snapshot {ov.fetched_at} · {ov.count} public repos ({ov.non_fork_count} original)</p>
+      <p className="pc-snapshot muted">{tr("pc.snapshot", { fetched: ov.fetched_at, count: ov.count, non_fork: ov.non_fork_count })}</p>
     </section>
   );
 }
@@ -77,22 +79,23 @@ function WeightTuner({ weights, onChange }: {
   weights: HealthWeights;
   onChange: (w: HealthWeights) => void;
 }) {
+  const tr = useT();
   const rows: { key: keyof HealthWeights; label: string }[] = [
-    { key: "activity", label: "Activity" },
-    { key: "rigor", label: "Rigor" },
-    { key: "focus", label: "Focus" },
-    { key: "influence", label: "Influence" },
+    { key: "activity", label: tr("tal.activity") },
+    { key: "rigor", label: tr("tal.rigor") },
+    { key: "focus", label: tr("tal.focus") },
+    { key: "influence", label: tr("tal.influence") },
   ];
   return (
     <div className="weight-tuner">
       <div className="weight-tuner-head">
-        <span className="muted">Re-weight the health score</span>
+        <span className="muted">{tr("tal.reweight")}</span>
         <button
           className="chip"
           onClick={() => onChange({ ...DEFAULT_HEALTH_WEIGHTS })}
-          title="Reset to defaults (40/30/20/10)"
+          title={tr("tal.reset_title")}
         >
-          reset
+          {tr("tal.reset")}
         </button>
       </div>
       {rows.map((r) => (
@@ -116,6 +119,8 @@ function WeightTuner({ weights, onChange }: {
 function TalentPanel({ t, ov, weights, onWeights }: {
   t: TalentSignals; ov: Overview; weights: HealthWeights; onWeights: (w: HealthWeights) => void;
 }) {
+  const tr = useT();
+  const { lang } = useLang();
   const focusBits = [
     t.top_lang,
     t.secondary_langs.length ? t.secondary_langs.join(" / ") : null,
@@ -123,7 +128,7 @@ function TalentPanel({ t, ov, weights, onWeights }: {
   const { total, pillars } = healthScore(t, weights);
   const [copied, setCopied] = React.useState(false);
   function copyNote() {
-    const text = toHrNote(ov, t, weights);
+    const text = toHrNote(ov, t, weights, lang);
     navigator.clipboard?.writeText(text).then(
       () => {
         setCopied(true);
@@ -133,70 +138,75 @@ function TalentPanel({ t, ov, weights, onWeights }: {
     );
   }
   function dlNote() {
-    downloadHrNote(ov, t, weights);
+    downloadHrNote(ov, t, weights, lang);
   }
   return (
     <section className="panel talent">
       <div className="talent-head">
         <div>
-          <h2>Talent signals</h2>
+          <h2>{tr("tal.signals")}</h2>
           <p className="muted talent-lead">
-            Recruiting reads of this GitHub footprint — derived from {ov.count} public repos, not a ranking.
+            {tr("tal.lead", { count: ov.count })}
           </p>
         </div>
         <div
           className="talent-score"
-          title={`Activity ${Math.round(weights.activity * 100)}% · Rigor ${Math.round(weights.rigor * 100)}% · Focus ${Math.round(weights.focus * 100)}% · Influence ${Math.round(weights.influence * 100)}%`}
+          title={tr("tal.weights_title", {
+            a: Math.round(weights.activity * 100),
+            r: Math.round(weights.rigor * 100),
+            f: Math.round(weights.focus * 100),
+            i: Math.round(weights.influence * 100),
+          })}
         >
           <div className="score-num">{total}</div>
-          <div className="score-cap">open-source health /100</div>
+          <div className="score-cap">{tr("tal.health")}</div>
         </div>
-        <button className="btn" onClick={copyNote} title="Copy a recruiting note">
-          {copied ? "✓ copied" : "Copy HR note"}
+        <button className="btn" onClick={copyNote} title={tr("tal.copy_title")}>
+          {copied ? tr("tal.copied") : tr("tal.copy")}
         </button>
-        <button className="btn" onClick={dlNote} title="Download the recruiting note as a .md file">
-          ↓ .md
+        <button className="btn" onClick={dlNote} title={tr("tal.dl_title")}>
+          {tr("tal.download")}
         </button>
       </div>
       <div className="talent-pillars">
-        <span>activity <b>{Math.round(pillars.activity * 100)}</b></span>
-        <span>rigor <b>{Math.round(pillars.rigor * 100)}</b></span>
-        <span>focus <b>{Math.round(pillars.focus * 100)}</b></span>
-        <span>influence <b>{Math.round(pillars.influence * 100)}</b></span>
+        <span>{tr("tal.activity")} <b>{Math.round(pillars.activity * 100)}</b></span>
+        <span>{tr("tal.rigor")} <b>{Math.round(pillars.rigor * 100)}</b></span>
+        <span>{tr("tal.focus")} <b>{Math.round(pillars.focus * 100)}</b></span>
+        <span>{tr("tal.influence")} <b>{Math.round(pillars.influence * 100)}</b></span>
       </div>
 
       <WeightTuner weights={weights} onChange={onWeights} />
 
       <div className="talent-grid">
         <div className="talent-card">
-          <h3>Tenure</h3>
+          <h3>{tr("tal.tenure")}</h3>
           <div className="talent-big">
-            {t.member_since_year ? `since ${t.member_since_year}` : "—"}
+            {t.member_since_year ? tr("tal.since", { year: t.member_since_year }) : "—"}
           </div>
           <p className="muted">
-            {t.tenure_years != null ? t.tenure_years + " yrs on GitHub" : "account age unknown"}
+            {t.tenure_years != null ? tr("tal.tenure_years", { n: t.tenure_years }) : tr("tal.tenure_unknown")}
           </p>
         </div>
 
         <div className="talent-card">
-          <h3>Output &amp; maintenance</h3>
-          <SignalBar label="Currently shipping" ratio={t.output_ratio} />
-          <p className="muted">{cadence(t.avg_days_since_push)} · {Math.round(t.avg_days_since_push)}d avg to last push</p>
+          <h3>{tr("tal.output")}</h3>
+          <SignalBar label={tr("tal.shipping")} ratio={t.output_ratio} />
+          <p className="muted">{cadence(t.avg_days_since_push, lang)} · {tr("tal.avg_push", { d: Math.round(t.avg_days_since_push) })}</p>
         </div>
 
         <div className="talent-card">
-          <h3>Engineering rigor</h3>
-          <SignalBar label="Documents repos" ratio={t.desc_ratio} />
-          <SignalBar label="Adds licenses" ratio={t.license_ratio} />
-          <SignalBar label="Tags topics" ratio={t.topics_ratio} />
+          <h3>{tr("tal.engineering")}</h3>
+          <SignalBar label={tr("tal.docs")} ratio={t.desc_ratio} />
+          <SignalBar label={tr("tal.licenses")} ratio={t.license_ratio} />
+          <SignalBar label={tr("tal.topics")} ratio={t.topics_ratio} />
         </div>
 
         <div className="talent-card">
-          <h3>Focus &amp; influence</h3>
+          <h3>{tr("tal.focus_title")}</h3>
           <p><b>{t.top_lang}</b> {pct(t.top_lang_ratio)} · {focusBits.join(" · ")}</p>
           <p className="muted">
-            {t.followers} followers
-            {t.top_star_repo ? ` · top repo “${t.top_star_repo.name}” ★${t.top_star_repo.stars}` : null}
+            {tr("tal.followers", { n: t.followers })}
+            {t.top_star_repo ? tr("tal.top_repo", { name: t.top_star_repo.name, stars: t.top_star_repo.stars }) : null}
           </p>
         </div>
       </div>
@@ -216,8 +226,10 @@ function TalentPanel({ t, ov, weights, onWeights }: {
 function ComparePanel({ ovA, ovB, weights }: {
   ovA: Overview; ovB: Overview; weights: HealthWeights;
 }) {
-  const ta = deriveTalent(ovA);
-  const tb = deriveTalent(ovB);
+  const tr = useT();
+  const { lang } = useLang();
+  const ta = deriveTalent(ovA, lang);
+  const tb = deriveTalent(ovB, lang);
   const sa = healthScore(ta, weights).total;
   const sb = healthScore(tb, weights).total;
   const row = (
@@ -239,32 +251,32 @@ function ComparePanel({ ovA, ovB, weights }: {
   return (
     <section className="panel compare">
       <h2>
-        Compare <code>@{ovA.owner}</code> vs <code>@{ovB.owner}</code>
+        {tr("cmp.title", { a: "@" + ovA.owner, b: "@" + ovB.owner })}
       </h2>
       <div className="cmp-grid">
         <div className="cmp-head" />
         <div className="cmp-head">{ovA.owner}</div>
         <div className="cmp-head">{ovB.owner}</div>
 
-        {row("Health /100", <b>{sa}</b>, <b>{sb}</b>, true, sa, sb)}
-        {row("Repos", ovA.count, ovB.count, true, ovA.count, ovB.count)}
-        {row("Original (non-fork)", ovA.non_fork_count, ovB.non_fork_count, true, ovA.non_fork_count, ovB.non_fork_count)}
-        {row("Active ≤90d", ovA.recency.active || 0, ovB.recency.active || 0, true, ovA.recency.active || 0, ovB.recency.active || 0)}
-        {row("Shipping", pct(ta.output_ratio), pct(tb.output_ratio), true, ta.output_ratio, tb.output_ratio)}
+        {row(tr("cmp.health"), <b>{sa}</b>, <b>{sb}</b>, true, sa, sb)}
+        {row(tr("cmp.repos"), ovA.count, ovB.count, true, ovA.count, ovB.count)}
+        {row(tr("cmp.original"), ovA.non_fork_count, ovB.non_fork_count, true, ovA.non_fork_count, ovB.non_fork_count)}
+        {row(tr("cmp.active_90d"), ovA.recency.active || 0, ovB.recency.active || 0, true, ovA.recency.active || 0, ovB.recency.active || 0)}
+        {row(tr("cmp.shipping"), pct(ta.output_ratio), pct(tb.output_ratio), true, ta.output_ratio, tb.output_ratio)}
         {row(
-          "Rigor",
+          tr("cmp.rigor"),
           Math.round(((ta.desc_ratio + ta.license_ratio + ta.topics_ratio) / 3) * 100) + "%",
           Math.round(((tb.desc_ratio + tb.license_ratio + tb.topics_ratio) / 3) * 100) + "%",
           true,
           ta.desc_ratio + ta.license_ratio + ta.topics_ratio,
           tb.desc_ratio + tb.license_ratio + tb.topics_ratio
         )}
-        {row("Top language", ta.top_lang + " " + pct(ta.top_lang_ratio), tb.top_lang + " " + pct(tb.top_lang_ratio))}
-        {row("GitHub since", ta.member_since_year || "—", tb.member_since_year || "—")}
-        {row("Followers", ta.followers, tb.followers, true, ta.followers, tb.followers)}
-        {row("Stars (total)", ovA.totals.stars, ovB.totals.stars, true, ovA.totals.stars, ovB.totals.stars)}
+        {row(tr("cmp.top_lang"), ta.top_lang + " " + pct(ta.top_lang_ratio), tb.top_lang + " " + pct(tb.top_lang_ratio))}
+        {row(tr("cmp.since"), ta.member_since_year || "—", tb.member_since_year || "—")}
+        {row(tr("cmp.followers"), ta.followers, tb.followers, true, ta.followers, tb.followers)}
+        {row(tr("cmp.stars"), ovA.totals.stars, ovB.totals.stars, true, ovA.totals.stars, ovB.totals.stars)}
       </div>
-      <p className="muted cmp-note">Accent value wins each row · higher is better for all metrics shown.</p>
+      <p className="muted cmp-note">{tr("cmp.note")}</p>
     </section>
   );
 }
@@ -273,6 +285,7 @@ function ComparePanel({ ovA, ovB, weights }: {
 // Ordered newest → oldest; everything before the 12-month window is folded
 // into a single "older" row. Uses the same .bar-* styling as `Bars`.
 function PushTrend({ data }: { data: Record<string, number> }) {
+  const tr = useT();
   const months: string[] = [];
   const now = new Date();
   const cur = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
@@ -287,15 +300,16 @@ function PushTrend({ data }: { data: Record<string, number> }) {
   }
   const rows: { k: string; v: number }[] = months.map((m) => ({ k: m, v: data[m] || 0 }));
   if (older > 0) rows.push({ k: "older", v: older });
+  const olderLabel = tr("bars.older");
   const max = Math.max(1, ...rows.map((r) => r.v));
   const activeMonths = rows.filter((r) => r.v > 0 && r.k !== "older").length;
   return (
     <div className="panel">
-      <h2>Push activity — last 12 mo</h2>
+      <h2>{tr("bars.push_activity")}</h2>
       <div className="bars">
         {rows.map((r) => (
           <div className="bar-row" key={r.k}>
-            <span className="bar-label" title={r.k}>{r.k}</span>
+            <span className="bar-label" title={r.k}>{r.k === "older" ? olderLabel : r.k}</span>
             <div className="bar-track">
               <div className="bar-fill" style={{ width: `${(r.v / max) * 100}%`, background: "#38bdf8" }} />
             </div>
@@ -304,7 +318,7 @@ function PushTrend({ data }: { data: Record<string, number> }) {
         ))}
       </div>
       <p className="muted push-note">
-        {activeMonths} of last 12 months had pushes · repos pushed this month: {data[cur] || 0}
+        {tr("bars.months_note", { n: activeMonths, cur: data[cur] || 0 })}
       </p>
     </div>
   );

@@ -1,5 +1,6 @@
 import React from "react";
 import { api } from "../api";
+import { useT } from "../i18n";
 import { isNoSnapshot } from "../types";
 import type { NoSnapshot, RepoView, PersonView } from "../types";
 
@@ -21,12 +22,13 @@ function PersonList({ title, people, totals, note, onOpen }: {
   title: string; people: PersonView[]; totals: number; note?: string;
   onOpen: (login: string) => void;
 }) {
+  const t = useT();
   return (
     <div className="panel">
       <h2>
-        {title} <span className="muted">· {people.length} shown / {totals} total</span>
+        {title} <span className="muted">{t("people.shown_total", { shown: people.length, total: totals })}</span>
       </h2>
-      {people.length === 0 && <p className="muted">{note || "no data"}</p>}
+      {people.length === 0 && <p className="muted">{note || t("people.no_data")}</p>}
       {people.length > 0 && (
         <div className="person-list">
           {people.map((p, i) => (
@@ -34,19 +36,19 @@ function PersonList({ title, people, totals, note, onOpen }: {
               key={i}
               className="person-chip"
               onClick={() => onOpen(p.login)}
-              title={"Analyze @" + p.login + " (in-app)"}
+              title={t("people.click_name", { login: p.login })}
             >
               @{p.login}
-              {p.type === "Bot" ? <span className="chip bot">bot</span> : null}
-              {p.recruiter ? <span className="chip recruiter">recruiter?</span> : null}
-              {p.suspect === "high" ? <span className="chip suspect">water?</span> : null}
-              {p.suspect === "medium" ? <span className="chip suspect-med">maybe-water</span> : null}
+              {p.type === "Bot" ? <span className="chip bot">{t("people.bot")}</span> : null}
+              {p.recruiter ? <span className="chip recruiter">{t("people.recruiter")}</span> : null}
+              {p.suspect === "high" ? <span className="chip suspect">{t("people.water")}</span> : null}
+              {p.suspect === "medium" ? <span className="chip suspect-med">{t("people.maybe_water")}</span> : null}
             </button>
           ))}
         </div>
       )}
       {people.length > 0 && totals > people.length && (
-        <p className="muted">…and {totals - people.length} more (first page shown). Click a name to analyze that person.</p>
+        <p className="muted">{t("people.more", { n: totals - people.length })}</p>
       )}
     </div>
   );
@@ -73,6 +75,7 @@ function RepoRow({ r, rank }: { r: RepoView; rank: number }) {
 function BrowsePage({ limit, setLimit, owner, liveAll }: {
   limit: number; setLimit: (n: number) => void; owner: string; liveAll: RepoView[] | null;
 }) {
+  const t = useT();
   const [offset, setOffset] = React.useState(0);
   const [page, setPage] = React.useState<RepoView[]>([]);
   const [total, setTotal] = React.useState(0);
@@ -112,7 +115,7 @@ function BrowsePage({ limit, setLimit, owner, liveAll }: {
         <button className="chip" onClick={() => setLimitSafe(10)} disabled={limit === 10}>10</button>
         <button className="chip" onClick={() => setLimitSafe(25)} disabled={limit === 25}>25</button>
         <button className="chip" onClick={() => setLimitSafe(50)} disabled={limit === 50}>50</button>
-        <span className="muted">{cur}/{pages} · {total} repos</span>
+        <span className="muted">{cur}/{pages} · {total} {t("all.repos_short")}</span>
       </div>
       <ol className="top-list all">
         {page.map((r, i) => (
@@ -120,8 +123,8 @@ function BrowsePage({ limit, setLimit, owner, liveAll }: {
         ))}
       </ol>
       <div className="pager">
-        <button className="btn" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>← prev</button>
-        <button className="btn" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>next →</button>
+        <button className="btn" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>{t("all.prev")}</button>
+        <button className="btn" disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}>{t("all.next")}</button>
       </div>
     </div>
   );

@@ -1,0 +1,347 @@
+import React from "react";
+
+// Lightweight i18n for the dashboard + agent. Two languages (zh/en), a
+// keyed dictionary, persisted per browser (localStorage), defaulting to zh.
+// Every user-visible string in the React UI should go through useT() so the
+// whole dashboard flips on the toggle. The SSR pages have their own parallel
+// dictionary in app/lib/ui.lume (keys kept in sync here).
+
+export type Lang = "zh" | "en";
+export const LANG_STORAGE = "tl-lang";
+
+export function loadLang(): Lang {
+  try {
+    const s = localStorage.getItem(LANG_STORAGE);
+    if (s === "zh" || s === "en") return s;
+  } catch {
+    /* storage unavailable — fall through to default */
+  }
+  return "zh";
+}
+
+const zh: Record<string, string> = {
+  // nav (also mirrored into the static HTML shells by main.tsx)
+  "nav.dashboard": "仪表盘",
+  "nav.ssr_overview": "SSR 概览",
+  "nav.ssr_repos": "SSR 仓库",
+  "nav.api": "API",
+  "nav.agent": "智能体",
+  // hero
+  "hero.title": "GitHub 足迹上的招聘视角",
+  "hero.subtitle": "选择一个账号，读取其人才信号——画像、工程严谨度、产出、专注度（本地快照，离线可用）。",
+  // owner picker
+  "owner.label": "GitHub 账号",
+  "owner.placeholder": "输入 GitHub 用户名",
+  "owner.analyze": "分析",
+  "owner.cached": "已缓存",
+  // candidate pool
+  "pool.label": "排名",
+  "pool.placeholder": "候选池——多个账号，逗号/空格分隔（如 erishen, acme, bob）",
+  "pool.rank": "排名",
+  "pool.clear": "清空",
+  "pool.loading_title": "候选排名 · 加载中",
+  "pool.loaded": "{done} / {total} 已加载",
+  "pool.fetching": "获取中",
+  "pool.repos_page": "仓库第 {cur}/{total} 页",
+  "pool.throttled": "（live 拉取受节流限制，保持在 60 req/h 配额内）",
+  "pool.ranking_title": "候选排名 · 按开源健康度",
+  "pool.detail": "{count} 个仓库 · 主语言 {lang} · {active} 个活跃 ≤90d",
+  "pool.click_to_open": "点击名字打开完整分析",
+  "pool.note": "按当前健康权重排序（{a}/{r}/{f}/{i}）——在“人才信号”里调整滑块，排名实时更新。",
+  // compare
+  "cmp.label": "对比",
+  "cmp.placeholder": "与另一个 GitHub 账号对比（如 torvalds）",
+  "cmp.btn": "对比",
+  "cmp.failed": "对比失败",
+  "cmp.clear": "清空",
+  "cmp.health": "健康度 /100",
+  "cmp.repos": "仓库数",
+  "cmp.original": "原创（非 fork）",
+  "cmp.active_90d": "活跃 ≤90 天",
+  "cmp.shipping": "持续产出",
+  "cmp.rigor": "严谨度",
+  "cmp.top_lang": "主要语言",
+  "cmp.since": "加入 GitHub",
+  "cmp.followers": "粉丝",
+  "cmp.stars": "Star 总数",
+  "cmp.note": "每行高亮者为胜方 · 所有指标均为越高越好。",
+  // live fetch / no snapshot
+  "live.fetching": "正在从 GitHub 实时获取 {owner}…",
+  "live.pulling": "拉取仓库中…",
+  "live.page_progress": "仓库第 {page}/{total} 页 · 已拉取 {repos} 个仓库",
+  "live.failed": "实时获取失败 @{owner}",
+  "live.retry": "重试",
+  "live.offline_fallback": "离线兜底——运行：",
+  "live.no_snapshot": "没有 {owner} 的本地快照",
+  "live.two_ways": "两种方式分析 {owner}：",
+  "live.fetch_live": "从 GitHub 实时获取",
+  "live.or_offline": "或离线 / 不受限流影响：",
+  "live.proxy_note": "实时获取走服务器的 /api/live/github 代理（出站 http_get）；未认证时共享约 60 req/h——设置 GH_TOKEN 可提升。",
+  "live.error_network": "无法连接 GitHub（网络或限流）。缓存账号请重启服务器使 /api/people 可用，再点击重试。",
+  "live.error_failed": "加载粉丝/关注列表失败。",
+  // KPIs
+  "kpi.repos": "仓库",
+  "kpi.original": "原创",
+  "kpi.stars_total": "Star 总计",
+  "kpi.forks_total": "Fork 总计",
+  "kpi.active_90d": "活跃 ≤90 天",
+  // bars
+  "bars.languages": "语言",
+  "bars.recency": "活跃度",
+  "bars.created_per_year": "按年创建",
+  "bars.push_activity": "推送活跃度——近 12 个月",
+  "bars.older": "更早",
+  "bars.months_note": "近 12 个月中有 {n} 个月有推送 · 本月有推送的仓库：{cur}",
+  // people lists
+  "people.title": "粉丝 / 关注",
+  "people.loading": "加载中…",
+  "people.error_title": "粉丝 / 关注",
+  "people.retry": "重试",
+  "people.followers": "粉丝",
+  "people.following": "关注",
+  "people.shown_total": "· 显示 {shown} 个 / 共 {total} 个",
+  "people.no_data": "暂无数据",
+  "people.more": "…还有 {n} 个（仅显示第一页）。点击名字可分析该用户。",
+  "people.click_name": "在应用内分析 @{login}",
+  "people.water": "水号?",
+  "people.maybe_water": "疑似水号",
+  "people.recruiter": "招聘方?",
+  "people.bot": "机器人",
+  // search
+  "search.in": "在 {owner} 中搜索",
+  "search.placeholder": "按名称 / 描述 / 语言 / 主题筛选…",
+  "search.btn": "搜索",
+  "search.no_matches": "没有匹配 “{q}” 的结果",
+  "search.match": "个匹配",
+  // all repos / pager
+  "all.repos": "全部仓库",
+  "all.repos_short": "个仓库",
+  "all.top10": "按 Star 前 10",
+  "all.prev": "上一页",
+  "all.next": "下一页",
+  // profile card
+  "pc.no_bio": "无简介。",
+  "pc.open_to_work": "正在找工作",
+  "pc.followers": "粉丝",
+  "pc.following": "关注",
+  "pc.repos": "仓库",
+  "pc.gists": "Gist",
+  "pc.snapshot": "快照 {fetched} · {count} 个公开仓库（{non_fork} 个原创）",
+  "pc.since": "自 {year} 起加入",
+  "pc.o2w_title": "GitHub 资料上标记了正在找工作",
+  "pc.website": "网站",
+  // talent panel
+  "tal.signals": "人才信号",
+  "tal.lead": "对这份 GitHub 足迹的招聘解读——基于 {count} 个公开仓库推算，并非排名。",
+  "tal.copy": "复制 HR 备注",
+  "tal.copied": "已复制",
+  "tal.download": "下载 .md",
+  "tal.activity": "活跃度",
+  "tal.rigor": "严谨度",
+  "tal.focus": "专注度",
+  "tal.influence": "影响力",
+  "tal.health": "开源健康度 /100",
+  "tal.reweight": "重新调整健康度权重",
+  "tal.reset": "重置",
+  "tal.tenure": "年限",
+  "tal.since": "自 {year} 起",
+  "tal.tenure_years": "{n} 年 GitHub 账号",
+  "tal.tenure_unknown": "账号年龄未知",
+  "tal.output": "产出与维护",
+  "tal.shipping": "持续产出中",
+  "tal.engineering": "工程严谨度",
+  "tal.docs": "有文档的仓库",
+  "tal.licenses": "带许可证",
+  "tal.topics": "带主题标签",
+  "tal.focus_title": "专注度与影响力",
+  "tal.followers": "{n} 粉丝",
+  "tal.top_repo": "· 顶级仓库 “{name}” ★{stars}",
+  "tal.weights_title": "活跃度 {a}% · 严谨度 {r}% · 专注度 {f}% · 影响力 {i}%",
+  "tal.avg_push": "平均 {d} 天前最后推送",
+  "tal.reset_title": "重置为默认权重（40/30/20/10）",
+  "tal.copy_title": "复制一条招聘备注",
+  "tal.dl_title": "将招聘备注下载为 .md 文件",
+  "cmp.title": "对比 @{a} 与 @{b}",
+  // agent
+  "agent.note": "询问这个人的 GitHub 足迹——画像、顶级仓库、活跃度、总量。智能体使用注册工具（repo_insights / repo_search / repo_language / repo_recency / repo_year / repo_stats）基于本地快照作答。",
+  "agent.placeholder": "询问你的仓库…",
+  "agent.placeholder_busy": "智能体思考中…",
+  "agent.send": "发送",
+  "agent.typing": "…",
+  "agent.tag_tool": "工具",
+  "agent.tag_agent": "智能体",
+  "agent.no_reply": "（无回复）",
+  "agent.upstream_error": "上游错误",
+  // misc
+  "misc.loading": "加载中…",
+};
+
+const en: Record<string, string> = {
+  "nav.dashboard": "Dashboard",
+  "nav.ssr_overview": "SSR Overview",
+  "nav.ssr_repos": "SSR Repos",
+  "nav.api": "API",
+  "nav.agent": "Agent",
+  "hero.title": "Recruiting lens over a GitHub footprint",
+  "hero.subtitle": "Pick an owner to read their talent signals — profile, engineering rigor, output, focus (local snapshots, offline).",
+  "owner.label": "GitHub owner",
+  "owner.placeholder": "enter a GitHub username",
+  "owner.analyze": "Analyze",
+  "owner.cached": "cached",
+  "pool.label": "rank",
+  "pool.placeholder": "candidate pool — several owners, comma/space separated (e.g. erishen, acme, bob)",
+  "pool.rank": "Rank",
+  "pool.clear": "✕ clear",
+  "pool.loading_title": "Candidate ranking · loading",
+  "pool.loaded": "{done} / {total} loaded",
+  "pool.fetching": "fetching",
+  "pool.repos_page": "(repos page {cur}/{total})",
+  "pool.throttled": "(live pulls are throttled to stay under the 60 req/h limit)",
+  "pool.ranking_title": "Candidate ranking · by open-source health",
+  "pool.detail": "{count} repos · top {lang} · {active} active ≤90d",
+  "pool.click_to_open": "Click a name to open the full analysis",
+  "pool.note": "sorted by the current health weights ({a}/{r}/{f}/{i}) — adjust them in Talent signals and the ranking updates live.",
+  "cmp.label": "vs",
+  "cmp.placeholder": "compare with another GitHub owner (e.g. torvalds)",
+  "cmp.btn": "Compare",
+  "cmp.failed": "Compare failed",
+  "cmp.clear": "✕ clear",
+  "cmp.health": "Health /100",
+  "cmp.repos": "Repos",
+  "cmp.original": "Original (non-fork)",
+  "cmp.active_90d": "Active ≤90d",
+  "cmp.shipping": "Shipping",
+  "cmp.rigor": "Rigor",
+  "cmp.top_lang": "Top language",
+  "cmp.since": "GitHub since",
+  "cmp.followers": "Followers",
+  "cmp.stars": "Stars (total)",
+  "cmp.note": "Accent value wins each row · higher is better for all metrics shown.",
+  "live.fetching": "Fetching {owner} live from GitHub…",
+  "live.pulling": "pulling repos…",
+  "live.page_progress": "repos page {page}/{total} · {repos} repos pulled",
+  "live.failed": "Live fetch failed @{owner}",
+  "live.retry": "Retry",
+  "live.offline_fallback": "offline fallback — run:",
+  "live.no_snapshot": "No local snapshot for {owner}",
+  "live.two_ways": "Two ways to analyze {owner}:",
+  "live.fetch_live": "Fetch live from GitHub",
+  "live.or_offline": "or, offline / rate-limit-proof:",
+  "live.proxy_note": "Live fetch goes through the server's /api/live/github proxy (outbound http_get); unauthenticated it is shared at ~60 req/h — set GH_TOKEN to raise it.",
+  "live.error_network": "Could not reach GitHub for this owner (network or rate limit). For a cached owner, restart the server so /api/people is available, then click Retry.",
+  "live.error_failed": "Failed to load followers/following.",
+  "kpi.repos": "repos",
+  "kpi.original": "original",
+  "kpi.stars_total": "stars total",
+  "kpi.forks_total": "forks total",
+  "kpi.active_90d": "active ≤90d",
+  "bars.languages": "Languages",
+  "bars.recency": "Recency",
+  "bars.created_per_year": "Created per year",
+  "bars.push_activity": "Push activity — last 12 mo",
+  "bars.older": "older",
+  "bars.months_note": "{n} of last 12 months had pushes · repos pushed this month: {cur}",
+  "people.title": "Followers & Following",
+  "people.loading": "Loading…",
+  "people.error_title": "Followers & Following",
+  "people.retry": "Retry",
+  "people.followers": "Followers",
+  "people.following": "Following",
+  "people.shown_total": "· {shown} shown / {total} total",
+  "people.no_data": "no data",
+  "people.more": "…and {n} more (first page shown). Click a name to analyze that person.",
+  "people.click_name": "Analyze @{login} (in-app)",
+  "people.water": "water?",
+  "people.maybe_water": "maybe-water",
+  "people.recruiter": "recruiter?",
+  "people.bot": "bot",
+  "search.in": "Search in {owner}",
+  "search.placeholder": "filter by name / description / language / topic…",
+  "search.btn": "Search",
+  "search.no_matches": "no matches for “{q}”",
+  "search.match": " match",
+  "all.repos": "All repos",
+  "all.repos_short": "repos",
+  "all.top10": "Top 10 by stars",
+  "all.prev": "← prev",
+  "all.next": "next →",
+  "pc.no_bio": "No bio.",
+  "pc.open_to_work": "open to work",
+  "pc.followers": "followers",
+  "pc.following": "following",
+  "pc.repos": "repos",
+  "pc.gists": "gists",
+  "pc.snapshot": "snapshot {fetched} · {count} public repos ({non_fork} original)",
+  "pc.since": "member since {year}",
+  "pc.o2w_title": "hireable flag on the GitHub profile",
+  "pc.website": "Website",
+  "tal.signals": "Talent signals",
+  "tal.lead": "Recruiting reads of this GitHub footprint — derived from {count} public repos, not a ranking.",
+  "tal.copy": "Copy HR note",
+  "tal.copied": "✓ copied",
+  "tal.download": "↓ .md",
+  "tal.activity": "Activity",
+  "tal.rigor": "Rigor",
+  "tal.focus": "Focus",
+  "tal.influence": "Influence",
+  "tal.health": "open-source health /100",
+  "tal.reweight": "Re-weight the health score",
+  "tal.reset": "reset",
+  "tal.tenure": "Tenure",
+  "tal.since": "since {year}",
+  "tal.tenure_years": "{n} yrs on GitHub",
+  "tal.tenure_unknown": "account age unknown",
+  "tal.output": "Output & maintenance",
+  "tal.shipping": "Currently shipping",
+  "tal.engineering": "Engineering rigor",
+  "tal.docs": "Documents repos",
+  "tal.licenses": "Adds licenses",
+  "tal.topics": "Tags topics",
+  "tal.focus_title": "Focus & influence",
+  "tal.followers": "{n} followers",
+  "tal.top_repo": " · top repo “{name}” ★{stars}",
+  "tal.weights_title": "Activity {a}% · Rigor {r}% · Focus {f}% · Influence {i}%",
+  "tal.avg_push": "{d}d avg to last push",
+  "tal.reset_title": "Reset to defaults (40/30/20/10)",
+  "tal.copy_title": "Copy a recruiting note",
+  "tal.dl_title": "Download the recruiting note as a .md file",
+  "cmp.title": "Compare @{a} vs @{b}",
+  "agent.note": "Ask about this person's GitHub footprint — profile, top repos, recency, totals. The agent answers with its registered tools (repo_insights / repo_search / repo_language / repo_recency / repo_year / repo_stats) backed by the local snapshot.",
+  "agent.placeholder": "ask about your repos…",
+  "agent.placeholder_busy": "agent is thinking…",
+  "agent.send": "Send",
+  "agent.typing": "…",
+  "agent.tag_tool": "tool",
+  "agent.tag_agent": "agent",
+  "agent.no_reply": "(no reply)",
+  "agent.upstream_error": "upstream error",
+  "misc.loading": "Loading…",
+};
+
+export const dicts: Record<Lang, Record<string, string>> = { zh, en };
+
+interface LangCtx {
+  lang: Lang;
+  setLang: (l: Lang) => void;
+}
+export const LangContext = React.createContext<LangCtx>({ lang: "zh", setLang: () => {} });
+
+export function useLang(): LangCtx {
+  return React.useContext(LangContext);
+}
+
+// t(key, params?) — dictionary lookup with {place} interpolation. Falls back
+// to the English entry, then the raw key, so a missing key never renders as
+// nothing on the zh side.
+export function useT(): (key: string, params?: Record<string, string | number>) => string {
+  const { lang } = useLang();
+  return (key, params) => {
+    let s = dicts[lang][key] ?? dicts.en[key] ?? key;
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        s = s.replace("{" + k + "}", String(v));
+      }
+    }
+    return s;
+  };
+}

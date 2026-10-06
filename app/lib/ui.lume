@@ -9,10 +9,120 @@
 // under <body data-page='...'> by /invest/app.js (the shared chat bundle the
 // framework already ships) or the app's own dashboard bundle.
 
+// ------------------------------------------------ SSR i18n (zh/en)
+// The React dashboard carries its own dictionary (frontend/src/i18n.ts);
+// SSR pages get a parallel one here, keyed the same way and fed by the
+// ?lang= query param on each route. JSON endpoints keep English hints (they
+// are machine + agent contracts, not UI copy).
+
+func lang_dict(lang, key) {
+  let zh = {
+    nav_dashboard: "仪表盘",
+    nav_overview: "SSR 概览",
+    nav_repos: "SSR 仓库",
+    nav_api: "API",
+    nav_agent: "智能体",
+    footer: "— 候选 GitHub 人才信号的服务器端视图",
+    no_lang: "无语言",
+    ssr_no_snap_title: "没有本地快照：",
+    ssr_no_snap_fetch: "先获取它，然后重试本页：",
+    ssr_no_snap_cached: "本地已缓存账号：",
+    ov_hero_1: "的 GitHub 人才画像（",
+    ov_hero_2: "）",
+    ov_hero_3: "由 Lume 从本地快照服务端渲染，共 ",
+    ov_hero_4: " 个公开仓库 · 获取于 ",
+    ov_hero_5: "。可交互 JSON API 或通过 /chat 询问智能体。",
+    ov_kpi_repos: "仓库",
+    ov_kpi_original: "原创（非 fork）",
+    ov_kpi_stars: "Star 总计",
+    ov_kpi_forks: "Fork 总计",
+    ov_langs: "语言",
+    ov_recency: "活跃度",
+    ov_top10: "按 Star 前 10",
+    ov_browse: "浏览全部 →",
+    ov_api: "JSON API →",
+    ov_chat: "询问智能体 →",
+    repos_hero_2: "完整数据：/api/repos?owner=",
+    repos_hero_3: "。可在仪表盘（React）/ 切换账号。",
+    api_hero_2: "所有路由接受可选 ?owner=（默认：最近获取的账号，经 data/github/last_owner）。仅回环，无鉴权。",
+    api_endpoints: "接口",
+    api_tools: "智能体工具",
+    api_add: "添加其他账号",
+    api_add_desc: "—— 将 acme 的公开仓库快照到 data/github/acme/。",
+    api_ep_owners: "— 本地缓存的账号 + 当前默认账号",
+    api_ep_people: "— x 的粉丝 / 关注（各自第一页，最多 100 条）",
+    api_ep_overview: "— x 的完整分析包（未获取时返回 404 + 提示）",
+    api_ep_repos: "— x 的分页规范化仓库视图",
+    api_ep_top: "— x 的按 Star 前 10 与按创建年份前 10",
+    api_ep_langs: "— x 的语言直方图（{lang: n}）",
+    api_ep_recency: "— x 的活跃度直方图（active/recent/dormant/stale/unknown）",
+    api_ep_year: "— x 的创建年份直方图",
+    api_ep_search: "— 按名称/描述/主题/语言子串筛选 x 的仓库",
+    api_tool_1: "repo_insights / repo_language / repo_recency / repo_year / repo_stats — 可选 { owner }",
+    api_tool_2: "repo_search — { owner?, q } 名称/描述/主题/语言子串",
+    api_tool_3: "github_owners — 列出本地缓存账号",
+  };
+  let en = {
+    nav_dashboard: "Dashboard",
+    nav_overview: "SSR Overview",
+    nav_repos: "SSR Repos",
+    nav_api: "API",
+    nav_agent: "Agent",
+    footer: " — server-rendered view of a candidate's GitHub talent signals",
+    no_lang: "no language",
+    ssr_no_snap_title: "No local snapshot for ",
+    ssr_no_snap_fetch: "Fetch it first, then retry this page: ",
+    ssr_no_snap_cached: "Locally cached owners: ",
+    ov_hero_1: "'s GitHub talent profile (",
+    ov_hero_2: ")",
+    ov_hero_3: "Server-rendered by Lume from a local snapshot of ",
+    ov_hero_4: " public repos · fetched ",
+    ov_hero_5: ". Interact with the JSON APIs or ask the agent via /chat.",
+    ov_kpi_repos: "repos",
+    ov_kpi_original: "original (non-fork)",
+    ov_kpi_stars: "stars total",
+    ov_kpi_forks: "forks total",
+    ov_langs: "Languages",
+    ov_recency: "Recency",
+    ov_top10: "Top 10 by stars",
+    ov_browse: "Browse all →",
+    ov_api: "JSON API →",
+    ov_chat: "Ask the agent →",
+    repos_hero_2: "Full data: /api/repos?owner=",
+    repos_hero_3: ". Switch owner in the dashboard (React) at /.",
+    api_hero_2: "All routes take an optional ?owner= (default: the last owner fetched, via data/github/last_owner). Loopback-only, no auth.",
+    api_endpoints: "Endpoints",
+    api_tools: "Agent tools",
+    api_add: "Adding another owner",
+    api_add_desc: " — snapshots acme's public repos into data/github/acme/.",
+    api_ep_owners: " — locally-cached owners + the current default",
+    api_ep_people: " — followers / following for x (first page of each, up to 100)",
+    api_ep_overview: " — full analysis bundle for x (404 + hint when not fetched)",
+    api_ep_repos: " — paged normalized repo views for x",
+    api_ep_top: " — top-10 by stars and top-10 by creation year",
+    api_ep_langs: " — language histogram for x ({lang: n})",
+    api_ep_recency: " — recency histogram for x (active/recent/dormant/stale/unknown)",
+    api_ep_year: " — creation-year histogram for x",
+    api_ep_search: " — filter x's repos by name/desc/topic/language substring",
+    api_tool_1: "repo_insights / repo_language / repo_recency / repo_year / repo_stats — optional { owner }",
+    api_tool_2: "repo_search — { owner?, q } substring across name/desc/topics/lang",
+    api_tool_3: "github_owners — list locally-cached owners",
+  };
+  let v = get(zh, key, null);
+  if (lang == "en") { v = get(en, key, null); }
+  if (v == null) { v = get(en, key, key); }
+  return v;
+}
+
+export func t(lang, key) {
+  return lang_dict(lang, key);
+}
+
 // ------------------------------------------------ shared shell
-// {0} title, {1} page_id, {2} nav, {3} main body slots, {4} footer note
-export func page(title, page_id, body) {
-  return html("<!doctype html><html><head>"
+// {0} title, {1} page_id, {2} nav, {3} main body slots, {4} footer note.
+// `lang` (zh|en) feeds the nav labels + footer line.
+export func page(title, page_id, body, lang) {
+  return html("<!doctype html><html lang='{5}'><head>"
     + "<meta charset='utf-8'>"
     + "<meta name='viewport' content='width=device-width, initial-scale=1'>"
     + "<title>{0} · lume-talentlens</title>"
@@ -23,8 +133,7 @@ export func page(title, page_id, body) {
     + "<main id='top'>{3}</main>"
     + "<footer>{4}</footer>"
     + "</body></html>",
-    title, page_id, nav(page_id), body,
-    " — server-rendered view of a candidate's GitHub talent signals");
+    title, page_id, nav(page_id, lang), body, lang_dict(lang, "footer"), lang);
 }
 
 export func cls(active: string, name: string): string {
@@ -33,16 +142,20 @@ export func cls(active: string, name: string): string {
   return c;
 }
 
-export func nav(active) {
+export func nav(active, lang) {
   // Keep labels + hrefs in sync with the React shells (www/github/*.html):
   // "/" is the React dashboard, the SSR pages live on /overview, /repos, /api.
+  // Language follows the ?lang= param the same way the React shell follows
+  // its localStorage toggle; each SSR link carries it so a switch persists
+  // across pages.
+  let lq = "?lang=" + lang;
   return el("nav", { class: "gh-nav" },
-    el("a", { class: "brand", href: "/" }, "lume-talentlens"),
-    el("a", { href: "/" }, "Dashboard"),
-    el("a", { class: cls(active, "home"), href: "/overview" }, "SSR Overview"),
-    el("a", { class: cls(active, "repos"), href: "/repos" }, "SSR Repos"),
-    el("a", { class: cls(active, "api"), href: "/api" }, "API"),
-    el("a", { class: cls(active, "chat"), href: "/chat" }, "Agent"));
+    el("a", { class: "brand", href: "/" + lq }, "lume-talentlens"),
+    el("a", { href: "/" + lq }, lang_dict(lang, "nav_dashboard")),
+    el("a", { class: cls(active, "home"), href: "/overview" + lq }, lang_dict(lang, "nav_overview")),
+    el("a", { class: cls(active, "repos"), href: "/repos" + lq }, lang_dict(lang, "nav_repos")),
+    el("a", { class: cls(active, "api"), href: "/api" + lq }, lang_dict(lang, "nav_api")),
+    el("a", { class: cls(active, "chat"), href: "/chat" + lq }, lang_dict(lang, "nav_agent")));
 }
 
 export func kpi(value, label) {
@@ -77,10 +190,10 @@ export func bars(hist) {
 }
 
 // a repo row for a "top" list
-export func repo_row(r, rank) {
+export func repo_row(r, rank, ui_lang) {
   let lang = str(get(r, "lang", null));
   let lang_html = "—";
-  if (lang == "null" or lang == "") { lang_html = "no language"; }
+  if (lang == "null" or lang == "") { lang_html = lang_dict(ui_lang, "no_lang"); }
   else { lang_html = lang; }
   return el("li", { class: "repo-row" },
     el("span", { class: "rank" }, str(rank)),

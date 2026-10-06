@@ -1,6 +1,74 @@
 import type { Overview, TalentSignals } from "./types";
+import type { Lang } from "./i18n";
 
 const YEAR_MS = 365 * 86400000;
+
+// ---- talent-domain strings (labels / cadence / HR note) — bilingual.
+// Kept here rather than i18n.ts: they belong to the note pipeline, not the
+// dashboard chrome. Functions default to "en" so callers without a lang
+// context (SSR-independent code paths) keep the previous behaviour.
+
+const TAL: Record<Lang, Record<string, string>> = {
+  zh: {
+    label_active: "活跃维护者",
+    label_archived: "有归档项目",
+    label_forks: "常 fork 收藏",
+    label_docs: "文档齐全",
+    label_license: "带许可证开源",
+    label_topics: "打主题标签",
+    label_focused: "专注型作品集",
+    label_community: "社区关注度高",
+    cad_unknown: "活跃度未知",
+    cad_month: "本月有推送",
+    cad_quarter: "本季度活跃",
+    cad_year: "一年内有推送",
+    cad_months_ago: "{n} 个月前有推送",
+    hrn_title: "@{owner} — 开源人才画像",
+    hrn_repos: "{count} 个公开仓库（{non_fork} 个原创）。{since}主要语言 {lang}（{pct}）。",
+    hrn_since: "自 {year} 起加入 GitHub。",
+    hrn_output: "产出：近 90 天 {pct}% 仓库活跃；{cad}。",
+    hrn_rigor: "严谨度：{doc}% 有文档、{lic}% 带许可证、{top}% 打主题标签。",
+    hrn_signals: "信号：{labels}。",
+    hrn_health: "开源健康度 {total}/100（活跃 {a}、严谨 {r}、专注 {f}、影响 {i}）。",
+    hrn_md_head: "# 开源人才画像 — @{owner}\n\n",
+    hrn_md_foot: "\n_权重 — 活跃 {a}% · 严谨 {r}% · 专注 {f}% · 影响 {i}% · 数据源：GitHub 公开仓库快照。_\n",
+  },
+  en: {
+    label_active: "Active maintainer",
+    label_archived: "Has archived projects",
+    label_forks: "Curates via forks",
+    label_docs: "Documents work",
+    label_license: "Open-sources with licenses",
+    label_topics: "Tags topics",
+    label_focused: "Focused portfolio",
+    label_community: "Followed community",
+    cad_unknown: "unknown cadence",
+    cad_month: "pushing this month",
+    cad_quarter: "active this quarter",
+    cad_year: "pushed within a year",
+    cad_months_ago: "last push {n} months ago",
+    hrn_title: "@{owner} — open-source talent read",
+    hrn_repos: "{count} public repos ({non_fork} original). {since}Top language {lang} ({pct}).",
+    hrn_since: "GitHub since {year}. ",
+    hrn_output: "Output: {pct}% of repos active in the last 90 days; {cad}.",
+    hrn_rigor: "Rigor: {doc}% documented, {lic}% licensed, {top}% topic-tagged.",
+    hrn_signals: "Signals: {labels}.",
+    hrn_health: "Open-source health {total}/100 (activity {a}, rigor {r}, focus {f}, influence {i}).",
+    hrn_md_head: "# Open-source talent read — @{owner}\n\n",
+    hrn_md_foot: "\n_Weights used — activity {a}% · rigor {r}% · focus {f}% · influence {i}% · source: GitHub public repos snapshot._\n",
+  },
+};
+
+function fill(s: string, p: Record<string, string | number>): string {
+  for (const [k, v] of Object.entries(p)) {
+    s = s.replace("{" + k + "}", String(v));
+  }
+  return s;
+}
+
+function tal(lang: Lang, key: string): string {
+  return TAL[lang][key] ?? TAL.en[key] ?? key;
+}
 
 function nowYear(): number {
   return new Date().getFullYear();
@@ -22,7 +90,7 @@ function topLangs(ov: Overview): [string, string[], number] {
 }
 
 // Derive the recruiter-facing signals from an Overview.
-export function deriveTalent(ov: Overview): TalentSignals {
+export function deriveTalent(ov: Overview, lang: Lang = "en"): TalentSignals {
   const n = Math.max(1, ov.count || 1);
   const active = ov.recency?.active ?? 0; // repos pushed within 90d
   const [top, secondaries, top2] = topLangs(ov);
@@ -44,20 +112,20 @@ export function deriveTalent(ov: Overview): TalentSignals {
   const labels: string[] = [];
 
   // Output / maintenance
-  if (active > 0) labels.push("Active maintainer");
-  if ((ov.totals?.archived ?? 0) > 0) labels.push("Has archived projects");
-  if ((ov.totals?.forked ?? 0) > 0) labels.push("Curates via forks");
+  if (active > 0) labels.push(tal(lang, "label_active"));
+  if ((ov.totals?.archived ?? 0) > 0) labels.push(tal(lang, "label_archived"));
+  if ((ov.totals?.forked ?? 0) > 0) labels.push(tal(lang, "label_forks"));
 
   // Rigor
-  if (t && t.with_desc / n >= 0.8) labels.push("Documents work");
-  if (t && t.with_license / n >= 0.4) labels.push("Open-sources with licenses");
-  if (t && t.with_topics / n >= 0.4) labels.push("Tags topics");
+  if (t && t.with_desc / n >= 0.8) labels.push(tal(lang, "label_docs"));
+  if (t && t.with_license / n >= 0.4) labels.push(tal(lang, "label_license"));
+  if (t && t.with_topics / n >= 0.4) labels.push(tal(lang, "label_topics"));
 
   // Focus
-  if (ov.non_fork_count && ov.non_fork_count <= 20) labels.push("Focused portfolio");
+  if (ov.non_fork_count && ov.non_fork_count <= 20) labels.push(tal(lang, "label_focused"));
 
   // Influence
-  if ((ov.profile?.followers ?? 0) >= 100) labels.push("Followed community");
+  if ((ov.profile?.followers ?? 0) >= 100) labels.push(tal(lang, "label_community"));
 
   return {
     member_since_year: memberSince,
@@ -79,12 +147,12 @@ export function deriveTalent(ov: Overview): TalentSignals {
 }
 
 // Human-readable phrase for the last-push cadence.
-export function cadence(d: number): string {
-  if (d < 0) return "unknown cadence";
-  if (d <= 30) return "pushing this month";
-  if (d <= 90) return "active this quarter";
-  if (d <= 365) return "pushed within a year";
-  return "last push " + Math.round(d / 30) + " months ago";
+export function cadence(d: number, lang: Lang = "en"): string {
+  if (d < 0) return tal(lang, "cad_unknown");
+  if (d <= 30) return tal(lang, "cad_month");
+  if (d <= 90) return tal(lang, "cad_quarter");
+  if (d <= 365) return tal(lang, "cad_year");
+  return fill(tal(lang, "cad_months_ago"), { n: Math.round(d / 30) });
 }
 
 // ---- composite "open-source health" score (0–100) ----------------------
@@ -194,27 +262,43 @@ export function healthScore(
 export function toHrNote(
   ov: Overview,
   t: TalentSignals,
-  w: HealthWeights = DEFAULT_HEALTH_WEIGHTS
+  w: HealthWeights = DEFAULT_HEALTH_WEIGHTS,
+  lang: Lang = "en"
 ): string {
   const { total, pillars } = healthScore(t, w);
   const L: string[] = [];
-  L.push(`@${ov.owner} — open-source talent read`);
+  L.push(fill(tal(lang, "hrn_title"), { owner: ov.owner }));
   L.push(
-    `${ov.count} public repos (${ov.non_fork_count} original). ` +
-      (t.member_since_year ? `GitHub since ${t.member_since_year}. ` : "") +
-      `Top language ${t.top_lang} (${pct(t.top_lang_ratio)}).`
+    fill(tal(lang, "hrn_repos"), {
+      count: ov.count,
+      non_fork: ov.non_fork_count,
+      since: t.member_since_year ? fill(tal(lang, "hrn_since"), { year: t.member_since_year }) : "",
+      lang: t.top_lang,
+      pct: pct(t.top_lang_ratio),
+    })
   );
   L.push(
-    `Output: ${Math.round(t.output_ratio * 100)}% of repos active in the last 90 days; ${cadence(t.avg_days_since_push)}.`
+    fill(tal(lang, "hrn_output"), {
+      pct: Math.round(t.output_ratio * 100),
+      cad: cadence(t.avg_days_since_push, lang),
+    })
   );
   L.push(
-    `Rigor: ${pct(t.desc_ratio)} documented, ${pct(t.license_ratio)} licensed, ${pct(t.topics_ratio)} topic-tagged.`
+    fill(tal(lang, "hrn_rigor"), {
+      doc: pct(t.desc_ratio),
+      lic: pct(t.license_ratio),
+      top: pct(t.topics_ratio),
+    })
   );
-  if (t.labels.length) L.push(`Signals: ${t.labels.join(", ")}.`);
+  if (t.labels.length) L.push(fill(tal(lang, "hrn_signals"), { labels: t.labels.join(", ") }));
   L.push(
-    `Open-source health ${total}/100 ` +
-      `(activity ${Math.round(pillars.activity * 100)}, rigor ${Math.round(pillars.rigor * 100)}, ` +
-      `focus ${Math.round(pillars.focus * 100)}, influence ${Math.round(pillars.influence * 100)}). `
+    fill(tal(lang, "hrn_health"), {
+      total,
+      a: Math.round(pillars.activity * 100),
+      r: Math.round(pillars.rigor * 100),
+      f: Math.round(pillars.focus * 100),
+      i: Math.round(pillars.influence * 100),
+    })
   );
   return L.join("\n");
 }
@@ -223,23 +307,27 @@ export function toHrNote(
 export function hrNoteMarkdown(
   ov: Overview,
   t: TalentSignals,
-  w: HealthWeights = DEFAULT_HEALTH_WEIGHTS
+  w: HealthWeights = DEFAULT_HEALTH_WEIGHTS,
+  lang: Lang = "en"
 ): string {
-  const head = `# Open-source talent read — @${ov.owner}\n\n`;
-  const foot =
-    `\n_Weights used — activity ${Math.round(w.activity * 100)}% · rigor ` +
-    `${Math.round(w.rigor * 100)}% · focus ${Math.round(w.focus * 100)}% · influence ` +
-    `${Math.round(w.influence * 100)}% · source: GitHub public repos snapshot._\n`;
-  return head + toHrNote(ov, t, w) + foot;
+  const head = fill(tal(lang, "hrn_md_head"), { owner: ov.owner });
+  const foot = fill(tal(lang, "hrn_md_foot"), {
+    a: Math.round(w.activity * 100),
+    r: Math.round(w.rigor * 100),
+    f: Math.round(w.focus * 100),
+    i: Math.round(w.influence * 100),
+  });
+  return head + toHrNote(ov, t, w, lang) + foot;
 }
 
 // Trigger a browser download of the .md. Returns a promise resolving on click.
 export function downloadHrNote(
   ov: Overview,
   t: TalentSignals,
-  w: HealthWeights = DEFAULT_HEALTH_WEIGHTS
+  w: HealthWeights = DEFAULT_HEALTH_WEIGHTS,
+  lang: Lang = "en"
 ): void {
-  const md = hrNoteMarkdown(ov, t, w);
+  const md = hrNoteMarkdown(ov, t, w, lang);
   const blob = new Blob([md], { type: "text/markdown" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

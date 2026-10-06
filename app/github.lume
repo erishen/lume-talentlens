@@ -90,6 +90,16 @@ func owner_param(req) {
   return sanitize_owner(get(qp, "owner", ""));
 }
 
+// language from ?lang= (req-based); "zh" default, "en" accepted, anything
+// else (including absent) falls back to "zh" — matches the React shell's
+// localStorage default so both entry points agree out of the box.
+func lang_param(req) {
+  let qp = get(req, "query_params", {});
+  let l = str(get(qp, "lang", "zh"));
+  if (l == "en") { return "en"; }
+  return "zh";
+}
+
 // owner from a tool argument map; empty string when the arg is absent.
 func owner_arg(arg) {
   return sanitize_owner(get(arg, "owner", ""));
@@ -461,62 +471,62 @@ func ssr_owner(req) {
   return o;
 }
 
-func ssr_block(owner) {
+func ssr_block(owner, lang) {
   // owner page with a hint card when its snapshot is missing
   return el("section", { class: "panel error" },
-    el("h2", {}, "No local snapshot for " + owner),
-    el("p", {}, "Fetch it first, then retry this page: "),
+    el("h2", {}, ui.t(lang, "ssr_no_snap_title") + owner),
+    el("p", {}, ui.t(lang, "ssr_no_snap_fetch")),
     el("code", {}, "OWNER=" + owner + " make fetch"),
-    el("p", {}, "Locally cached owners: "
+    el("p", {}, ui.t(lang, "ssr_no_snap_cached")
       + str(reduce((acc, e) => acc + str(e) + " ", cached_owners(), ""))));
 }
 
 get "/overview", (req) => {
   let owner = ssr_owner(req);
+  let lang = lang_param(req);
   let snap = load_snap(owner);
   if (snap == null) {
-    return ui.page("Overview · " + owner, "home", [ssr_block(owner)]);
+    return ui.page("Overview · " + owner, "home", [ssr_block(owner, lang)], lang);
   }
   let a = bundle(get(snap, "repos", []), snap);
   let tot = a.totals;
   let body = [
     el("section", { class: "hero" },
-            el("h1", {}, str(get(a.profile, "name", "")) + "'s GitHub talent profile (" + owner + ")"),
-      el("p", {}, "Server-rendered by Lume from a local snapshot of "
-        + str(a.count) + " public repos · fetched " + a.fetched_at
-        + ". Interact with the JSON APIs or ask the agent via /chat.")),
+            el("h1", {}, str(get(a.profile, "name", "")) + ui.t(lang, "ov_hero_1") + owner + ui.t(lang, "ov_hero_2")),
+      el("p", {}, ui.t(lang, "ov_hero_3") + str(a.count) + ui.t(lang, "ov_hero_4")
+        + a.fetched_at + ui.t(lang, "ov_hero_5"))),
 
     el("section", { class: "kpis" },
-      ui.kpi(str(a.count), "repos"),
-      ui.kpi(str(a.non_fork_count), "original (non-fork)"),
-      ui.kpi(str(int(get(tot, "stars", 0))), "stars total"),
-      ui.kpi(str(int(get(tot, "forks", 0))), "forks total")),
+      ui.kpi(str(a.count), ui.t(lang, "ov_kpi_repos")),
+      ui.kpi(str(a.non_fork_count), ui.t(lang, "ov_kpi_original")),
+      ui.kpi(str(int(get(tot, "stars", 0))), ui.t(lang, "ov_kpi_stars")),
+      ui.kpi(str(int(get(tot, "forks", 0))), ui.t(lang, "ov_kpi_forks"))),
 
     el("section", { class: "grid" },
       el("div", { class: "panel" },
-        el("h2", {}, "Languages"),
+        el("h2", {}, ui.t(lang, "ov_langs")),
         el("div", { class: "bars" }, ui.bars(a.languages))),
       el("div", { class: "panel" },
-        el("h2", {}, "Recency"),
+        el("h2", {}, ui.t(lang, "ov_recency")),
         el("div", { class: "bars" }, ui.bars(a.recency)))),
 
     el("section", { class: "panel" },
-      el("h2", {}, "Top 10 by stars"),
-      el("ol", { class: "top-list" }, top_list(a.top_by_stars))),
+      el("h2", {}, ui.t(lang, "ov_top10")),
+      el("ol", { class: "top-list" }, top_list(a.top_by_stars, lang))),
 
     el("section", { class: "links" },
-      el("a", { class: "btn", href: "/repos" }, "Browse all →"),
-      el("a", { class: "btn", href: "/api" }, "JSON API →"),
-      el("a", { class: "btn", href: "/chat" }, "Ask the agent →")),
+      el("a", { class: "btn", href: "/repos?lang=" + lang }, ui.t(lang, "ov_browse")),
+      el("a", { class: "btn", href: "/api?lang=" + lang }, ui.t(lang, "ov_api")),
+      el("a", { class: "btn", href: "/chat?lang=" + lang }, ui.t(lang, "ov_chat"))),
   ];
-  return ui.page("Overview · " + owner, "home", body);
+  return ui.page("Overview · " + owner, "home", body, lang);
 };
 
-func top_list(rows) {
+func top_list(rows, lang) {
   let out = [];
   let i = 0;
   for (let r in rows) {
-    push(out, ui.repo_row(r, i + 1));
+    push(out, ui.repo_row(r, i + 1, lang));
     i = i + 1;
   }
   return out;
@@ -524,70 +534,60 @@ func top_list(rows) {
 
 get "/repos", (req) => {
   let owner = ssr_owner(req);
+  let lang = lang_param(req);
   let snap = load_snap(owner);
   if (snap == null) {
-    return ui.page("Repos · " + owner, "repos", [ssr_block(owner)]);
+    return ui.page("Repos · " + owner, "repos", [ssr_block(owner, lang)], lang);
   }
   let all = map(gh.repo_view, get(snap, "repos", []));
   let rows = [];
   let i = 0;
   for (let r in all) {
-    push(rows, ui.repo_row(r, i + 1));
+    push(rows, ui.repo_row(r, i + 1, lang));
     i = i + 1;
   }
   let body = [
     el("section", { class: "hero" },
-      el("h1", {}, "All repos · " + owner + " (" + str(len(all)) + ")"),
-      el("p", {}, "Full data: /api/repos?owner=" + owner
-        + ". Switch owner in the dashboard (React) at /.")),
+      el("h1", {}, repos_title(lang, owner, len(all))),
+      el("p", {}, ui.t(lang, "repos_hero_2") + owner + ui.t(lang, "repos_hero_3"))),
     el("ol", { class: "top-list all" }, rows),
   ];
-  return ui.page("Repos · " + owner, "repos", body);
+  return ui.page("Repos · " + owner, "repos", body, lang);
 };
 
 get "/api", (req) => {
+  let lang = lang_param(req);
   let rows = [
-    el("li", {}, el("code", {}, "GET /api/owners"),
-      " — locally-cached owners + the current default"),
-    el("li", {}, el("code", {}, "GET /api/people?owner=x"),
-      " — followers / following for x (first page of each, up to 100)"),
-    el("li", {}, el("code", {}, "GET /api/overview?owner=x"),
-      " — full analysis bundle for x (404 + hint when not fetched)"),
-    el("li", {}, el("code", {}, "GET /api/repos?owner=x&offset=0&limit=25"),
-      " — paged normalized repo views for x"),
-    el("li", {}, el("code", {}, "GET /api/top?owner=x"),
-      " — top-10 by stars and top-10 by creation year"),
-    el("li", {}, el("code", {}, "GET /api/langs?owner=x"),
-      " — language histogram for x ({lang: n})"),
-    el("li", {}, el("code", {}, "GET /api/recency?owner=x"),
-      " — recency histogram for x (active/recent/dormant/stale/unknown)"),
-    el("li", {}, el("code", {}, "GET /api/year?owner=x"),
-      " — creation-year histogram for x"),
-    el("li", {}, el("code", {}, "GET /api/search?owner=x&q=rust"),
-      " — filter x's repos by name/desc/topic/language substring"),
+    el("li", {}, el("code", {}, "GET /api/owners"), ui.t(lang, "api_ep_owners")),
+    el("li", {}, el("code", {}, "GET /api/people?owner=x"), ui.t(lang, "api_ep_people")),
+    el("li", {}, el("code", {}, "GET /api/overview?owner=x"), ui.t(lang, "api_ep_overview")),
+    el("li", {}, el("code", {}, "GET /api/repos?owner=x&offset=0&limit=25"), ui.t(lang, "api_ep_repos")),
+    el("li", {}, el("code", {}, "GET /api/top?owner=x"), ui.t(lang, "api_ep_top")),
+    el("li", {}, el("code", {}, "GET /api/langs?owner=x"), ui.t(lang, "api_ep_langs")),
+    el("li", {}, el("code", {}, "GET /api/recency?owner=x"), ui.t(lang, "api_ep_recency")),
+    el("li", {}, el("code", {}, "GET /api/year?owner=x"), ui.t(lang, "api_ep_year")),
+    el("li", {}, el("code", {}, "GET /api/search?owner=x&q=rust"), ui.t(lang, "api_ep_search")),
   ];
   let body = [
     el("section", { class: "hero" },
       el("h1", {}, "JSON API"),
-      el("p", {}, "All routes take an optional ?owner= (default: the last "
-        + "owner fetched, via data/github/last_owner). Loopback-only, no auth.")),
+      el("p", {}, ui.t(lang, "api_hero_2"))),
     el("section", { class: "panel" },
-      el("h2", {}, "Endpoints"),
+      el("h2", {}, ui.t(lang, "api_endpoints")),
       el("ul", {}, rows)),
     el("section", { class: "panel" },
-      el("h2", {}, "Agent tools"),
+      el("h2", {}, ui.t(lang, "api_tools")),
       el("ul", {},
-        el("li", {}, "repo_insights / repo_language / repo_recency / repo_year / repo_stats — optional { owner }"),
-        el("li", {}, "repo_search — { owner?, q } substring across name/desc/topics/lang"),
-        el("li", {}, "github_owners — list locally-cached owners")
+        el("li", {}, ui.t(lang, "api_tool_1")),
+        el("li", {}, ui.t(lang, "api_tool_2")),
+        el("li", {}, ui.t(lang, "api_tool_3"))
       )
     ),
     el("section", { class: "panel" },
-      el("h2", {}, "Adding another owner"),
-      el("p", {}, el("code", {}, "OWNER=acme make fetch"),
-        " — snapshots acme's public repos into data/github/acme/.")),
+      el("h2", {}, ui.t(lang, "api_add")),
+      el("p", {}, el("code", {}, "OWNER=acme make fetch"), ui.t(lang, "api_add_desc"))),
   ];
-  return ui.page("API", "api", body);
+  return ui.page("API", "api", body, lang);
 };
 
 // ------------------------------------------------ agent tools

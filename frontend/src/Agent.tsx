@@ -1,4 +1,6 @@
 import React from "react";
+import { useT } from "./i18n";
+import { LangSwitch } from "./LangSwitch";
 
 interface Msg {
   role: "user" | "agent" | "note" | "error";
@@ -14,15 +16,9 @@ interface Msg {
 // We accumulate deltas into the live agent bubble, show notes as system
 // lines, and stop on done/error.
 export function Agent() {
+  const t = useT();
   const [msgs, setMsgs] = React.useState<Msg[]>([
-    {
-      role: "note",
-      text:
-        "Ask about this person's GitHub footprint — profile, top repos, recency, " +
-        "totals. The agent answers with its registered tools " +
-        "(repo_insights / repo_search / repo_language / repo_recency / repo_year / repo_stats) " +
-        "backed by the local snapshot.",
-    },
+    { role: "note", text: t("agent.note") },
   ]);
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -61,7 +57,7 @@ export function Agent() {
       setMsgs((m) => {
         let next = [...m];
         if (!agentStarted) {
-          next.push({ role: "agent", text: errText ? "" : "(no reply)" });
+          next.push({ role: "agent", text: errText ? "" : t("agent.no_reply") });
         } else if (errText && agentBuf === "") {
           next.push({ role: "error", text: errText });
         }
@@ -123,7 +119,7 @@ export function Agent() {
             } else if (ev.t === "note") {
               setMsgs((m) => [...m, { role: "note", text: ev.d || "" }]);
             } else if (ev.t === "error") {
-              setMsgs((m) => [...m, { role: "error", text: ev.d || "upstream error" }]);
+              setMsgs((m) => [...m, { role: "error", text: ev.d || t("agent.upstream_error") }]);
             } else if (ev.t === "done") {
               return;
             }
@@ -136,11 +132,14 @@ export function Agent() {
 
   return (
     <div className="agent">
+      <div className="agent-head">
+        <LangSwitch />
+      </div>
       <div className="agent-scroll" ref={scroller}>
         {msgs.map((m, i) => (
           <div key={i} className={"msg " + m.role}>
-            {m.role === "note" && <span className="msg-tag">tool</span>}
-            {m.role === "agent" && <span className="msg-tag">agent</span>}
+            {m.role === "note" && <span className="msg-tag">{t("agent.tag_tool")}</span>}
+            {m.role === "agent" && <span className="msg-tag">{t("agent.tag_agent")}</span>}
             <span className="msg-text">{m.text}</span>
           </div>
         ))}
@@ -149,13 +148,13 @@ export function Agent() {
       <div className="agent-input">
         <input
           value={input}
-          placeholder={busy ? "agent is thinking…" : "ask about your repos…"}
+          placeholder={busy ? t("agent.placeholder_busy") : t("agent.placeholder")}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
           disabled={busy}
         />
         <button className="btn" onClick={send} disabled={busy || input.trim() === ""}>
-          Send
+          {t("agent.send")}
         </button>
       </div>
     </div>

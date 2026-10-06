@@ -8,8 +8,12 @@ import { OwnerPicker } from "./dashboard/pickers";
 import { ProfileCard, TalentPanel, ComparePanel, PushTrend } from "./dashboard/panels";
 import { Bars, Kpi } from "./dashboard/bars";
 import { PersonList, RepoRow, BrowsePage } from "./dashboard/lists";
+import { LangSwitch } from "./LangSwitch";
+import { useLang, useT } from "./i18n";
 
 export function Dashboard() {
+  const t = useT();
+  const { lang } = useLang();
   const [owner, setOwner] = React.useState("");
   const [cached, setCached] = React.useState<string[]>([]);
   // request-sequence guards: the latest load wins, older in-flight responses
@@ -100,8 +104,7 @@ export function Dashboard() {
       if (s !== peopleSeq.current) return;
       if (p.followers.length === 0 && p.following.length === 0) {
         setPeople(p);
-        setPeopleError("Could not reach GitHub for this owner (network or rate limit). " +
-          "For a cached owner, restart the server so /api/people is available, then click Retry.");
+        setPeopleError(t("live.error_network"));
       } else {
         setPeople(p);
         setPeopleError("");
@@ -110,7 +113,7 @@ export function Dashboard() {
     }).catch(() => {
       if (s !== peopleSeq.current) return;
       setPeople(null);
-      setPeopleError("Failed to load followers/following.");
+      setPeopleError(t("live.error_failed"));
       setPeopleLoading(false);
     });
   }
@@ -256,7 +259,7 @@ export function Dashboard() {
         }
         row.ov = ov;
         row.err = errMsg;
-        row.score = ov ? healthScore(deriveTalent(ov)).total : 0;
+        row.score = ov ? healthScore(deriveTalent(ov, lang)).total : 0;
         done += 1;
         if (seq === poolSeq.current) {
           setPoolProgress({ done, total: names.length });
@@ -330,7 +333,7 @@ export function Dashboard() {
   const rankedPool = pool
     .map((p) => ({
       ...p,
-      score: p.ov ? healthScore(deriveTalent(p.ov), weights).total : 0,
+      score: p.ov ? healthScore(deriveTalent(p.ov, lang), weights).total : 0,
     }))
     .sort((a, b) => b.score - a.score);
 
@@ -345,55 +348,58 @@ export function Dashboard() {
   return (
     <div>
       <section className="hero">
-        <h1>Recruiting lens over a GitHub footprint</h1>
-        <p>Pick an owner to read their talent signals — profile, engineering rigor, output, focus (local snapshots, offline).</p>
+        <div className="hero-text">
+          <h1>{t("hero.title")}</h1>
+          <p>{t("hero.subtitle")}</p>
+        </div>
+        <LangSwitch />
       </section>
 
       <OwnerPicker value={owner} cached={cached} onPick={onOwnerPick} onAnalyze={loadOverview} busy={loading} />
 
       <div className="pool-row">
-        <span className="muted">rank</span>
+        <span className="muted">{t("pool.label")}</span>
         <input
           className="search-input"
-          placeholder="candidate pool — several owners, comma/space separated (e.g. erishen, acme, bob)"
+          placeholder={t("pool.placeholder")}
           value={poolInput}
           onChange={(e) => setPoolInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !poolLoading && loadPool(poolInput)}
         />
         <button className="btn" onClick={() => loadPool(poolInput)} disabled={poolLoading}>
-          {poolLoading ? "…" : "Rank"}
+          {poolLoading ? "…" : t("pool.rank")}
         </button>
         {pool.length > 0 && (
           <button className="chip" onClick={() => { setPool([]); setPoolInput(""); }}>
-            ✕ clear
+            {t("pool.clear")}
           </button>
         )}
       </div>
 
       {poolLoading && poolProgress && (
         <div className="panel pool-progress">
-          <h2>Candidate ranking · loading</h2>
+          <h2>{t("pool.loading_title")}</h2>
           <div className="pool-prog-bar">
             <div className="pool-prog-fill" style={{ width: `${poolFrac * 100}%` }} />
           </div>
           <p className="muted">
-            {poolProgress.done} / {poolProgress.total} loaded
+            {t("pool.loaded", { done: poolProgress.done, total: poolProgress.total })}
             {poolProgress.curOwner ? (
               <>
-                {" "}· fetching <code>@{poolProgress.curOwner}</code>
+                {" "}· {t("pool.fetching")} <code>@{poolProgress.curOwner}</code>
                 {poolProgress.curTotal ? (
-                  <> (repos page {Math.min(poolProgress.curPage ?? 0, poolProgress.curTotal)}/{poolProgress.curTotal})</>
+                  <> ({t("pool.repos_page", { cur: Math.min(poolProgress.curPage ?? 0, poolProgress.curTotal), total: poolProgress.curTotal })})</>
                 ) : null}
               </>
             ) : null}
-            {" "}(live pulls are throttled to stay under the 60 req/h limit)
+            {" "}{t("pool.throttled")}
           </p>
         </div>
       )}
 
       {pool.length > 0 && !poolLoading && (
         <section className="panel pool">
-          <h2>Candidate ranking · by open-source health</h2>
+          <h2>{t("pool.ranking_title")}</h2>
           <div className="pool-table">
             {rankedPool.map((p, i) => (
               <div className="pool-row-item" key={p.target}>
@@ -401,7 +407,7 @@ export function Dashboard() {
                 <button
                   className="pool-name"
                   onClick={() => openOwner(p.target)}
-                  title={"Analyze @" + p.target + " (in-app)"}
+                  title={t("people.click_name", { login: p.target })}
                 >
                   @{p.target}
                 </button>
@@ -413,8 +419,11 @@ export function Dashboard() {
                     <span className="muted err">{p.err}</span>
                   ) : p.ov ? (
                     <span>
-                      {p.ov.count} repos · top <code>{Object.keys(p.ov.languages || {})[0] || "—"}</code>{" "}
-                      · {p.ov.recency.active || 0} active ≤90d
+                      {t("pool.detail", {
+                        count: p.ov.count,
+                        lang: Object.keys(p.ov.languages || {})[0] || "—",
+                        active: p.ov.recency.active || 0,
+                      })}
                     </span>
                   ) : null}
                 </span>
@@ -422,44 +431,46 @@ export function Dashboard() {
             ))}
           </div>
           <p className="muted pool-note">
-            Click a name to open the full analysis · sorted by the current health weights
-            ({Math.round(weights.activity * 100)}/{Math.round(weights.rigor * 100)}/
-            {Math.round(weights.focus * 100)}/{Math.round(weights.influence * 100)}) — adjust them in Talent
-            signals and the ranking updates live.
+            {t("pool.note", {
+              a: Math.round(weights.activity * 100),
+              r: Math.round(weights.rigor * 100),
+              f: Math.round(weights.focus * 100),
+              i: Math.round(weights.influence * 100),
+            })}
           </p>
         </section>
       )}
 
       <div className="compare-row">
-        <span className="muted">vs</span>
+        <span className="muted">{t("cmp.label")}</span>
         <input
           className="search-input"
-          placeholder="compare with another GitHub owner (e.g. torvalds)"
+          placeholder={t("cmp.placeholder")}
           value={cmp.target}
           onChange={(e) => setCmp((c) => ({ ...c, target: e.target.value }))}
           onKeyDown={(e) => e.key === "Enter" && loadCompare(cmp.target)}
         />
         <button className="btn" onClick={() => loadCompare(cmp.target)} disabled={cmp.loading}>
-          {cmp.loading ? "…" : "Compare"}
+          {cmp.loading ? "…" : t("cmp.btn")}
         </button>
         {cmp.ov && (
           <button className="chip" onClick={() => setCmp({ target: "", ov: null, loading: false, err: "" })}>
-            ✕ clear
+            {t("cmp.clear")}
           </button>
         )}
       </div>
-      {cmp.err && <div className="panel error">Compare failed: {cmp.err}</div>}
+      {cmp.err && <div className="panel error">{t("cmp.failed")}: {cmp.err}</div>}
       {ov && cmp.ov && ov.owner !== cmp.target ? (
         <ComparePanel ovA={ov} ovB={cmp.ov} weights={weights} />
       ) : null}
 
       {err && <div className="panel error">{err}</div>}
 
-      {loading && <div className="panel">Loading…</div>}
+      {loading && <div className="panel">{t("misc.loading")}</div>}
 
       {liveLoading && (
         <div className="panel">
-          <h2>Fetching <code>{owner}</code> live from GitHub…</h2>
+          <h2>{t("live.fetching", { owner })}</h2>
           {liveProgress && liveProgress.total > 0 ? (
             <>
               <div className="pool-prog-bar">
@@ -469,23 +480,27 @@ export function Dashboard() {
                 />
               </div>
               <p className="muted">
-                repos page {Math.min(liveProgress.page, liveProgress.total)}/{liveProgress.total} · {liveProgress.repos} repos pulled
+                {t("live.page_progress", {
+                  page: Math.min(liveProgress.page, liveProgress.total),
+                  total: liveProgress.total,
+                  repos: liveProgress.repos,
+                })}
               </p>
             </>
           ) : (
-            <p className="muted">pulling repos…</p>
+            <p className="muted">{t("live.pulling")}</p>
           )}
         </div>
       )}
 
       {liveErr && !liveLoading && (
         <div className="panel error">
-          <h2>Live fetch failed{owner ? <code> @{owner}</code> : null}</h2>
+          <h2>{t("live.failed", { owner: owner ? "@" + owner : "" })}</h2>
           <p>{liveErr}</p>
           {owner && (
             <div className="no-snap-actions">
-              <button className="btn" onClick={() => loadLive(owner)}>Retry</button>
-              <span className="muted">offline fallback — run:</span>
+              <button className="btn" onClick={() => loadLive(owner)}>{t("live.retry")}</button>
+              <span className="muted">{t("live.offline_fallback")}</span>
               <code className="hint-cmd">{`OWNER=${owner} make fetch`}</code>
             </div>
           )}
@@ -494,16 +509,15 @@ export function Dashboard() {
 
       {noSnap && !loading && !liveLoading && (
         <div className="panel no-snap">
-          <h2>No local snapshot for <code>{noSnap.owner}</code></h2>
-          <p>Two ways to analyze <code>{noSnap.owner}</code>:</p>
+          <h2>{t("live.no_snapshot", { owner: noSnap.owner })}</h2>
+          <p>{t("live.two_ways", { owner: noSnap.owner })}</p>
           <div className="no-snap-actions">
-            <button className="btn" onClick={() => loadLive(noSnap.owner)}>Fetch live from GitHub</button>
-            <span className="muted">or, offline / rate-limit-proof:</span>
+            <button className="btn" onClick={() => loadLive(noSnap.owner)}>{t("live.fetch_live")}</button>
+            <span className="muted">{t("live.or_offline")}</span>
             <code className="hint-cmd">{`OWNER=${noSnap.owner} make fetch`}</code>
           </div>
           <p className="muted">
-            Live fetch goes through the server's /api/live/github proxy (outbound http_get);
-            unauthenticated it is shared at ~60 req/h — set GH_TOKEN to raise it.
+            {t("live.proxy_note")}
           </p>
         </div>
       )}
@@ -512,20 +526,20 @@ export function Dashboard() {
         <>
           <ProfileCard ov={ov} />
 
-          <TalentPanel t={deriveTalent(ov)} ov={ov} weights={weights} onWeights={setWeights} />
+          <TalentPanel t={deriveTalent(ov, lang)} ov={ov} weights={weights} onWeights={setWeights} />
 
           <section className="kpis">
-            <Kpi n={String(ov.count)} label="repos" />
-            <Kpi n={String(ov.non_fork_count)} label="original" />
-            <Kpi n={String(ov.totals.stars)} label="stars total" />
-            <Kpi n={String(ov.totals.forks)} label="forks total" />
-            <Kpi n={String(ov.recency.active || 0)} label="active ≤90d" />
+            <Kpi n={String(ov.count)} label={t("kpi.repos")} />
+            <Kpi n={String(ov.non_fork_count)} label={t("kpi.original")} />
+            <Kpi n={String(ov.totals.stars)} label={t("kpi.stars_total")} />
+            <Kpi n={String(ov.totals.forks)} label={t("kpi.forks_total")} />
+            <Kpi n={String(ov.recency.active || 0)} label={t("kpi.active_90d")} />
           </section>
 
           <section className="grid">
-            <Bars title="Languages" data={ov.languages} />
-            <Bars title="Recency" data={ov.recency} color="#22c55e" />
-            <Bars title="Created per year" data={ov.years} color="#f59e0b" />
+            <Bars title={t("bars.languages")} data={ov.languages} />
+            <Bars title={t("bars.recency")} data={ov.recency} color="#22c55e" />
+            <Bars title={t("bars.created_per_year")} data={ov.years} color="#f59e0b" />
           </section>
 
           {ov.push_trend && (
@@ -537,28 +551,28 @@ export function Dashboard() {
           <div className="grid two">
             {peopleLoading && (
               <div className="panel">
-                <h2>Followers &amp; Following</h2>
-                <p className="muted">Loading…</p>
+                <h2>{t("people.title")}</h2>
+                <p className="muted">{t("people.loading")}</p>
               </div>
             )}
             {!peopleLoading && peopleError && (
               <div className="panel error" style={{ gridColumn: "1 / -1" }}>
-                <h2>Followers &amp; Following</h2>
+                <h2>{t("people.error_title")}</h2>
                 <p>{peopleError}</p>
-                <button className="btn" onClick={() => loadPeople(owner, !!live)}>Retry</button>
+                <button className="btn" onClick={() => loadPeople(owner, !!live)}>{t("people.retry")}</button>
               </div>
             )}
             {!peopleLoading && !peopleError && people && (
               <>
                 <PersonList
-                  title="Followers"
+                  title={t("people.followers")}
                   people={people.followers}
                   totals={people.totals.followers}
                   note={people.note}
                   onOpen={openOwner}
                 />
                 <PersonList
-                  title="Following"
+                  title={t("people.following")}
                   people={people.following}
                   totals={people.totals.following}
                   note={people.note}
@@ -569,7 +583,7 @@ export function Dashboard() {
           </div>
 
           <section className="panel">
-            <h2>Top 10 by stars</h2>
+            <h2>{t("all.top10")}</h2>
             <ol className="top-list">
               {ov.top_by_stars.map((r, i) => (
                 <RepoRow key={r.name} r={r} rank={i + 1} />
@@ -578,17 +592,17 @@ export function Dashboard() {
           </section>
 
           <section className="panel">
-            <h2>Search {owner ? <span className="muted">in {owner}</span> : null}</h2>
+            <h2>{owner ? t("search.in", { owner }) : t("search.btn")}</h2>
             <div className="search-row">
               <input
                 className="search-input"
                 value={q}
-                placeholder="filter by name / description / language / topic…"
+                placeholder={t("search.placeholder")}
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && onSearch()}
               />
               <button className="btn" onClick={onSearch} disabled={searching || !owner}>
-                {searching ? "…" : "Search"}
+                {searching ? "…" : t("search.btn")}
               </button>
             </div>
             {searched && (
@@ -596,14 +610,14 @@ export function Dashboard() {
                 {hits.map((r, i) => (
                   <RepoRow key={r.name} r={r} rank={i + 1} />
                 ))}
-                {hits.length === 0 && <li className="muted">no matches for “{q}”</li>}
-                {hits.length > 0 && <li className="muted">{hitsTotal} match{hitsTotal === 1 ? "" : "es"}</li>}
+                {hits.length === 0 && <li className="muted">{t("search.no_matches", { q })}</li>}
+                {hits.length > 0 && <li className="muted">{hitsTotal} {t("search.match")}</li>}
               </ol>
             )}
           </section>
 
           <section className="panel">
-            <h2>All repos</h2>
+            <h2>{t("all.repos")}</h2>
             <BrowsePage limit={limit} setLimit={setLimit} owner={owner}
               liveAll={live ? live.all : null} />
           </section>
