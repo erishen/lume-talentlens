@@ -50,9 +50,10 @@ EOF
 TOTAL="$(wc -l < "$TMPDIR/logins.txt" | tr -d ' ')"
 [ "$LIMIT" -gt 0 ] && [ "$LIMIT" -lt "$TOTAL" ] && TOTAL="$LIMIT"
 
-echo "people-scan: scanning $TOTAL/$TOTAL $KIND of @$OWNER (token: $([ -n "$TOK" ] && echo yes || echo no))" >&2
+echo "people-scan: scanning up to $TOTAL $KIND of @$OWNER (token: $([ -n "$TOK" ] && echo yes || echo no))" >&2
 
 # 2) per-user profile fetch (the only thing that costs API requests)
+#    ${AUTH[@]+...}: safe empty-array expansion under `set -u` (macOS bash 3.2)
 AUTH=()
 [ -n "$TOK" ] && AUTH=(-H "Authorization: Bearer $TOK")
 N=0
@@ -60,7 +61,7 @@ while IFS= read -r u && { [ "$LIMIT" -eq 0 ] || [ "$N" -lt "$LIMIT" ]; }; do
   [ -z "$u" ] && continue
   N=$((N + 1))
   out="$TMPDIR/u_$N.json"
-  if ! curl -s --max-time 10 "${AUTH[@]}" "https://api.github.com/users/$u" -o "$out"; then
+  if ! curl -s --max-time 10 ${AUTH[@]+"${AUTH[@]}"} "https://api.github.com/users/$u" -o "$out"; then
     echo "  ! $u: fetch failed" >&2
     continue
   fi

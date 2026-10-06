@@ -38,7 +38,7 @@ def year_est(uid: int) -> str:
 
 RECRUITER_RE = re.compile(
     r"(?i)(recruit|hiring|talent[-_]?(acq|acquisition)|headhunt|head[-_]?hunt|"
-    r"\bhr[-_a-z]*\b|staffing|peopleops|people[-_]?ops|human[-_]?capital|"
+    r"(^|[-_])(hr|hrs)([-_]|$)|staffing|peopleops|people[-_]?ops|human[-_]?capital|"
     r"outsourc|career|job[-_]?(hunter|provider)|workforce)"
 )
 
@@ -47,7 +47,9 @@ def patterns(login: str) -> list:
     marks = []
     if re.search(r"\d{3,}$", login):
         marks.append("number-tail")
-    if re.search(r"(?i)(coder|dev|ninja|tech|official|social|ai|oss|byte|web)", login):
+    # word-boundary so common substrings (dev in "devansh", ai in "main",
+    # web in "webster") don't mark every name as a buzzword stack
+    if re.search(r"(?i)\b(coder|dev|ninja|tech|official|social|ai|oss|byte|web)\b", login):
         marks.append("buzzword")
     if re.search(r"[A-Z]+-[A-Z]+", login):
         marks.append("hyphen-stack")
