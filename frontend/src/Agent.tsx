@@ -170,11 +170,27 @@ export function Agent() {
       .catch(() => {});
   }
 
+  function clearChat() {
+    abortRef.current?.abort();
+    setMsgs([{ role: "note", text: t("agent.note") }]);
+  }
+
   return (
     <div className="agent">
+      <div className="agent-header">
+        <span className="agent-title">{t("agent.title")}</span>
+        <button className="agent-clear" onClick={clearChat} disabled={busy}>
+          {t("agent.clear")}
+        </button>
+      </div>
       <div className="agent-scroll" ref={scroller}>
         {msgs.map((m, i) => (
-          <div key={i} className={"msg " + m.role}>
+          <div
+            key={i}
+            className={
+              "msg " + m.role + (i === 0 && m.role === "note" ? " welcome" : "")
+            }
+          >
             {m.role === "note" && <span className="msg-tag">{t("agent.tag_tool")}</span>}
             {m.role === "agent" && <span className="msg-tag">{t("agent.tag_agent")}</span>}
             <span className="msg-text">{m.text}</span>

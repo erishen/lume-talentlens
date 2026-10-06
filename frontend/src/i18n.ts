@@ -170,6 +170,8 @@ const zh: Record<string, string> = {
   "tal.dl_title": "将招聘备注下载为 .md 文件",
   "cmp.title": "对比 @{a} 与 @{b}",
   // agent
+  "agent.title": "GitHub 人才信号助手",
+  "agent.clear": "清空会话",
   "agent.note": "询问这个人的 GitHub 足迹——画像、顶级仓库、活跃度、总量。智能体使用注册工具（repo_insights / repo_search / repo_language / repo_recency / repo_year / repo_stats）基于本地快照作答。",
   "agent.placeholder": "询问你的仓库…",
   "agent.placeholder_busy": "智能体思考中…",
@@ -323,6 +325,8 @@ const en: Record<string, string> = {
   "tal.copy_title": "Copy a recruiting note",
   "tal.dl_title": "Download the recruiting note as a .md file",
   "cmp.title": "Compare @{a} vs @{b}",
+  "agent.title": "GitHub Talent-Signal Assistant",
+  "agent.clear": "Clear chat",
   "agent.note": "Ask about this person's GitHub footprint — profile, top repos, recency, totals. The agent answers with its registered tools (repo_insights / repo_search / repo_language / repo_recency / repo_year / repo_stats) backed by the local snapshot.",
   "agent.placeholder": "ask about your repos…",
   "agent.placeholder_busy": "agent is thinking…",

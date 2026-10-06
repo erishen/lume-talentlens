@@ -459,14 +459,37 @@ main, .agent-wrap, #gh-root {
 .agent {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 220px);
-  min-height: 320px;
+  height: calc(100vh - 190px);
+  min-height: 360px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
   overflow: hidden;
 }
+.agent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+}
+.agent-title { font-weight: 600; color: var(--ink); font-size: .95rem; }
+.agent-clear {
+  font-size: .72rem;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.agent-clear:hover:not(:disabled) { color: var(--bad); border-color: var(--bad); }
+.agent-clear:disabled { opacity: .4; cursor: default; }
 .agent-scroll { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.agent-scroll::-webkit-scrollbar { width: 8px; }
+.agent-scroll::-webkit-scrollbar-thumb { background: #26304d; border-radius: 4px; }
+.agent-scroll::-webkit-scrollbar-thumb:hover { background: #33406a; }
 .agent-input {
   display: flex;
   gap: 8px;
@@ -481,6 +504,7 @@ main, .agent-wrap, #gh-root {
   padding: 9px 12px;
   color: var(--ink);
 }
+.agent-input input::placeholder { color: var(--muted); opacity: .7; }
 .agent-input input:focus { outline: none; border-color: var(--accent); }
 .msg { max-width: 78%; padding: 8px 12px; border-radius: 10px; font-size: .9rem; white-space: pre-wrap; }
 .msg.user { align-self: flex-end; background: var(--accent); color: #06213a; }
@@ -492,6 +516,18 @@ main, .agent-wrap, #gh-root {
   font-size: .78rem;
   font-family: ui-monospace, monospace;
 }
+/* welcome card: the first (intro) note renders as a highlighted banner */
+.msg.note.welcome {
+  align-self: stretch;
+  background: #0d1526;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  color: var(--ink);
+  font-size: .82rem;
+  font-family: inherit;
+  padding: 12px 14px;
+}
+.msg.note.welcome .msg-tag { display: none; }
 .msg.error { align-self: flex-start; background: rgba(248,113,113,.12); border: 1px solid var(--bad); color: var(--bad); }
 .msg .msg-tag {
   display: inline-block;
@@ -501,7 +537,14 @@ main, .agent-wrap, #gh-root {
   color: var(--accent);
   margin-bottom: 3px;
 }
-.msg.typing { color: var(--muted); }
+.msg.typing {
+  color: var(--muted);
+  animation: typingPulse 1.2s ease-in-out infinite;
+}
+@keyframes typingPulse {
+  0%, 60%, 100% { opacity: .25; }
+  30% { opacity: 1; }
+}
 .msg .msg-copy {
   display: inline-block;
   margin-left: 8px;
