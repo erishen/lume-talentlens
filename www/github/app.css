@@ -2,7 +2,7 @@
    lume-talentlens — shared stylesheet
    Served at /app.css (views dir is a virtual root: www/github -> /).
    Covers both the Lume SSR shell (.hero/.panel/.bar-*) and the
-   React dashboard/agent (.kpi/.chip/.repo-row/.agent/.msg).
+   React dashboard/agent panel (.kpi/.chip/.repo-row/.agent-panel/.msg).
    ============================================================ */
 :root {
   --bg: #0b1020;
@@ -459,7 +459,7 @@ main, .agent-wrap, #gh-root {
 /* height adapts to the content (min-height keeps it usable); it never
    stretches to fill the viewport when there are only a couple of messages,
    and caps at the viewport minus chrome so long threads scroll */
-.agent {
+.agent-panel {
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 190px);

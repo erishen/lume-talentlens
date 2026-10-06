@@ -177,7 +177,7 @@ export function Agent() {
   }
 
   return (
-    <div className="agent">
+    <div className="agent-panel">
       <div className="agent-header">
         <span className="agent-title">{t("agent.title")}</span>
         <button className="agent-clear" onClick={clearChat} disabled={busy}>
