@@ -276,8 +276,12 @@ get "/api/people", (req) => {
   let followers = get(people, "followers", []);
   let following = get(people, "following", []);
   // water-account pre-screen (data/github/<owner>/suspects.json, if present):
-  // tag each entry with suspect level + recruiter vocabulary flag
-  let suspects_raw = read_file("data/github/" + owner + "/suspects.json");
+  // tag each entry with suspect level + recruiter vocabulary flag.
+  // Owner-scoped: this signal is only maintained for the user's own account.
+  let suspects_raw = null;
+  if (owner == "erishen") {
+    suspects_raw = read_file("data/github/erishen/suspects.json");
+  }
   if (suspects_raw != null) {
     let lookup = {};
     for (let s in get(json(suspects_raw), "suspects", [])) {
