@@ -17,6 +17,10 @@ API="https://api.github.com/user/following"
 #   shinobi-coder701 / takumi-sato0209 / MaxCode917 -> 2600-4000 followers in 3-4 months
 #   Lxcardoza993 / raviwijerathna1 -> borderline, kept per user choice
 #   abdulwasio2521 -> 797 followers / 10 repos, looks like a real dev — consider removing
+# API-confirmed 2026-10-06 (promoted from medium):
+#   HEJustinSun (3367 fol / 1 repo in 6 weeks), irisdomain23 (705 fol in 1 month),
+#   xcontcom (12772 fol), pwnedroot (7992 fol / 7 repos), jkdevcode (6541 fol),
+#   webbrain-one (24555 repos — auto-commit farm)
 LOGINS=(
   pipiwork0007-ai
   shinobi-coder701
@@ -25,17 +29,17 @@ LOGINS=(
   Lxcardoza993
   raviwijerathna1
   abdulwasio2521
-  # medium: registered 2024+ only, no template-name pattern (user chose all 17)
-  irisdomain23
   HEJustinSun
+  irisdomain23
+  xcontcom
+  pwnedroot
+  jkdevcode
   webbrain-one
+  # medium: registered 2024+ only, no template-name pattern (user chose all 17)
   RichardTang-Aden
   bryanadenhq
   arielshakaramiro
-  xcontcom
   itzmitto
-  pwnedroot
-  jkdevcode
 )
 
 if [ -z "${GH_TOKEN:-}" ]; then
