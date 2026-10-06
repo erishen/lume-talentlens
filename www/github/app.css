@@ -350,7 +350,7 @@ main, .agent-wrap, #gh-root {
 .pool-score b { color: var(--accent); font-size: 1.1rem; }
 .pool-detail { font-size: .8rem; color: var(--muted); min-width: 0; }
 .pool-detail code { font-size: .78rem; }
-.pool-detail .err { color: var(--err, #f87171); }
+.pool-detail .err { color: var(--bad); }
 .pool-note { margin: 10px 0 0; font-size: .76rem; }
 .pool-progress { margin-bottom: 14px; }
 .pool-prog-bar { height: 8px; background: #0a0f1e; border-radius: 5px; overflow: hidden; margin: 8px 0; }
@@ -424,17 +424,6 @@ main, .agent-wrap, #gh-root {
 .pc-stats { display: flex; flex-wrap: wrap; gap: 14px; font-size: .85rem; }
 .pc-stats b { color: var(--ink); font-variant-numeric: tabular-nums; }
 .pc-snapshot { margin: 12px 0 0; font-size: .76rem; }
-
-/* ---- profile meta (followers/following/…) under the owner hero ---- */
-.profile-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  margin-top: 8px;
-  font-size: .85rem;
-  color: var(--muted);
-}
-.profile-meta .pm b { color: var(--ink); font-variant-numeric: tabular-nums; }
 
 .pager { display: flex; gap: 8px; align-items: center; margin: 10px 0; flex-wrap: wrap; }
 .pager .chip { cursor: pointer; }
