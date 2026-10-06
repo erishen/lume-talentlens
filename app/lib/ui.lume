@@ -142,6 +142,24 @@ export func cls(active: string, name: string): string {
   return c;
 }
 
+// path of the page identified by the nav `active` marker — used by the
+// language links so a switch keeps you on the same page.
+func nav_page(active) {
+  if (active == "home") { return "/overview"; }
+  if (active == "repos") { return "/repos"; }
+  if (active == "api") { return "/api"; }
+  if (active == "chat") { return "/chat"; }
+  return "/";
+}
+
+// one zh/en switch link; the current language is highlighted (mirrors the
+// React LangSwitch buttons in the static shells' top nav).
+func lang_link(active, lang, code, label) {
+  let c = "lang-a";
+  if (lang == code) { c = c + " active"; }
+  return el("a", { class: c, href: nav_page(active) + "?lang=" + code }, label);
+}
+
 export func nav(active, lang) {
   // Keep labels + hrefs in sync with the React shells (www/github/*.html):
   // "/" is the React dashboard, the SSR pages live on /overview, /repos, /api.
@@ -155,7 +173,10 @@ export func nav(active, lang) {
     el("a", { class: cls(active, "home"), href: "/overview" + lq }, lang_dict(lang, "nav_overview")),
     el("a", { class: cls(active, "repos"), href: "/repos" + lq }, lang_dict(lang, "nav_repos")),
     el("a", { class: cls(active, "api"), href: "/api" + lq }, lang_dict(lang, "nav_api")),
-    el("a", { class: cls(active, "chat"), href: "/chat" + lq }, lang_dict(lang, "nav_agent")));
+    el("a", { class: cls(active, "chat"), href: "/chat" + lq }, lang_dict(lang, "nav_agent")),
+    el("span", { class: "gh-lang-slot" },
+      lang_link(active, lang, "zh", "中文"),
+      lang_link(active, lang, "en", "EN")));
 }
 
 export func kpi(value, label) {

@@ -8,7 +8,6 @@ import { OwnerPicker } from "./dashboard/pickers";
 import { ProfileCard, TalentPanel, ComparePanel, PushTrend } from "./dashboard/panels";
 import { Bars, Kpi } from "./dashboard/bars";
 import { PersonList, RepoRow, BrowsePage } from "./dashboard/lists";
-import { LangSwitch } from "./LangSwitch";
 import { useLang, useT } from "./i18n";
 
 export function Dashboard() {
@@ -348,11 +347,8 @@ export function Dashboard() {
   return (
     <div>
       <section className="hero">
-        <div className="hero-text">
-          <h1>{t("hero.title")}</h1>
-          <p>{t("hero.subtitle")}</p>
-        </div>
-        <LangSwitch />
+        <h1>{t("hero.title")}</h1>
+        <p>{t("hero.subtitle")}</p>
       </section>
 
       <OwnerPicker value={owner} cached={cached} onPick={onOwnerPick} onAnalyze={loadOverview} busy={loading} />

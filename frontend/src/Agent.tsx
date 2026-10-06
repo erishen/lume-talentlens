@@ -1,6 +1,5 @@
 import React from "react";
 import { useT } from "./i18n";
-import { LangSwitch } from "./LangSwitch";
 
 interface Msg {
   role: "user" | "agent" | "note" | "error";
@@ -132,9 +131,6 @@ export function Agent() {
 
   return (
     <div className="agent">
-      <div className="agent-head">
-        <LangSwitch />
-      </div>
       <div className="agent-scroll" ref={scroller}>
         {msgs.map((m, i) => (
           <div key={i} className={"msg " + m.role}>

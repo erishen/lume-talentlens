@@ -428,10 +428,22 @@ main, .agent-wrap, #gh-root {
 .pager { display: flex; gap: 8px; align-items: center; margin: 10px 0; flex-wrap: wrap; }
 .pager .chip { cursor: pointer; }
 
-/* ---- language switch (zh/en toggle) ---- */
+/* ---- language switch (top nav, right-aligned) ---- */
+#gh-lang { margin-left: auto; display: flex; align-items: center; }
+.gh-lang-slot { margin-left: auto; display: flex; gap: 4px; align-items: center; }
 .lang-switch { display: flex; gap: 6px; }
-.lang-chip { cursor: pointer; background: transparent; }
-.lang-chip.active { color: var(--accent); border-color: var(--accent); }
+.lang-chip, .gh-nav .lang-a {
+  cursor: pointer;
+  background: transparent;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.lang-chip.active, .gh-nav .lang-a.active {
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.lang-chip { border: 1px solid var(--line); }
 
 /* ---- agent chat ---- */
 .agent {
@@ -489,6 +501,3 @@ footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 24
 
 /* light mode for SSR pages (they use /styles.css — a minimal separate sheet
  * is also emitted; keep dark here as default so SSR + React look coherent). */
-
-/* agent page header — language switch sits top-right */
-.agent-head { display: flex; justify-content: flex-end; padding: 6px 0 10px; }

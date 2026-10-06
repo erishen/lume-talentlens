@@ -1,8 +1,10 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { createPortal } from "react-dom";
 import { Dashboard } from "./Dashboard";
 import { Agent } from "./Agent";
 import { LangContext, loadLang, LANG_STORAGE, dicts, type Lang } from "./i18n";
+import { LangSwitch } from "./LangSwitch";
 
 // One bundle, two pages: the server picks the view from body[data-page].
 // "/" (static www/github/index.html) mounts the SPA dashboard, "/chat" the
@@ -32,8 +34,13 @@ function App() {
     syncNav(lang);
   }, [lang]);
 
+  // The toggle lives in the static shell's top nav (outside #gh-root), so
+  // render it there via a portal; SSR pages have no #gh-lang (their nav is
+  // server-rendered with plain ?lang= links) — skip silently.
+  const langSlot = document.getElementById("gh-lang");
   return (
     <LangContext.Provider value={{ lang, setLang }}>
+      {langSlot ? createPortal(React.createElement(LangSwitch), langSlot) : null}
       {page === "chat" ? React.createElement(Agent) : React.createElement(Dashboard)}
     </LangContext.Provider>
   );
