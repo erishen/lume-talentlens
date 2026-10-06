@@ -213,7 +213,13 @@ export function Agent() {
             )}
           </div>
         ))}
-        {busy && <div className="msg agent typing">{t("agent.typing")}</div>}
+        {busy && (
+          <div className="msg agent typing" aria-label={t("agent.typing")}>
+            <span className="dot" />
+            <span className="dot" />
+            <span className="dot" />
+          </div>
+        )}
       </div>
       <div className="agent-input">
         <input
