@@ -193,8 +193,9 @@ get "/api/repos", (req) => {
   let limit = int(get(qp, "limit", 25), 25);
   if (offset < 0) { offset = 0; }
   if (limit <= 0) { limit = 25; }
-  // clamp to 50: at 50/page the response is ~30KB, safely under the 65536-byte
-  // response cap (100/page hit ~54KB and would silently truncate larger owners).
+  // clamp to 50: at 50/page the response is ~30KB, comfortably under the
+  // framework's response-size cap (100/page would silently truncate larger
+  // owners).
   if (limit > 50) { limit = 50; }
   let page_src = gh.slice(repos, offset, limit);
   let page = map(gh.repo_view, page_src);
@@ -351,7 +352,7 @@ func live_safe_path(p) {
   // must be a user-scoped sub-path; the fixed "https://api.github.com" prefix
   // plus these guards mean p can never smuggle another host or scheme.
   if (not contains(p, "/users/")) { return false; }
-  if (contains(p, ":") or contains(p, "//") or contains(p, " ")) { return false; }
+  if (contains(p, ":") or contains(p, "//") or contains(p, " ") or contains(p, "..")) { return false; }
   return true;
 }
 
@@ -465,7 +466,7 @@ func ssr_block(owner) {
     el("p", {}, "Fetch it first, then retry this page: "),
     el("code", {}, "OWNER=" + owner + " make fetch"),
     el("p", {}, "Locally cached owners: "
-      + str(reduce((acc, e) => acc + str(e) + " ", files("data/github"), ""))));
+      + str(reduce((acc, e) => acc + str(e) + " ", cached_owners(), ""))));
 }
 
 get "/overview", (req) => {
