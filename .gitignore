@@ -1,5 +1,4 @@
-# node (frontend/node_modules is a symlink into ../research/lume/frontend —
-# match both the link and any real directory)
+# node (frontend is pnpm-managed; node_modules holds the pnpm virtual store)
 frontend/node_modules
 www/github/app.js
 

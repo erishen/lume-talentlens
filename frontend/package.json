@@ -6,7 +6,7 @@
   "scripts": {
     "build:js": "esbuild src/main.tsx --bundle --minify --format=esm --jsx=automatic --outfile=../www/github/app.js",
     "typecheck": "tsc --noEmit",
-    "build": "npm run typecheck && npm run build:js",
+    "build": "pnpm run typecheck && pnpm run build:js",
     "dev:js": "esbuild src/main.tsx --bundle --format=esm --jsx=automatic --outfile=../www/github/app.js --watch"
   },
   "dependencies": {

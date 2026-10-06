@@ -30,13 +30,14 @@ www/github/
 data/github/         # snapshot produced by scripts/fetch-github.sh
 scripts/
   fetch-github.sh    # paginate /users/<owner>/repos, pre-compute derived fields
-  build-ui.sh        # symlink node_modules + run esbuild
+  build-ui.sh        # pnpm-managed deps + run esbuild
 Makefile             # check / fetch / ui / run
 ```
 
 ## Quick start
 
 ```bash
+(cd frontend && pnpm install) # frontend deps (react, esbuild, typescript) — first clone only
 make run          # fetch (if missing) + build UI + start on :8091
 # or step by step:
 make fetch        # snapshot your repos -> data/github/

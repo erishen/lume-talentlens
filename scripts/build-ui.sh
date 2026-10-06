@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # build-ui.sh — bundle the React dashboard/agent UI with esbuild.
 #
-# The Lume research tree ships a working node_modules (react, react-dom,
-# esbuild, typescript). We symlink it into frontend/node_modules and run the
-# standalone esbuild binary (node itself is not required — esbuild is a
-# native binary that resolves "react" via frontend/node_modules).
+# frontend is pnpm-managed (pnpm install creates its own node_modules with a
+# virtual store); esbuild resolves "react" via frontend/node_modules and is
+# invoked as the standalone native binary (node itself is not required).
 #
 # Output: ../www/github/app.js  (the Lume views dir is a virtual root, so
 # the bundle is served at /app.js).
@@ -12,18 +11,14 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FE="$ROOT/frontend"
-LUME_NM="$ROOT/../research/lume/frontend/node_modules"
 
 cd "$FE"
 
-# 1) ensure node_modules is present (link the framework's copy if missing)
+# 1) ensure dependencies are installed (frontend owns its node_modules — do
+#    NOT fall back to symlinking the research tree's copy)
 if [ ! -e node_modules/react ]; then
-  if [ ! -d "$LUME_NM" ]; then
-    echo "build-ui: $LUME_NM not found — run pnpm install in research/lume/frontend" >&2
-    exit 1
-  fi
-  ln -sfn "$LUME_NM" node_modules
-  echo "build-ui: linked node_modules -> $LUME_NM"
+  echo "build-ui: frontend/node_modules missing — run: (cd frontend && pnpm install)" >&2
+  exit 1
 fi
 
 # 2) locate esbuild (native binary inside the linked node_modules)
