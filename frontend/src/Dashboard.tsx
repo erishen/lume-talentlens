@@ -386,6 +386,9 @@ function PersonList({ title, people, totals, note, onOpen }: {
             >
               @{p.login}
               {p.type === "Bot" ? <span className="chip bot">bot</span> : null}
+              {p.recruiter ? <span className="chip recruiter">recruiter?</span> : null}
+              {p.suspect === "high" ? <span className="chip suspect">water?</span> : null}
+              {p.suspect === "medium" ? <span className="chip suspect-med">maybe-water</span> : null}
             </button>
           ))}
         </div>

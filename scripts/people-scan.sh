@@ -75,7 +75,7 @@ SCANNED="$N"
 
 # 3) rank + flag expert suspects
 python3 - "$TMPDIR" "$KIND" << 'EOF'
-import json, sys, os, glob
+import json, re, sys, os, glob
 d = sys.argv[1]
 rows = []
 for f in sorted(glob.glob(os.path.join(d, "u_*.json"))):
@@ -87,13 +87,23 @@ for f in sorted(glob.glob(os.path.join(d, "u_*.json"))):
         continue
     fol, repo = u.get("followers", 0), u.get("public_repos", 0)
     created = (u.get("created_at") or "")[:7]
+    bio = u.get("bio") or ""
+    company = u.get("company") or ""
+    # hiring-side account: bio/company carries recruiter vocabulary — these
+    # bulk-follow developers as a sourcing action, not spam
+    rec = bool(re.search(
+        r"(?i)(recruit|hiring|talent[-_ ]?(acq|acquisition|partner)?|headhunt|"
+        r"\bhr\b|staffing|peopleops|human[-_ ]?capital|outsourc|career)",
+        (bio + " " + company)[:200]))
     # expert suspect: big reach, or old + prolific, or old + hireable
     flag = "EXPERT?" if (fol >= 1000 or (repo >= 80 and created and created < "2021") or (fol >= 300 and repo >= 20)) else ""
-    rows.append((fol, repo, created, u.get("login"), flag, (u.get("bio") or "")[:50]))
+    recflag = "RECRUITER?" if rec else ""
+    rows.append((fol, repo, created, u.get("login"), flag, recflag, bio[:60]))
 rows.sort(reverse=True)
 print(f"\n{len(rows)} users scanned, ranked by followers:")
-for fol, repo, created, login, flag, bio in rows:
-    print(f"  @{login:24s} fol={fol:6d} repos={repo:4d} since={created} {flag:8s} {bio}")
-print("\n(EXPERT? = followers>=1000, or old+prolific, or 300+ followers w/ 20+ repos)")
+for fol, repo, created, login, flag, recflag, bio in rows:
+    print(f"  @{login:24s} fol={fol:6d} repos={repo:4d} since={created} {flag:8s} {recflag:10s} {bio}")
+print("\n(EXPERT? = followers>=1000, or old+prolific, or 300+ followers w/ 20+ repos;")
+print(" RECRUITER? = bio/company carries hiring vocabulary)")
 EOF
 echo "people-scan: done ($SCANNED scanned)" >&2

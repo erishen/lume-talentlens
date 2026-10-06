@@ -228,6 +228,21 @@ main, .agent-wrap, #gh-root {
   color: var(--warn);
   border-color: var(--warn);
 }
+.person-chip .chip.suspect {
+  font-size: .68rem;
+  color: var(--bad);
+  border-color: var(--bad);
+}
+.person-chip .chip.suspect-med {
+  font-size: .68rem;
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.person-chip .chip.recruiter {
+  font-size: .68rem;
+  color: var(--ok);
+  border-color: var(--ok);
+}
 
 /* ---- talent signals (recruiter-facing) ---- */
 .talent { margin-bottom: 18px; }

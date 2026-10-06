@@ -250,6 +250,21 @@ func load_people(owner) {
   return s;
 }
 
+// merge a suspects.json pre-screen entry into a person row (no-op when absent)
+func tag_suspect(p, lookup) {
+  let s = get(lookup, str(get(p, "login", "")), null);
+  if (s == null) { return p; }
+  return {
+    login: str(get(p, "login", "")),
+    name: str(get(p, "name", "")),
+    avatar: str(get(p, "avatar", "")),
+    url: str(get(p, "url", "")),
+    type: str(get(p, "type", "")),
+    suspect: str(get(s, "level", "")),
+    recruiter: bool(get(s, "maybe_recruiter", false)),
+  };
+}
+
 get "/api/people", (req) => {
   let owner = owner_param(req);
   if (owner == "") { owner = default_owner(); }
@@ -260,6 +275,17 @@ get "/api/people", (req) => {
   if (people == null) { people = {}; }
   let followers = get(people, "followers", []);
   let following = get(people, "following", []);
+  // water-account pre-screen (data/github/<owner>/suspects.json, if present):
+  // tag each entry with suspect level + recruiter vocabulary flag
+  let suspects_raw = read_file("data/github/" + owner + "/suspects.json");
+  if (suspects_raw != null) {
+    let lookup = {};
+    for (let s in get(json(suspects_raw), "suspects", [])) {
+      put(lookup, str(get(s, "login", "")), s);
+    }
+    followers = map((p) => tag_suspect(p, lookup), followers);
+    following = map((p) => tag_suspect(p, lookup), following);
+  }
   let totals = get(people, "totals", {});
   // fall back to the profile counts when people.json predates the capture
   let prof = get(snap, "profile", {});

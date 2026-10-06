@@ -109,6 +109,10 @@ export interface PersonView {
   avatar?: string;
   url: string;
   type: string;
+  /** water-account pre-screen level from suspects.json ("high" | "medium") */
+  suspect?: string;
+  /** login name carries recruiter/HR vocabulary — likely a hiring-side account */
+  recruiter?: boolean;
 }
 
 export interface People {

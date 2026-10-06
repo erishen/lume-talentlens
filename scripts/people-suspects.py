@@ -36,6 +36,13 @@ def year_est(uid: int) -> str:
     return "2026"
 
 
+RECRUITER_RE = re.compile(
+    r"(?i)(recruit|hiring|talent[-_]?(acq|acquisition)|headhunt|head[-_]?hunt|"
+    r"\bhr[-_a-z]*\b|staffing|peopleops|people[-_]?ops|human[-_]?capital|"
+    r"outsourc|career|job[-_]?(hunter|provider)|workforce)"
+)
+
+
 def patterns(login: str) -> list:
     marks = []
     if re.search(r"\d{3,}$", login):
@@ -75,12 +82,17 @@ def main() -> int:
             "est_registered": y,
             "patterns": pats,
             "level": level,
+            # hiring-side accounts (recruiters/HR) are NOT water accounts in the
+            # harmful sense — they bulk-follow developers as a sourcing action.
+            # Flag them separately so the UI can label them as opportunities.
+            "maybe_recruiter": bool(RECRUITER_RE.search(login)),
         })
 
     suspects.sort(key=lambda s: (-s["uid"]))
     counts = {
         "high": sum(1 for s in suspects if s["level"] == "high"),
         "medium": sum(1 for s in suspects if s["level"] == "medium"),
+        "maybe_recruiter": sum(1 for s in suspects if s["maybe_recruiter"]),
         "registered_2024_plus": sum(1 for s in suspects if s["est_registered"] in ("2024", "2025", "2026")),
         "total_followers": len(users),
     }
