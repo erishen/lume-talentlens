@@ -515,37 +515,44 @@ export function Dashboard() {
 
   // Load the follower / following lists for the current owner. Cached owners
   // hit the server's /api/people; live owners (or when the running server
-  // predates that route) fetch in the browser instead.
+  // predates that route) fetch in the browser instead. Own seq guard: rapid
+  // owner switches must not let an older people response clobber the new one.
+  const peopleSeq = React.useRef(0);
   function loadPeople(o: string, viaLive: boolean) {
+    const seq = ++peopleSeq.current;
     setPeople(null);
     setPeopleError("");
     setPeopleLoading(true);
     const target = o.trim();
     if (!target) return;
     if (viaLive) {
-      loadLivePeople(target);
+      loadLivePeople(target, seq);
       return;
     }
     api.people(target).then((r) => {
+      if (seq !== peopleSeq.current) return;
       if (isNoSnapshot(r)) {
-        loadLivePeople(target);
+        loadLivePeople(target, seq);
         return;
       }
       setPeople(r as People);
       setPeopleLoading(false);
     }).catch(() => {
+      if (seq !== peopleSeq.current) return;
       // /api/people unavailable (older server) → live fallback
-      loadLivePeople(target);
+      loadLivePeople(target, seq);
     });
   }
 
   // browser-side people fetch (live owners + fallback when server lacks route).
   // GitHub may be rate-limited / unreachable (e.g. from mainland China); in
   // that case we surface an explicit error state instead of silent emptiness.
-  function loadLivePeople(o: string) {
+  function loadLivePeople(o: string, seq?: number) {
     const target = o.trim();
     if (!target) return;
+    const s = seq ?? ++peopleSeq.current;
     fetchLivePeople(target).then((p) => {
+      if (s !== peopleSeq.current) return;
       if (p.followers.length === 0 && p.following.length === 0) {
         setPeople(p);
         setPeopleError("Could not reach GitHub for this owner (network or rate limit). " +
@@ -556,6 +563,7 @@ export function Dashboard() {
       }
       setPeopleLoading(false);
     }).catch(() => {
+      if (s !== peopleSeq.current) return;
       setPeople(null);
       setPeopleError("Failed to load followers/following.");
       setPeopleLoading(false);
@@ -627,7 +635,14 @@ export function Dashboard() {
     if (!target) return;
     const seq = ++cmpSeq.current;
     setCmp({ target, ov: null, loading: true, err: "" });
-    const r = await api.overview(target);
+    let r: Overview | NoSnapshot;
+    try {
+      r = await api.overview(target);
+    } catch (e) {
+      if (seq !== cmpSeq.current) return;
+      setCmp({ target, ov: null, loading: false, err: String((e as Error)?.message || e) });
+      return;
+    }
     if (seq !== cmpSeq.current) return;
     if (isNoSnapshot(r)) {
       try {
@@ -739,8 +754,10 @@ export function Dashboard() {
   }
 
   // search: live results are searched client-side; cached owners hit the server
+  const searchSeq = React.useRef(0);
   function onSearch() {
     if (!owner) return;
+    const seq = ++searchSeq.current;
     if (live) {
       const res = searchLocal(live.all, q);
       setHits(res);
@@ -750,6 +767,7 @@ export function Dashboard() {
     }
     setSearching(true);
     api.search(q, owner).then((r) => {
+      if (seq !== searchSeq.current) return;
       if (isNoSnapshot(r)) {
         setNoSnap(r as NoSnapshot);
       } else {
@@ -758,7 +776,7 @@ export function Dashboard() {
       }
       setSearched(true);
       setSearching(false);
-    }).catch(() => setSearching(false));
+    }).catch(() => { if (seq === searchSeq.current) setSearching(false); });
   }
 
   // Re-score + re-rank the pool with the CURRENT weights so dragging the
@@ -1080,13 +1098,19 @@ function BrowsePage({ limit, setLimit, owner, liveAll }: {
 
   const pages = Math.max(1, Math.ceil(total / limit));
   const cur = Math.floor(offset / limit) + 1;
+  // changing the page size resets to page 1 — otherwise offset stays on a
+  // non-multiple of the new limit and the "page N" indicator jumps around
+  function setLimitSafe(n: number) {
+    setOffset(0);
+    setLimit(n);
+  }
 
   return (
     <div>
       <div className="pager">
-        <button className="chip" onClick={() => setLimit(10)} disabled={limit === 10}>10</button>
-        <button className="chip" onClick={() => setLimit(25)} disabled={limit === 25}>25</button>
-        <button className="chip" onClick={() => setLimit(50)} disabled={limit === 50}>50</button>
+        <button className="chip" onClick={() => setLimitSafe(10)} disabled={limit === 10}>10</button>
+        <button className="chip" onClick={() => setLimitSafe(25)} disabled={limit === 25}>25</button>
+        <button className="chip" onClick={() => setLimitSafe(50)} disabled={limit === 50}>50</button>
         <span className="muted">{cur}/{pages} · {total} repos</span>
       </div>
       <ol className="top-list all">
