@@ -64,10 +64,11 @@ cp .env.example .env   # then edit OWNER=your-github-login
 | `OWNER` | Your GitHub login. Default owner until `data/github/last_owner` exists, and the **only** owner whose follower/following lists get the water-account / recruiter pre-screen (`suspects.json`) merged into `/api/people`. |
 | `GH_TOKEN` | Optional classic PAT (scope `user:follow`): 60 → 5000 req/h for the live proxy (`/api/live/github`), people refresh (`/api/refresh`), `fetch-github.sh`, `people-scan.sh`, `unfollow.sh`. Never commit a real token. |
 | `LUME_GITHUB_PORT` | Optional port override (default 8091). |
+| `LLM_API_URL` / `LLM_API_KEY` / `LLM_MODEL` | Optional, for the `/chat` agent and agent tools: point Lume's built-in LLM bridge at any OpenAI-compatible endpoint (e.g. `https://api.openai.com/v1` + `gpt-4o-mini`). Leave unset to get the canned offline engine. `LLM_SYSTEM_EXTRA` is an optional extra system-prompt fragment. |
 
-The Lume server loads `.env` at startup; the shell/python scripts source it
-too. Any of these can also be passed as a normal env var (e.g.
-`OWNER=acme make fetch`), which always wins.
+The Lume server loads `.env` at startup (including the `LLM_*` keys); the
+shell/python scripts source it too. Any of these can also be passed as a
+normal env var (e.g. `OWNER=acme make fetch`), which always wins.
 
 > The server binds `127.0.0.1` only. The agent and dashboard run against the
 > **local snapshot** for cached owners. Uncached owners are fetched on demand
@@ -76,9 +77,9 @@ too. Any of these can also be passed as a normal env var (e.g.
 > libssl) and **projects the response down to the fields the app consumes**
 > (raw 100-repo pages are ~250KB and would break the framework's response cap).
 > Set `GH_TOKEN` for the 5000 req/h authenticated limit; without it the shared
-> server IP is limited to ~60 req/h unauthenticated. Set `LLM_*` env vars (see
-> the Lume docs) to enable real model-backed chat; otherwise a canned offline
-> engine replies.
+> server IP is limited to ~60 req/h unauthenticated. Set the `LLM_*` vars (see
+> the Configuration table above) to enable real model-backed chat; otherwise a
+> canned offline engine replies.
 
 > **Two view tiers.** The SSR pages (`/overview`, `/repos`, `/api`) are a
 > read-only, dependency-free view of the same snapshot. The React dashboard at
