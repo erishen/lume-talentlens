@@ -38,13 +38,18 @@ Makefile             # check / fetch / ui / run
 
 ```bash
 (cd frontend && pnpm install) # frontend deps (react, esbuild, typescript) — first clone only
-make run          # fetch (if missing) + build UI + start on :8091
+make dev          # kill any server on the port + build UI + esbuild watch +
+                  # foreground server on :8091 (Ctrl-C stops server + watcher)
 # or step by step:
 make fetch        # snapshot your repos -> data/github/
 make ui           # esbuild React bundle -> www/github/app.js
 make check        # type-check the .lume files
-make run PORT=9000
+make dev PORT=9000
 ```
+
+The server always runs in the **foreground** — there is no background
+`make run`; `make dev` is the one dev loop and it kills whatever already
+holds the port before starting.
 
 Open <http://127.0.0.1:8091/> for the React dashboard, `/chat` for the agent,
 or the JSON below.

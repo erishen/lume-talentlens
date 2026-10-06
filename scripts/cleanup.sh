@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # cleanup.sh — shared kill/port-release helpers for lume-talentlens.
-# Sourced by dev.sh / stop.sh; defines:
+# Sourced by dev.sh; defines:
 #   kill_matching <pattern>  kill every process whose cmdline matches
 #                            (TERM retried, then -9) until verified gone
 #   wait_port_free <port>    poll until the port's listener is gone

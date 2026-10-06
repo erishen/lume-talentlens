@@ -4,29 +4,27 @@
 # Default: LUME = ../research/lume/bin/lume (a sibling of this project).
 #
 # Common targets:
-#   make dev      kill any server on the port, rebuild UI, esbuild watch +
-#                 foreground Lume server (the dev loop; default :8091)
+#   make dev      THE dev loop: kill any server on the port, rebuild UI,
+#                 esbuild watch + foreground Lume server (default :8091)
 #   make check    type-check all .lume files (no server)
 #   make fetch    snapshot the default owner's repos into data/github/<owner>/
 #   make fetch OWNER=foo   snapshot a specific owner (adds it to the UI cache)
 #   make ui       bundle the React dashboard (esbuild -> www/github/app.js)
-#   make run      fetch (if missing) + ui + start server on :8091
-#   make run PORT=9000
-#   make logs     tail the server log
 #
-# `make dev` stops the watcher automatically when the foreground server exits.
+# There is deliberately no `make run`: the server always runs in the
+# foreground (Ctrl-C stops server + watcher). `make dev` also kills whatever
+# already holds the port, so it is safe to re-run at any time.
 
 LUME    ?= ../research/lume/bin/lume
 APP     := app/github.lume
 PORT    ?= 8091
-LOG     := ./.lume-github.log
 
 # local config: OWNER / GH_TOKEN / LUME_GITHUB_PORT from .env (gitignored).
 # `export` makes OWNER visible to the scripts/app child processes too.
 -include .env
 export OWNER
 
-.PHONY: dev check fetch ui run stop logs clean people-scan
+.PHONY: dev check fetch ui clean people-scan
 
 dev:
 	@echo "== dev loop: kill :$(PORT) + rebuild + watch + run =="
@@ -45,33 +43,6 @@ ui:
 	@echo "== building React UI =="
 	bash scripts/build-ui.sh
 
-run: fetch-if-missing ui
-	@echo "== stopping previous lume-talentlens instances (port :$(PORT)) =="
-	@bash scripts/stop.sh $(PORT) >/dev/null 2>&1 || true
-	@echo "== starting Lume server on :$(PORT) =="
-	LUME_GITHUB_PORT=$(PORT) $(LUME) $(APP) > $(LOG) 2>&1 &
-	@echo "  log -> $(LOG)"; echo "  stop: make stop"
-	@sleep 3
-	@echo "== routes =="
-	@for p in / /api/overview /api/repos /api/people /overview /repos /api /chat /discovery; do \
-	  printf '  %s -> %s\n' "$$p" "$$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$(PORT)$$p 2>/dev/null)"; \
-	done
-
-# Stop the Lume server and the esbuild watcher started by `make run`/`make dev`.
-stop:
-	@bash scripts/stop.sh $(PORT)
-
-fetch-if-missing:
-	@if [ ! -f data/github/last_owner ] && [ -z "$$(ls -d data/github/*/ 2>/dev/null)" ]; then \
-	  echo "== no cached owner snapshots — fetching default owner =="; \
-	  bash scripts/fetch-github.sh; \
-	else \
-	  echo "== owner snapshots present under data/github/ =="; \
-	fi
-
-logs:
-	@tail -n 200 -f $(LOG)
-
 # Rank an owner's followers by reach/prolificacy to surface expert suspects
 # (people.json only lists them; this adds per-user profile fields).
 #   make people-scan                # default owner's followers
@@ -83,4 +54,4 @@ people-scan:
 	  bash scripts/people-scan.sh
 
 clean:
-	rm -f $(LOG) ./.run ./.api-ov.json
+	rm -f ./.run ./.api-ov.json
