@@ -21,6 +21,7 @@ export function Agent() {
   ]);
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [copiedId, setCopiedId] = React.useState<number | null>(null);
   const scroller = React.useRef<HTMLDivElement>(null);
   const abortRef = React.useRef<AbortController | null>(null);
   // index of the live agent bubble inside msgs. SSE interleaves "note"
@@ -52,13 +53,32 @@ export function Agent() {
     // A placeholder agent bubble we fill as deltas arrive.
     let agentBuf = "";
     let agentStarted = false;
+    let finalized = false;
+    let idleTimer: number | undefined;
+    // SSE idle guard: if the upstream stops sending bytes (stuck LLM, dead
+    // proxy) we abort and surface a timeout instead of leaving the "…"
+    // indicator spinning forever. 60s covers the server's LLM_TIMEOUT=60.
+    const IDLE_MS = 60000;
+    const stopIdle = () => {
+      if (idleTimer !== undefined) clearTimeout(idleTimer);
+    };
+    const resetIdle = () => {
+      stopIdle();
+      idleTimer = window.setTimeout(() => {
+        abortRef.current?.abort();
+        finalize(t("agent.upstream_timeout"));
+      }, IDLE_MS);
+    };
     const finalize = (errText?: string) => {
+      if (finalized) return;
+      finalized = true;
+      stopIdle();
       setMsgs((m) => {
         let next = [...m];
-        if (!agentStarted) {
-          next.push({ role: "agent", text: errText ? "" : t("agent.no_reply") });
-        } else if (errText && agentBuf === "") {
+        if (errText) {
           next.push({ role: "error", text: errText });
+        } else if (!agentStarted) {
+          next.push({ role: "agent", text: t("agent.no_reply") });
         }
         return next;
       });
@@ -80,9 +100,11 @@ export function Agent() {
         const reader = res.body.getReader();
         const dec = new TextDecoder();
         let buf = "";
+        resetIdle();
         for (;;) {
           const chunk = await reader.read();
           if (chunk.done) break;
+          resetIdle();
           buf += dec.decode(chunk.value, { stream: true });
           // SSE events are double-newline separated
           const lines = buf.split("\n");
@@ -119,14 +141,33 @@ export function Agent() {
               setMsgs((m) => [...m, { role: "note", text: ev.d || "" }]);
             } else if (ev.t === "error") {
               setMsgs((m) => [...m, { role: "error", text: ev.d || t("agent.upstream_error") }]);
+              finalize();
             } else if (ev.t === "done") {
+              finalize();
               return;
             }
           }
         }
         finalize();
       })
-      .catch((e) => finalize(String(e)));
+      .catch((e) => {
+        // abort() from our idle guard / unmount — finalize already ran
+        if (e?.name === "AbortError") {
+          finalize();
+        } else {
+          finalize(String(e));
+        }
+      });
+  }
+
+  function copyMsg(i: number, text: string) {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopiedId(i);
+        window.setTimeout(() => setCopiedId((c) => (c === i ? null : c)), 1500);
+      })
+      .catch(() => {});
   }
 
   return (
@@ -137,9 +178,18 @@ export function Agent() {
             {m.role === "note" && <span className="msg-tag">{t("agent.tag_tool")}</span>}
             {m.role === "agent" && <span className="msg-tag">{t("agent.tag_agent")}</span>}
             <span className="msg-text">{m.text}</span>
+            {m.role === "agent" && m.text !== "" && (
+              <button
+                className={"msg-copy" + (copiedId === i ? " copied" : "")}
+                onClick={() => copyMsg(i, m.text)}
+                title={t("agent.copy")}
+              >
+                {copiedId === i ? t("agent.copied") : t("agent.copy")}
+              </button>
+            )}
           </div>
         ))}
-        {busy && <div className="msg agent typing">…</div>}
+        {busy && <div className="msg agent typing">{t("agent.typing")}</div>}
       </div>
       <div className="agent-input">
         <input

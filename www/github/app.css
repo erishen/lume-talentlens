@@ -502,6 +502,22 @@ main, .agent-wrap, #gh-root {
   margin-bottom: 3px;
 }
 .msg.typing { color: var(--muted); }
+.msg .msg-copy {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: .68rem;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 7px;
+  cursor: pointer;
+  opacity: .35;
+  transition: opacity .15s;
+  vertical-align: middle;
+}
+.msg.agent:hover .msg-copy { opacity: 1; }
+.msg .msg-copy.copied { color: #4caf7d; border-color: #4caf7d; opacity: 1; }
 
 /* SSR page footer */
 footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 24px; }
