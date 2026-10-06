@@ -106,7 +106,9 @@ export function Agent() {
               if (!agentStarted) {
                 agentStarted = true;
                 setMsgs((m) => {
-                  const next = [...m, { role: "agent", text: "" }];
+                  // explicit Msg[] — TS widens [...m, {role:"agent"}] to
+                  // {role:string}[] without the annotation
+                  const next: Msg[] = [...m, { role: "agent", text: "" }];
                   agentIdxRef.current = next.length - 1;
                   return next;
                 });
