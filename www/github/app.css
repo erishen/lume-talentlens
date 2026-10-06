@@ -456,10 +456,13 @@ main, .agent-wrap, #gh-root {
 .lang-chip { border: 1px solid var(--line); }
 
 /* ---- agent chat ---- */
+/* height adapts to the content (min-height keeps it usable); it never
+   stretches to fill the viewport when there are only a couple of messages,
+   and caps at the viewport minus chrome so long threads scroll */
 .agent {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 190px);
+  max-height: calc(100vh - 190px);
   min-height: 360px;
   background: var(--panel);
   border: 1px solid var(--line);
