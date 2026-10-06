@@ -82,6 +82,16 @@ main, .agent-wrap, #gh-root {
 }
 .panel h2 { margin: 0 0 12px; font-size: 1rem; color: var(--ink); }
 .error { border-color: var(--bad); color: var(--bad); }
+/* people refresh tool row: note + message left, button right */
+.panel.tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+}
+.panel.tools .muted { flex: 1 1 auto; }
+.panel.tools .btn { margin-left: auto; }
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

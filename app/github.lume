@@ -464,6 +464,83 @@ get "/api/live/github", (req) => {
   return { ok: ok, status: up, data: body, err: herr };
 };
 
+// ------------------------------------------------ people refresh endpoint
+// The dashboard's "refresh" button. Lume has no process spawn, so the
+// followers/following fetch is inlined here via http_get() (the same path the
+// live proxy uses) and people.json is rewritten atomically — no shell, no
+// python. Rate-limited to one run per owner per REFRESH_GAP_SEC (anonymous
+// GitHub is 60 req/h shared; this costs ~4-5 requests). The full water-account
+// pre-screen (suspects.json) remains a `make fetch` + people-suspects.py job.
+
+let REFRESH_GAP_SEC = 60;
+let _refresh_at = {};
+
+// fetch one paginated follower/following list, slimmed to app fields
+func refresh_fetch_kind(owner, headers, kind) {
+  let users = [];
+  let page = 1;
+  while (true) {
+    let url = "https://api.github.com/users/" + owner + "/" + kind + "?per_page=100&page=" + str(page);
+    let r = http_get(url, { headers: headers, timeout: 30, max_bytes: 4194304 });
+    let up = int(get(r, "status", 0), 0);
+    let body = str(get(r, "body", ""));
+    if (up < 200 or up >= 300) { break; }
+    let d = json(body);
+    if (d == null or len(d) == 0) { break; }
+    for (let u in d) {
+      let login = s(get(u, "login", null));
+      let nm = s(get(u, "name", null));
+      if (nm == "") { nm = login; }
+      push(users, {
+        login: login,
+        name: nm,
+        avatar: s(get(u, "avatar_url", null)),
+        url: s(get(u, "html_url", null)),
+        type: s(get(u, "type", null)),
+      });
+    }
+    if (len(d) < 100) { break; }
+    page = page + 1;
+    if (page > 10) { break; }
+  }
+  return users;
+}
+
+get "/api/refresh", (req) => {
+  let owner = owner_param(req);
+  if (owner == "") { owner = default_owner(); }
+  let t = int(now(), 0);
+  let last = int(get(_refresh_at, owner, 0), 0);
+  if (last != 0 and (t - last) < REFRESH_GAP_SEC) {
+    return { ok: false, status: 429, wait: REFRESH_GAP_SEC - (t - last), err: "refresh too soon" };
+  }
+  let headers = { "Accept": "application/vnd.github+json", "User-Agent": "lume-talentlens" };
+  let tok = env("GH_TOKEN");
+  if (tok != null and tok != "") { put(headers, "Authorization", "Bearer " + str(tok)); }
+
+  let followers = refresh_fetch_kind(owner, headers, "followers");
+  let following = refresh_fetch_kind(owner, headers, "following");
+  if (len(followers) == 0 and len(following) == 0) {
+    return { ok: false, status: 502, err: "upstream unreachable (network or rate limit)" };
+  }
+  // profile totals; fall back to fetched lengths when the profile call fails
+  let prof = http_get("https://api.github.com/users/" + owner, { headers: headers, timeout: 30, max_bytes: 4194304 });
+  let pd = json(str(get(prof, "body", "")));
+  let tot = { followers: len(followers), following: len(following) };
+  if (pd != null) {
+    tot = { followers: int(get(pd, "followers", 0), 0), following: int(get(pd, "following", 0), 0) };
+  }
+  let people = {
+    followers: followers,
+    following: following,
+    totals: tot,
+    note: "refreshed via /api/refresh (server-side)",
+  };
+  write_file("data/github/" + owner + "/people.json", str(people));
+  put(_refresh_at, owner, t);
+  return { ok: true, status: 200, owner: owner, followers: len(followers), following: len(following) };
+};
+
 // ------------------------------------------------ SSR pages
 // "/" is owned by the React SPA (static, views dir). SSR pages use distinct
 // paths and accept ?owner=; unknown/invalid owners fall back to the default.

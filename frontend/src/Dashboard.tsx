@@ -43,6 +43,8 @@ export function Dashboard() {
   const [people, setPeople] = React.useState<People | null>(null);
   const [peopleLoading, setPeopleLoading] = React.useState(false);
   const [peopleError, setPeopleError] = React.useState("");
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [refreshMsg, setRefreshMsg] = React.useState("");
 
   // side-by-side compare with a second candidate (B)
   const [cmp, setCmp] = React.useState<{ target: string; ov: Overview | null; loading: boolean; err: string }>({
@@ -66,6 +68,32 @@ export function Dashboard() {
   // predates that route) fetch in the browser instead. Own seq guard: rapid
   // owner switches must not let an older people response clobber the new one.
   const peopleSeq = React.useRef(0);
+  // Ask the server to re-fetch this owner's followers/following (server-side
+  // /api/refresh — rate-limited to one run per owner per 60s), then reload
+  // the local snapshot. People data is a cache, not live.
+  async function onRefresh() {
+    const target = owner.trim();
+    if (!target || refreshing) return;
+    setRefreshing(true);
+    setRefreshMsg("");
+    try {
+      const res = await fetch("/api/refresh?owner=" + encodeURIComponent(target));
+      const j = await res.json().catch(() => null);
+      if (j && j.ok) {
+        setRefreshMsg(t("people.refresh_ok", { followers: j.followers, following: j.following }));
+        loadPeople(target, !!live);
+      } else if (j && j.status === 429) {
+        setRefreshMsg(t("people.refresh_cooldown", { wait: Math.max(1, Math.ceil(j.wait || 60)) }));
+      } else {
+        setRefreshMsg(t("people.refresh_fail"));
+      }
+    } catch {
+      setRefreshMsg(t("people.refresh_fail"));
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   function loadPeople(o: string, viaLive: boolean) {
     const seq = ++peopleSeq.current;
     setPeople(null);
@@ -560,6 +588,13 @@ export function Dashboard() {
             )}
             {!peopleLoading && !peopleError && people && (
               <>
+                <div className="panel tools" style={{ gridColumn: "1 / -1" }}>
+                  <span className="muted">{t("people.snapshot_note")}</span>
+                  <span className="muted">{refreshMsg}</span>
+                  <button className="btn" onClick={onRefresh} disabled={refreshing}>
+                    {refreshing ? t("people.refreshing") : t("people.refresh")}
+                  </button>
+                </div>
                 <PersonList
                   title={t("people.followers")}
                   people={people.followers}
