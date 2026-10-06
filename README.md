@@ -64,7 +64,9 @@ cp .env.example .env   # then edit OWNER=your-github-login
 | `OWNER` | Your GitHub login. Default owner until `data/github/last_owner` exists, and the **only** owner whose follower/following lists get the water-account / recruiter pre-screen (`suspects.json`) merged into `/api/people`. |
 | `GH_TOKEN` | Optional classic PAT (scope `user:follow`): 60 → 5000 req/h for the live proxy (`/api/live/github`), people refresh (`/api/refresh`), `fetch-github.sh`, `people-scan.sh`, `unfollow.sh`. Never commit a real token. |
 | `LUME_GITHUB_PORT` | Optional port override (default 8091). |
-| `LLM_API_URL` / `LLM_API_KEY` / `LLM_MODEL` | Optional, for the `/chat` agent and agent tools: point Lume's built-in LLM bridge at any OpenAI-compatible endpoint (e.g. `https://api.openai.com/v1` + `gpt-4o-mini`). Leave unset to get the canned offline engine. `LLM_SYSTEM_EXTRA` is an optional extra system-prompt fragment. |
+| `LLM_API_URL` / `LLM_API_KEY` / `LLM_MODEL` | Optional, for the `/chat` agent and agent tools: point Lume's built-in LLM bridge at any OpenAI-compatible endpoint (e.g. `https://api.openai.com/v1` + `gpt-4o-mini`). Leave unset to get the canned offline engine. |
+| `LLM_TIMEOUT` | Optional; seconds to wait on the upstream LLM stream (default 60). |
+| `LLM_SYSTEM_EXTRA` | Optional raw text **appended to the agent's system prompt** — scenario guidance the agent must always follow (which data to answer from, how to cite evidence, output language). Single line only (the `.env` loader reads line by line). |
 
 The Lume server loads `.env` at startup (including the `LLM_*` keys); the
 shell/python scripts source it too. Any of these can also be passed as a
