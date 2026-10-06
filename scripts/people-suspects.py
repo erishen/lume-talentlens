@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 """people-suspects.py — flag likely "water accounts" (批量关注/僵尸号) among an
-owner's followers using data already in people.json (no API cost).
+owner's followers AND/OR following using data already in people.json (no API
+cost).
 
-The followers list endpoint only stores login/name/avatar/url/type, but the
-avatar URL embeds the GitHub user id, which is a free proxy for account age
-(bigger id = later signup). Combined with login-name patterns (number tails,
-stacked buzzwords, South-Asian batch templates), new accounts look like
-mass-registered water accounts with high confidence.
+The followers/following list endpoints only store login/name/avatar/url/type,
+but the avatar URL embeds the GitHub user id, which is a free proxy for
+account age (bigger id = later signup). Combined with login-name patterns
+(number tails, stacked buzzwords, South-Asian batch templates), new accounts
+look like mass-registered water accounts with high confidence.
 
-Output: data/github/<owner>/suspects.json next to people.json.
+Output: data/github/<owner>/suspects.json next to people.json. Every suspect
+carries a `kind` (followers | following | both). The server merges it by
+login into /api/people for BOTH lists, so following suspects now show up too.
 
-Usage:  OWNER=erishen python3 scripts/people-suspects.py
+Usage:
+  OWNER=erishen python3 scripts/people-suspects.py           # both lists
+  KIND=following OWNER=erishen python3 scripts/people-suspects.py
+  KIND=followers OWNER=erishen python3 scripts/people-suspects.py
 Precise confirmation (followers_count < 5 / repos == 0) still needs the API —
 see scripts/people-scan.sh once quota or GH_TOKEN is available.
 """
@@ -22,6 +28,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OWNER = os.environ.get("OWNER", "erishen")
+KIND = os.environ.get("KIND", "all")  # all | followers | following
 PEOPLE = os.path.join(ROOT, "data", "github", OWNER, "people.json")
 
 
@@ -58,16 +65,19 @@ def patterns(login: str) -> list:
     return marks
 
 
-def main() -> int:
-    if not os.path.exists(PEOPLE):
-        print(f"people-suspects: {PEOPLE} missing — run OWNER={OWNER} make fetch first", file=sys.stderr)
-        return 1
-    data = json.load(open(PEOPLE))
-    users = data.get("followers", [])
-
-    suspects = []
+def scan(users, kind: str, out: dict, org_skipped: list) -> None:
+    """Append suspects from one list to `out` (login-keyed; merge kind)."""
     for u in users:
         login = u.get("login", "")
+        if not login:
+            continue
+        # Organizations need org verification/email — they are never
+        # mass-registered water accounts (bulk-registered projects excepted).
+        # Excluding them kills the false positives on accounts like
+        # modelcontextprotocol / open-webui (registered 2024+ but legit).
+        if u.get("type") == "Organization":
+            org_skipped.append(login)
+            continue
         m = re.search(r"/u/(\d+)", u.get("avatar", ""))
         uid = int(m.group(1)) if m else 0
         y = year_est(uid)
@@ -78,25 +88,61 @@ def main() -> int:
             level = "medium"    # registered recently; pattern or not
         else:
             continue
-        suspects.append({
-            "login": login,
-            "uid": uid,
-            "est_registered": y,
-            "patterns": pats,
-            "level": level,
-            # hiring-side accounts (recruiters/HR) are NOT water accounts in the
-            # harmful sense — they bulk-follow developers as a sourcing action.
-            # Flag them separately so the UI can label them as opportunities.
-            "maybe_recruiter": bool(RECRUITER_RE.search(login)),
-        })
+        prev = out.get(login)
+        if prev is None:
+            out[login] = {
+                "login": login,
+                "uid": uid,
+                "est_registered": y,
+                "patterns": pats,
+                "level": level,
+                # hiring-side accounts (recruiters/HR) are NOT water accounts in
+                # the harmful sense — they bulk-follow developers as a sourcing
+                # action. Flag them separately so the UI can label them as
+                # opportunities.
+                "maybe_recruiter": bool(RECRUITER_RE.search(login)),
+                "kind": kind,
+            }
+        else:
+            # same login in both lists: keep the stronger level, mark "both"
+            if level == "high" and prev["level"] == "medium":
+                prev["level"] = "high"
+            if prev.get("kind") != kind:
+                prev["kind"] = "both"
 
-    suspects.sort(key=lambda s: (-s["uid"]))
+
+def main() -> int:
+    if not os.path.exists(PEOPLE):
+        print(f"people-suspects: {PEOPLE} missing — run OWNER={OWNER} make fetch first", file=sys.stderr)
+        return 1
+    data = json.load(open(PEOPLE))
+
+    kinds = ["followers", "following"] if KIND == "all" else [KIND]
+    merged = {}   # login -> suspect (merged across kinds)
+    totals = {}   # kind -> count scanned
+    org_skipped = []
+    for k in kinds:
+        users = data.get(k, [])
+        totals[k] = len(users)
+        scan(users, k, merged, org_skipped)
+
+    suspects = sorted(merged.values(), key=lambda s: (-s["uid"]))
     counts = {
         "high": sum(1 for s in suspects if s["level"] == "high"),
         "medium": sum(1 for s in suspects if s["level"] == "medium"),
         "maybe_recruiter": sum(1 for s in suspects if s["maybe_recruiter"]),
         "registered_2024_plus": sum(1 for s in suspects if s["est_registered"] in ("2024", "2025", "2026")),
-        "total_followers": len(users),
+        "total_followers": totals.get("followers", 0),
+        "total_following": totals.get("following", 0),
+        "per_kind": {
+            k: {
+                "high": sum(1 for s in suspects if s["level"] == "high" and s.get("kind") in (k, "both")),
+                "medium": sum(1 for s in suspects if s["level"] == "medium" and s.get("kind") in (k, "both")),
+                "total": totals[k],
+            }
+            for k in kinds
+        },
+        "excluded_organizations": len(org_skipped),
     }
     out = {
         "owner": OWNER,
@@ -109,8 +155,13 @@ def main() -> int:
     dest = os.path.join(os.path.dirname(PEOPLE), "suspects.json")
     with open(dest, "w") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
-    print(f"people-suspects: {counts['high']} high + {counts['medium']} medium suspects "
-          f"({counts['registered_2024_plus']} registered 2024+) of {counts['total_followers']} followers -> {dest}")
+
+    per = counts["per_kind"]
+    summary = " + ".join(
+        f"{k}: {per[k]['high']} high + {per[k]['medium']} medium of {per[k]['total']}"
+        for k in kinds
+    )
+    print(f"people-suspects: {summary} ({counts['registered_2024_plus']} registered 2024+) -> {dest}")
     return 0
 
 

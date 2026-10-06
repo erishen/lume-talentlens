@@ -9,7 +9,7 @@
 #
 # Outputs (all under data/github/<owner>/):
 #   user.json     — the owner profile (read back to build snapshot.profile)
-#   people.json   — followers / following (first page, slimmed) + totals
+#   people.json   — followers / following (paginated, slimmed) + totals
 #   snapshot.json — { fetched_at, owner, profile, count, repos: [...] }
 #                   (the only file the Lume server reads)
 set -euo pipefail
@@ -64,17 +64,26 @@ while :; do
   [ "$page" -gt 40 ] && { echo "    safety cap (40 pages)" >&2; break; }
 done
 
-# 2b) followers + following (first page of 100 each — enough for the UI's
-#     avatar grid; totals come from the profile). Slim fields only.
+# 2b) followers + following, paginated (each page -> own .tmp, like repos).
+#     An owner can follow thousands of users; a single page would silently
+#     miss everyone past the first 100. Slim fields only.
+rm -f "$DIR"/.followers.p*.tmp "$DIR"/.following.p*.tmp
 for kind in followers following; do
-  fcode=$(curl -sS --max-time 30 -w '%{http_code}' ${AUTH_ARGS[@]+"${AUTH_ARGS[@]}"} \
-    -o "$DIR/$kind.tmp" \
-    "$API/users/$OWNER/$kind?per_page=100") || true
-  if [ "${fcode:-000}" != "200" ]; then
-    echo "    $kind -> HTTP ${fcode:-000} (storing empty list)" >&2
-    echo "[]" > "$DIR/$kind.tmp"
-  fi
-  echo "    $kind -> $(python3 -c "import json,sys;print(len(json.load(open(sys.argv[1]))))" "$DIR/$kind.tmp" 2>/dev/null || echo 0) users"
+  page=1
+  while :; do
+    fcode=$(curl -sS --max-time 30 -w '%{http_code}' ${AUTH_ARGS[@]+"${AUTH_ARGS[@]}"} \
+      -o "$DIR/.$kind.p$page.tmp" \
+      "$API/users/$OWNER/$kind?per_page=100&page=$page") || true
+    if [ "${fcode:-000}" != "200" ]; then
+      echo "    $kind page $page -> HTTP ${fcode:-000} (stopping)" >&2
+      break
+    fi
+    n=$(python3 -c "import json,sys;print(len(json.load(open(sys.argv[1]))))" "$DIR/.$kind.p$page.tmp" 2>/dev/null || echo 0)
+    echo "    $kind page $page -> $n users"
+    [ "$n" -lt 100 ] && break
+    page=$((page + 1))
+    [ "$page" -gt 10 ] && { echo "    safety cap (10 pages / 1000 users)" >&2; break; }
+  done
 done
 
 # Combine all pages into one JSON array
@@ -189,14 +198,20 @@ except Exception:
     user = {"login": owner}
 json.dump(user, open(os.path.join(d, "user.json"), "w"), indent=2)
 
-# people.json — the followers / following lists (first page, slimmed).
-def slim_people(path):
-    try:
-        data = json.load(open(os.path.join(d, path)))
-    except Exception:
-        return []
+# people.json — the followers / following lists, paginated + slimmed.
+def slim_people(kind):
+    users = []
+    for f in sorted(glob.glob(os.path.join(d, ".%s.p*.tmp" % kind))):
+        try:
+            users.extend(json.load(open(f)))
+        except Exception:
+            print("    warning: skipping unreadable %s page %s" % (kind, os.path.basename(f)), file=sys.stderr)
+    # de-dupe by login (keep last)
+    seen = {}
+    for u in users:
+        seen[u.get("login")] = u
     out = []
-    for u in data:
+    for u in seen.values():
         out.append({
             "login": u.get("login"),
             "name": u.get("name") or u.get("login"),
@@ -207,15 +222,15 @@ def slim_people(path):
     return out
 
 people = {
-    "followers": slim_people("followers.tmp"),
-    "following": slim_people("following.tmp"),
+    "followers": slim_people("followers"),
+    "following": slim_people("following"),
     "totals": {"followers": user.get("followers"), "following": user.get("following")},
-    "note": "first page (up to 100) of each; totals from the owner profile",
+    "note": "paginated (up to 100/page) followers/following; totals from the owner profile",
 }
 json.dump(people, open(os.path.join(d, "people.json"), "w"), indent=2)
-for p in ("followers.tmp", "following.tmp"):
+for f in glob.glob(os.path.join(d, ".followers.p*.tmp")) + glob.glob(os.path.join(d, ".following.p*.tmp")):
     try:
-        os.remove(os.path.join(d, p))
+        os.remove(f)
     except OSError:
         pass
 
