@@ -113,6 +113,14 @@ export interface PersonView {
   suspect?: string;
   /** login name carries recruiter/HR vocabulary — likely a hiring-side account */
   recruiter?: boolean;
+  /** API-confirmation evidence (followers/repos/created/note), when a confirmation round has run */
+  api?: {
+    followers: number;
+    repos: number;
+    created: string;
+    note: string;
+    confirmed?: string;
+  };
 }
 
 export interface People {

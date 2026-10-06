@@ -127,6 +127,24 @@ def main() -> int:
         scan(users, k, merged, org_skipped)
 
     suspects = sorted(merged.values(), key=lambda s: (-s["uid"]))
+    # API-confirmation evidence (followers/repos/created/note) lives only in
+    # the previous suspects.json — a plain re-run of this pre-screen would
+    # silently drop it. Merge it back in by login so evidence survives re-runs,
+    # and apply the API-confirmed level (when present) over the heuristic one.
+    prev = {}
+    try:
+        with open(os.path.join(os.path.dirname(PEOPLE), "suspects.json")) as f:
+            for s in json.load(f).get("suspects", []):
+                if "api" in s:
+                    prev[s["login"]] = s["api"]
+    except Exception:
+        pass
+    for s in suspects:
+        api = prev.get(s["login"])
+        if api is not None:
+            s["api"] = api
+            if "confirmed" in api:
+                s["level"] = api["confirmed"]
     counts = {
         "high": sum(1 for s in suspects if s["level"] == "high"),
         "medium": sum(1 for s in suspects if s["level"] == "medium"),

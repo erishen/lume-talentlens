@@ -16,6 +16,20 @@ const RECCOLOR: Record<string, string> = {
   unknown: "#475569",
 };
 
+// tooltip for a suspect chip — API-confirmation evidence when available, else
+// a plain hint that this is a pre-screen flag (no per-account data fetched)
+function evidenceTitle(t: (k: string, p?: Record<string, string | number>) => string, p: PersonView): string {
+  if (p.api) {
+    return t("people.evidence", {
+      followers: p.api.followers,
+      repos: p.api.repos,
+      created: p.api.created,
+      note: p.api.note || "-",
+    });
+  }
+  return t("people.click_name", { login: p.login });
+}
+
 // Followers / Following — a list of GitHub logins. Clicking one analyzes that
 // person *in-app* (onOpen), it does NOT link out to their GitHub profile.
 function PersonList({ title, people, totals, note, onOpen }: {
@@ -41,8 +55,8 @@ function PersonList({ title, people, totals, note, onOpen }: {
               @{p.login}
               {p.type === "Bot" ? <span className="chip bot">{t("people.bot")}</span> : null}
               {p.recruiter ? <span className="chip recruiter">{t("people.recruiter")}</span> : null}
-              {p.suspect === "high" ? <span className="chip suspect">{t("people.water")}</span> : null}
-              {p.suspect === "medium" ? <span className="chip suspect-med">{t("people.maybe_water")}</span> : null}
+              {p.suspect === "high" ? <span className="chip suspect" title={evidenceTitle(t, p)}>{t("people.water")}</span> : null}
+              {p.suspect === "medium" ? <span className="chip suspect-med" title={evidenceTitle(t, p)}>{t("people.maybe_water")}</span> : null}
             </button>
           ))}
         </div>

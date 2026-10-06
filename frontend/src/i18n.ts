@@ -107,6 +107,7 @@ const zh: Record<string, string> = {
   "people.maybe_water": "疑似水号",
   "people.recruiter": "招聘方?",
   "people.bot": "机器人",
+  "people.evidence": "判定依据：{followers} 粉 / {repos} 仓库 / 注册 {created} — {note}",
   // search
   "search.in": "在 {owner} 中搜索",
   "search.placeholder": "按名称 / 描述 / 语言 / 主题筛选…",
@@ -255,6 +256,7 @@ const en: Record<string, string> = {
   "people.maybe_water": "maybe-water",
   "people.recruiter": "recruiter?",
   "people.bot": "bot",
+  "people.evidence": "Flagged: {followers} followers / {repos} repos / created {created} — {note}",
   "search.in": "Search in {owner}",
   "search.placeholder": "filter by name / description / language / topic…",
   "search.btn": "Search",

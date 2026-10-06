@@ -275,6 +275,9 @@ func tag_suspect(p, lookup) {
     type: str(get(p, "type", "")),
     suspect: str(get(s, "level", "")),
     recruiter: bool(get(s, "maybe_recruiter", false)),
+    // API-confirmation evidence (followers/repos/created/note), when a
+    // confirmation round has run — lets the UI show why an account is flagged
+    api: get(s, "api", null),
   };
 }
 
