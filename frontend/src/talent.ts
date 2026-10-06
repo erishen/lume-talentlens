@@ -44,7 +44,7 @@ export function deriveTalent(ov: Overview): TalentSignals {
   const labels: string[] = [];
 
   // Output / maintenance
-  if (active >= 0) labels.push("Active maintainer");
+  if (active > 0) labels.push("Active maintainer");
   if ((ov.totals?.archived ?? 0) > 0) labels.push("Has archived projects");
   if ((ov.totals?.forked ?? 0) > 0) labels.push("Curates via forks");
 

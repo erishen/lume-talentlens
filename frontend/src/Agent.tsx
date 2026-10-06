@@ -28,6 +28,11 @@ export function Agent() {
   const [busy, setBusy] = React.useState(false);
   const scroller = React.useRef<HTMLDivElement>(null);
   const abortRef = React.useRef<AbortController | null>(null);
+  // index of the live agent bubble inside msgs. SSE interleaves "note"
+  // (tool-call) events with "delta" (answer) events, so updating by
+  // "last element" would let a note overwrite the agent bubble — track the
+  // exact row instead. Set inside the setMsgs updater (authoritative state).
+  const agentIdxRef = React.useRef(-1);
 
   // abort any in-flight stream when the component unmounts (page switch)
   React.useEffect(() => {
@@ -100,12 +105,17 @@ export function Agent() {
             if (ev.t === "delta") {
               if (!agentStarted) {
                 agentStarted = true;
-                setMsgs((m) => [...m, { role: "agent", text: "" }]);
+                setMsgs((m) => {
+                  const next = [...m, { role: "agent", text: "" }];
+                  agentIdxRef.current = next.length - 1;
+                  return next;
+                });
               }
               agentBuf += ev.d || "";
               setMsgs((m) => {
                 const next = [...m];
-                next[next.length - 1] = { role: "agent", text: agentBuf };
+                const i = agentIdxRef.current;
+                if (i >= 0 && i < next.length) next[i] = { role: "agent", text: agentBuf };
                 return next;
               });
             } else if (ev.t === "note") {

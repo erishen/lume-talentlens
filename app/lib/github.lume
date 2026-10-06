@@ -26,7 +26,7 @@ export func repo_view(r) {
     else { lic_id = v; }
   }
   // `desc` and `topics` are pre-trimmed in the fetch script so views stay
-  // lean under the framework's 65536-byte HTTP response cap.
+  // lean under the framework's response-body cap.
   let lang = str(get(r, "language", null));
   if (lang == "null") { lang = ""; }
   return {
@@ -140,7 +140,8 @@ export func count_with_topics(list) {
 }
 
 // Mean days_since_push across repos that have a known push date (>= 0).
-// Returns 0 when no repo has a usable push date.
+// Returns 0 when no repo has a usable push date — callers should treat 0
+// from an empty/unknown set as "no data", not "pushed right now".
 export func avg_days_since_push(list) {
   let known = filter((r) => int(get(r, "days_since_push", -1)) >= 0, list);
   let n = len(known);
@@ -186,8 +187,8 @@ export func first_n(list, k) {
 }
 
 // list slice: elements [start, start+count). O(count), list index via get().
-// The HTTP framework caps a response body at 65536 bytes, so callers page the
-// full repo list instead of shipping it in one shot.
+// The HTTP framework caps a single response body, so callers page the full
+// repo list instead of shipping it in one shot.
 export func slice(list, start, count) {
   let out = [];
   for (let i = 0; i < count; i = i + 1) {
@@ -207,6 +208,9 @@ export func analyze(repos, snap) {
   // under the HTTP response cap. Sort the VIEWS once (repo_view already ran)
   // so each repo is projected exactly once.
   let top_by_stars = first_n(sort_desc(all, "stars"), 10);
+  // NOTE: "top by activity" = newest CREATED repos (created_year desc), i.e.
+  // the dashboard's "by year" list — the field name is historical, changing
+  // it would break the public /api/overview contract.
   let top_by_activity = first_n(sort_desc(all, "created_year"), 10);
 
   return {
@@ -238,8 +242,8 @@ export func analyze(repos, snap) {
   };
 }
 
-// Compact bundle WITHOUT the full `all` array — safe under the 65536-byte
-// HTTP response cap. The full list is paged via /api/repos?offset=&limit=.
+// Compact bundle WITHOUT the full `all` array — safe under the HTTP
+// response cap. The full list is paged via /api/repos?offset=&limit=.
 export func analyze_lite(repos, snap) {
   let a = analyze(repos, snap);
   return {
