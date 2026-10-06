@@ -506,9 +506,13 @@ main, .agent-wrap, #gh-root {
 }
 .agent-input input::placeholder { color: var(--muted); opacity: .7; }
 .agent-input input:focus { outline: none; border-color: var(--accent); }
-.msg { max-width: 78%; padding: 8px 12px; border-radius: 10px; font-size: .9rem; white-space: pre-wrap; }
+/* cap bubble width at a comfortable reading measure (~66% of the column,
+   hard-capped at 640px) — full-width bubbles make long answers unreadable */
+.msg { max-width: min(66%, 640px); padding: 8px 12px; border-radius: 10px; font-size: .9rem; white-space: pre-wrap; }
 .msg.user { align-self: flex-end; background: var(--accent); color: #06213a; }
-.msg.agent { align-self: flex-start; background: #0d1526; border: 1px solid var(--line); }
+.msg.agent { align-self: flex-start; background: #0d1526; border: 1px solid var(--line); position: relative; }
+/* keep text clear of the corner copy button */
+.msg.agent .msg-text { padding-right: 40px; }
 .msg.note {
   align-self: center;
   background: transparent;
@@ -546,18 +550,19 @@ main, .agent-wrap, #gh-root {
   30% { opacity: 1; }
 }
 .msg .msg-copy {
-  display: inline-block;
-  margin-left: 8px;
-  font-size: .68rem;
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: .62rem;
   color: var(--muted);
   background: none;
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 1px 7px;
+  padding: 1px 5px;
   cursor: pointer;
-  opacity: .35;
+  opacity: 0;
   transition: opacity .15s;
-  vertical-align: middle;
+  white-space: nowrap;
 }
 .msg.agent:hover .msg-copy { opacity: 1; }
 .msg .msg-copy.copied { color: #4caf7d; border-color: #4caf7d; opacity: 1; }
