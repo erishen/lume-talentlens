@@ -45,14 +45,6 @@ export func nav(active) {
     el("a", { class: cls(active, "chat"), href: "/chat" }, "Agent"));
 }
 
-export func card(icon, title, body, color) {
-  return el("div", { class: "card" },
-    el("span", { class: "dot", style: "background:" + color }),
-    el("h3", {}, icon + " " + title),
-    el("p", {}, body));
-}
-
-// a simple "KPI" tile: big number + label
 export func kpi(value, label) {
   return el("div", { class: "kpi" },
     el("div", { class: "kpi-num" }, value),

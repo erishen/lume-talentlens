@@ -196,12 +196,15 @@ export async function fetchLive(
   onProgress?: LiveProgressFn
 ): Promise<LiveResult> {
   const user = await getGithub("/users/" + encodeURIComponent(owner), owner, signal);
+  // the proxy returns null on an empty 200 body; guard so a malformed
+  // upstream response degrades to an empty profile instead of crashing
+  const u = user ?? {};
 
   // estimate the page count from the profile so the UI can show "page 2/3";
   // 0 when unknown (the progress bar degrades to a spinner-style message).
   const estTotal =
-    user && typeof user.public_repos === "number" && user.public_repos > 0
-      ? Math.max(1, Math.ceil(user.public_repos / 100))
+    u && typeof u.public_repos === "number" && u.public_repos > 0
+      ? Math.max(1, Math.ceil(u.public_repos / 100))
       : 0;
 
   // paginate the owner's own repos (type=owner), up to a sensible cap
@@ -228,20 +231,20 @@ export async function fetchLive(
     owner,
     fetched_at: new Date().toISOString().replace("T", " ").slice(0, 19),
     profile: {
-      name: user.name,
-      avatar_url: user.avatar_url,
-      bio: user.bio,
-      company: user.company,
-      location: user.location,
-      blog: user.blog,
-      twitter_username: user.twitter_username,
-      hireable: user.hireable,
-      followers: user.followers,
-      following: user.following,
-      public_repos: user.public_repos,
-      public_gists: user.public_gists,
-      created_at: user.created_at,
-      html_url: user.html_url,
+      name: u.name,
+      avatar_url: u.avatar_url,
+      bio: u.bio,
+      company: u.company,
+      location: u.location,
+      blog: u.blog,
+      twitter_username: u.twitter_username,
+      hireable: u.hireable,
+      followers: u.followers,
+      following: u.following,
+      public_repos: u.public_repos,
+      public_gists: u.public_gists,
+      created_at: u.created_at,
+      html_url: u.html_url,
     },
     count: all.length,
     non_fork_count: originals.length,

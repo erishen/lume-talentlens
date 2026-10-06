@@ -115,7 +115,9 @@ func no_snapshot(owner) {
 }
 
 func bundle(repos, snap) {
-  return gh.analyze(repos, snap);
+  // /overview renders aggregates only (KPIs, histograms, top-10 lists) and
+  // never touches the full `all` array — analyze_lite skips building it.
+  return gh.analyze_lite(repos, snap);
 }
 
 // ------------------------------------------------ local string helpers

@@ -153,6 +153,13 @@ main, .agent-wrap, #gh-root {
 }
 .chip.fork { color: var(--warn); border-color: var(--warn); }
 .chip.archived { color: var(--bad); border-color: var(--bad); }
+/* SSR repo rows render recency as a class (the React client colors it inline
+   with the same palette — keep these in sync) */
+.chip.recency-active { color: #22c55e; border-color: #22c55e; }
+.chip.recency-recent { color: #38bdf8; border-color: #38bdf8; }
+.chip.recency-dormant { color: #f59e0b; border-color: #f59e0b; }
+.chip.recency-stale { color: #64748b; border-color: #64748b; }
+.chip.recency-unknown { color: #475569; border-color: #475569; }
 
 /* ---- search ---- */
 .search-row { display: flex; gap: 8px; margin-bottom: 10px; }
