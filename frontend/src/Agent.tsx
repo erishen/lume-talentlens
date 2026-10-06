@@ -1,5 +1,6 @@
 import React from "react";
 import { useT } from "./i18n";
+import { renderMarkdown } from "./markdown";
 
 interface Msg {
   role: "user" | "agent" | "note" | "error";
@@ -193,7 +194,14 @@ export function Agent() {
           >
             {m.role === "note" && <span className="msg-tag">{t("agent.tag_tool")}</span>}
             {m.role === "agent" && <span className="msg-tag">{t("agent.tag_agent")}</span>}
-            <span className="msg-text">{m.text}</span>
+            {m.role === "note" ? (
+              <span className="msg-text">{m.text}</span>
+            ) : (
+              <span
+                className="msg-text"
+                dangerouslySetInnerHTML={renderMarkdown(m.text)}
+              />
+            )}
             {m.role === "agent" && m.text !== "" && (
               <button
                 className={"msg-copy" + (copiedId === i ? " copied" : "")}
