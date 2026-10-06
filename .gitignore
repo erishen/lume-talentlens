@@ -14,3 +14,6 @@ data/github/
 .env
 *.swp
 .DS_Store
+
+# framework session store (agent chat transcripts)
+.data/
