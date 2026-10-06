@@ -21,7 +21,7 @@ APP     := app/github.lume
 PORT    ?= 8091
 LOG     := ./.lume-github.log
 
-.PHONY: dev check fetch ui run stop logs clean
+.PHONY: dev check fetch ui run stop logs clean people-scan
 
 dev:
 	@echo "== dev loop: kill :$(PORT) + rebuild + watch + run =="
@@ -66,6 +66,16 @@ fetch-if-missing:
 
 logs:
 	@tail -n 200 -f $(LOG)
+
+# Rank an owner's followers by reach/prolificacy to surface expert suspects
+# (people.json only lists them; this adds per-user profile fields).
+#   make people-scan                # default owner's followers
+#   OWNER=foo make people-scan
+# For --limit / --kind, call the script directly (macOS make can't forward
+# dash-args):  OWNER=foo bash scripts/people-scan.sh --limit 20
+people-scan:
+	@OWNER="$(or $(OWNER),$(shell cat data/github/last_owner 2>/dev/null || echo erishen))" \
+	  bash scripts/people-scan.sh
 
 clean:
 	rm -f $(LOG) ./.run ./.api-ov.json
