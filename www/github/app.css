@@ -519,7 +519,7 @@ main, .agent-wrap, #gh-root {
 /* keep text clear of the corner copy button */
 .msg.agent .msg-text { padding-right: 40px; }
 .msg.note {
-  align-self: center;
+  align-self: flex-start;
   background: transparent;
   color: var(--muted);
   font-size: .78rem;
