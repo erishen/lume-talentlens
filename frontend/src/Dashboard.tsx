@@ -169,6 +169,7 @@ export function Dashboard() {
           ) : (
             <p className="muted">{t("live.pulling")}</p>
           )}
+          <p className="muted">{t("live.rate_note")}</p>
         </div>
       )}
 

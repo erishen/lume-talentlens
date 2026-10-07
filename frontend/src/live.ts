@@ -195,6 +195,13 @@ export async function fetchLive(
   signal?: AbortSignal,
   onProgress?: LiveProgressFn
 ): Promise<LiveResult> {
+  // Cache hit: re-analyzing the same owner within the TTL skips GitHub
+  // entirely — the unauthenticated 60 req/h shared limit makes a live fetch
+  // the slowest path in the app, and revisiting a just-fetched owner is the
+  // common case after a page refresh or an owner switch.
+  const cached = readLiveCache(owner);
+  if (cached) return cached;
+
   const user = await getGithub("/users/" + encodeURIComponent(owner), owner, signal);
   // the proxy returns null on an empty 200 body; guard so a malformed
   // upstream response degrades to an empty profile instead of crashing
@@ -271,7 +278,48 @@ export async function fetchLive(
     push_trend: pushTrend(all),
   };
 
-  return { overview, all };
+  const result: LiveResult = { overview, all };
+  writeLiveCache(owner, result);
+  return result;
+}
+
+// ---- live-fetch result cache (browser-side) ----------------------------
+// The unauthenticated GitHub limit (~60 req/h shared) makes a live fetch
+// slow; caching the finished LiveResult per owner for a short TTL turns
+// revisits into instant responses. localStorage survives a page refresh;
+// quota/unavailable storage degrades to "no cache" and live still works.
+
+const LIVE_CACHE_KEY = "lume-talentlens.live.v1";
+const LIVE_CACHE_TTL_MS = 10 * 60 * 1000;
+
+interface LiveCacheEntry {
+  fetchedAt: number;
+  result: LiveResult;
+}
+
+function readLiveCache(owner: string): LiveResult | null {
+  try {
+    const raw = localStorage.getItem(LIVE_CACHE_KEY);
+    if (!raw) return null;
+    const map = JSON.parse(raw) as Record<string, LiveCacheEntry>;
+    const e = map[owner];
+    if (!e) return null;
+    if (Date.now() - e.fetchedAt > LIVE_CACHE_TTL_MS) return null;
+    return e.result;
+  } catch {
+    return null;
+  }
+}
+
+function writeLiveCache(owner: string, result: LiveResult): void {
+  try {
+    const raw = localStorage.getItem(LIVE_CACHE_KEY);
+    const map: Record<string, LiveCacheEntry> = raw ? JSON.parse(raw) : {};
+    map[owner] = { fetchedAt: Date.now(), result };
+    localStorage.setItem(LIVE_CACHE_KEY, JSON.stringify(map));
+  } catch {
+    /* quota or storage unavailable — the live fetch still works uncached */
+  }
 }
 
 // year histogram drops zero/invalid years (matches server behavior).
