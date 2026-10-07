@@ -13,6 +13,14 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+
+# load local config from .env via the shell (not make -include, which would
+# put GH_TOKEN / LLM_API_KEY into make's variable database and print them in
+# make -pn / debug output). GH_ANALYZER_PAT is the non-credential-shaped
+# alias github.lume reads (env() masks names containing TOKEN/API_KEY/...).
+. "$ROOT/scripts/env.sh"
+export GH_ANALYZER_PAT="${GH_ANALYZER_PAT:-${GH_TOKEN:-}}"
+
 LUME="${LUME:-$ROOT/../research/lume/bin/lume}"
 WANT_PORT="${PORT:-${LUME_GITHUB_PORT:-8091}}"
 

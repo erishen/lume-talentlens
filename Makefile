@@ -19,19 +19,14 @@ LUME    ?= ../research/lume/bin/lume
 APP     := app/github.lume
 PORT    ?= 8091
 
-# local config: OWNER / GH_TOKEN / LUME_GITHUB_PORT / LLM_* /
-# AGENTHTTPD_CSP_IMG_SRC from .env (gitignored). `export` makes every key
-# visible to the scripts/app child processes — the server gets them on the
-# environment at startup instead of relying on its own lazy .env loader
-# (which is cwd-dependent). Keep this list in sync with .env.example.
--include .env
-export OWNER GH_TOKEN LUME_GITHUB_PORT LLM_API_URL LLM_API_KEY LLM_MODEL LLM_TIMEOUT LLM_SYSTEM_EXTRA AGENTHTTPD_CSP_IMG_SRC
-# GH_TOKEN is masked by Lume's env() credential filter (any name containing
-# TOKEN/API_KEY/SECRET/PASSWORD returns null, so an untrusted script cannot
-# exfiltrate keys). The trusted github.lume still needs it for authenticated
-# GitHub calls — map it to a non-credential-shaped name here (Makefile-level
-# variable expansion; same process env either way).
-export GH_ANALYZER_PAT := $(GH_TOKEN)
+# Local config (OWNER / GH_TOKEN / LLM_* / AGENTHTTPD_CSP_IMG_SRC) comes
+# from .env — but NEVER via `-include .env`: make would turn every key into
+# a make variable and `make -pn` / debug output would print GH_TOKEN and
+# LLM_API_KEY verbatim. Each script sources .env itself through
+# scripts/env.sh (shell-side, "already-set wins", last_owner fallback).
+# OWNER / PORT below are only command-line overrides (make fetch OWNER=foo).
+OWNER ?=
+PORT ?= 8091
 
 .PHONY: dev check fetch ui clean people-scan suspects unfollow
 
@@ -46,9 +41,8 @@ check:
 	$(LUME) app/sanity.lume
 
 fetch:
-	@echo "== fetching GitHub snapshot (owner: $(or $(OWNER),last_owner)) =="
-	OWNER="$(or $(OWNER),$(shell cat data/github/last_owner 2>/dev/null))" \
-	  bash scripts/fetch-github.sh
+	@echo "== fetching GitHub snapshot (owner: $(or $(OWNER),from .env / last_owner)) =="
+	OWNER="$(OWNER)" bash scripts/fetch-github.sh
 
 ui:
 	@echo "== building React UI =="
@@ -61,8 +55,7 @@ ui:
 # For --limit / --kind, call the script directly (macOS make can't forward
 # dash-args):  OWNER=foo bash scripts/people-scan.sh --limit 20
 people-scan:
-	@OWNER="$(or $(OWNER),$(shell cat data/github/last_owner 2>/dev/null))" \
-	  bash scripts/people-scan.sh
+	@OWNER="$(OWNER)" bash scripts/people-scan.sh
 
 # Flag water accounts / recruiters among an owner's followers AND following.
 # Local-only (avatar-uid age + login patterns), no GitHub API cost. Writes
@@ -71,8 +64,7 @@ people-scan:
 #   make suspects                  # default owner, both lists
 #   KIND=following make suspects   # one list only
 suspects:
-	@OWNER="$(or $(OWNER),$(shell cat data/github/last_owner 2>/dev/null))" \
-	  KIND="$(or $(KIND),all)" python3 scripts/people-suspects.py
+	@OWNER="$(OWNER)" KIND="$(or $(KIND),all)" python3 scripts/people-suspects.py
 
 # Dry-run the following-suspect unfollow list (actually unfollowing needs
 # GH_TOKEN with 'user:follow' — see scripts/unfollow.sh --help).

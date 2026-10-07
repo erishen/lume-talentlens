@@ -14,8 +14,11 @@
 #                   (the only file the Lume server reads)
 set -euo pipefail
 
-# load CWD .env (OWNER / GH_TOKEN) — already-set env vars win
-if [ -f .env ]; then set -a; . ./.env; set +a; fi
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# load .env (OWNER / GH_TOKEN) — already-set env vars win, then last_owner
+# fallback; never via make (see scripts/env.sh)
+. "$ROOT/scripts/env.sh"
 
 OWNER="${OWNER:-}"
 if [ -z "$OWNER" ]; then

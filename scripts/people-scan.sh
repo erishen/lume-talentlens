@@ -19,8 +19,9 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# load CWD .env (OWNER / GH_TOKEN) — already-set env vars win
-if [ -f "$ROOT/.env" ]; then set -a; . "$ROOT/.env"; set +a; fi
+# load .env (OWNER / GH_TOKEN) — already-set env vars win, then last_owner
+# fallback; never via make (see scripts/env.sh)
+. "$ROOT/scripts/env.sh"
 
 OWNER="${OWNER:-}"
 if [ -z "$OWNER" ]; then

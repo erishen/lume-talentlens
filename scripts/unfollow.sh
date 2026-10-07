@@ -34,8 +34,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# OWNER / GH_TOKEN from .env when not already in the environment
-if [ -f "$ROOT/.env" ]; then set -a; . "$ROOT/.env"; set +a; fi
+# OWNER / GH_TOKEN from .env when not already in the environment (already-set
+# env vars win; see scripts/env.sh)
+. "$ROOT/scripts/env.sh"
 OWNER="${OWNER:-}"
 
 # Historical API-verified water accounts (all unfollowed 2026-10-06 — kept as

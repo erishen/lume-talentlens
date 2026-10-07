@@ -49,6 +49,13 @@ def _load_dotenv(path):
 _load_dotenv(os.path.join(ROOT, ".env"))
 OWNER = os.environ.get("OWNER", "")
 if not OWNER:
+    # same last_owner fallback scripts/env.sh provides for the shell scripts
+    try:
+        with open(os.path.join(ROOT, "data", "github", "last_owner")) as f:
+            OWNER = f.read().strip()
+    except OSError:
+        OWNER = ""
+if not OWNER:
     print("people-suspects: no owner. Set OWNER (e.g. OWNER=alice) or add OWNER= to .env", file=sys.stderr)
     sys.exit(1)
 KIND = os.environ.get("KIND", "all")  # all | followers | following
