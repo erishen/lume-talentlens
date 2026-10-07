@@ -4,6 +4,7 @@ import type {
   SearchResult,
   OwnerList,
   People,
+  PeopleDiff,
   PersonView,
   NoSnapshot,
 } from "./types";
@@ -45,4 +46,6 @@ export const api = {
   },
   people: (owner?: string) =>
     j<People | NoSnapshot>("/api/people" + (owner ? "?" + ownerQS(owner) : "")),
+  peopleDiff: (owner?: string) =>
+    j<PeopleDiff>("/api/people_diff" + (owner ? "?" + ownerQS(owner) : "")),
 };

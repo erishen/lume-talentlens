@@ -131,6 +131,16 @@ export interface People {
   note: string;
 }
 
+// network change diff — who followed/unfollowed since the last /api/refresh
+// (has_history is false on the first refresh, when no archive exists yet)
+export interface PeopleDiff {
+  ok: boolean;
+  owner: string;
+  has_history: boolean;
+  added: { followers: string[]; following: string[] };
+  gone: { followers: string[]; following: string[] };
+}
+
 export interface OwnerList {
   owners: string[];
   current: string;

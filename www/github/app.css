@@ -646,3 +646,24 @@ footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 24
 
 /* light mode for SSR pages (they use /styles.css — a minimal separate sheet
  * is also emitted; keep dark here as default so SSR + React look coherent). */
+
+/* network-change diff panel (people diff) */
+.diff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px 16px;
+}
+.diff-cell {
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+.diff-label {
+  font-weight: 600;
+  color: var(--accent, #3b82f6);
+  margin-right: 8px;
+  white-space: nowrap;
+}
+.diff-items {
+  color: var(--fg, #333);
+  overflow-wrap: anywhere;
+}

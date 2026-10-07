@@ -33,7 +33,7 @@ export function Dashboard() {
     owner, cached, weights, setWeights,
     ov, live, noSnap, loading, liveLoading, liveErr, liveProgress,
     err, q, setQ, hits, hitsTotal, searched, searching, limit, setLimit,
-    people, peopleLoading, peopleError, refreshing, refreshMsg,
+    people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff,
     cmp, setCmp,
     poolInput, setPoolInput, poolLoading, poolProgress, pool, setPool,
     rankedPool, poolFrac,
@@ -265,6 +265,17 @@ export function Dashboard() {
                     {refreshing ? t("people.refreshing") : t("people.refresh")}
                   </button>
                 </div>
+                {peopleDiff && peopleDiff.has_history && (
+                  <div className="panel people-diff" style={{ gridColumn: "1 / -1" }}>
+                    <h2>{t("people.diff_title")}</h2>
+                    <div className="diff-grid">
+                      <DiffLine label={t("people.diff_new_followers")} items={peopleDiff.added.followers} t={t} />
+                      <DiffLine label={t("people.diff_gone_followers")} items={peopleDiff.gone.followers} t={t} />
+                      <DiffLine label={t("people.diff_new_following")} items={peopleDiff.added.following} t={t} />
+                      <DiffLine label={t("people.diff_gone_following")} items={peopleDiff.gone.following} t={t} />
+                    </div>
+                  </div>
+                )}
                 <PersonList
                   title={t("people.followers")}
                   people={people.followers}
@@ -324,6 +335,26 @@ export function Dashboard() {
           </section>
         </>
       )}
+    </div>
+  );
+}
+
+// one diff cell: "新关注我: @a, @b, @c +2 更多" (items are GitHub logins)
+function DiffLine({ label, items, t }: { label: string; items: string[]; t: (k: string, p?: Record<string, string | number>) => string }) {
+  if (!items || items.length === 0) {
+    return (
+      <div className="diff-cell">
+        <span className="diff-label">{label}</span>
+        <span className="muted">—</span>
+      </div>
+    );
+  }
+  const shown = items.slice(0, 5).map((s) => "@" + s).join("  ");
+  const more = items.length > 5 ? "  " + t("people.diff_more", { n: items.length - 5 }) : "";
+  return (
+    <div className="diff-cell">
+      <span className="diff-label">{label}</span>
+      <span className="diff-items">{shown}{more}</span>
     </div>
   );
 }

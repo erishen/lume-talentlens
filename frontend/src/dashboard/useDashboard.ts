@@ -4,7 +4,7 @@
 // ranking. Dashboard.tsx now only renders JSX against this hook.
 import React from "react";
 import { api } from "../api";
-import type { Overview, RepoView, NoSnapshot, People } from "../types";
+import type { Overview, RepoView, NoSnapshot, People, PeopleDiff } from "../types";
 import { isNoSnapshot } from "../types";
 import { fetchLive, fetchLivePeople, searchLocal, type LiveResult, type LiveProgress } from "../live";
 import { deriveTalent, healthScore, loadHealthWeights, saveHealthWeights, type HealthWeights } from "../talent";
@@ -54,6 +54,7 @@ export function useDashboardData(t: T, lang: Lang) {
   const [people, setPeople] = React.useState<People | null>(null);
   const [peopleLoading, setPeopleLoading] = React.useState(false);
   const [peopleError, setPeopleError] = React.useState("");
+  const [peopleDiff, setPeopleDiff] = React.useState<PeopleDiff | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
   const [refreshMsg, setRefreshMsg] = React.useState("");
 
@@ -119,6 +120,10 @@ export function useDashboardData(t: T, lang: Lang) {
       }
       setPeople(r as People);
       setPeopleLoading(false);
+      // network change diff rides along — best-effort, failures are silent
+      api.peopleDiff(target).then((d) => {
+        if (seq === peopleSeq.current && d && d.ok) setPeopleDiff(d);
+      }).catch(() => {});
     }).catch(() => {
       if (seq !== peopleSeq.current) return;
       // /api/people unavailable (older server) → live fallback
@@ -382,7 +387,7 @@ export function useDashboardData(t: T, lang: Lang) {
     weights, setWeights,
     ov, live, noSnap, loading, liveLoading, liveErr, liveProgress,
     err, q, setQ, hits, hitsTotal, searched, searching, limit, setLimit,
-    people, peopleLoading, peopleError, refreshing, refreshMsg,
+    people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff,
     cmp, setCmp,
     poolInput, setPoolInput, poolLoading, poolProgress, pool, setPool,
     rankedPool, poolFrac,

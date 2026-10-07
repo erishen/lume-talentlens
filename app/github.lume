@@ -566,9 +566,62 @@ get "/api/refresh", (req) => {
     totals: tot,
     note: "refreshed via /api/refresh (server-side)",
   };
+  // archive the previous snapshot before overwriting — /api/people_diff
+  // compares current vs previous to show who followed/unfollowed since the
+  // last refresh (no history on the very first refresh).
+  let prev_raw = read_file("data/github/" + owner + "/people.json");
+  if (prev_raw != null and prev_raw != "") {
+    write_file("data/github/" + owner + "/people.prev.json", prev_raw);
+  }
   write_file("data/github/" + owner + "/people.json", str(people));
   put(_refresh_at, owner, t);
   return { ok: true, status: 200, owner: owner, followers: len(followers), following: len(following) };
+};
+
+// people change diff: current people.json vs the archived people.prev.json
+// (written by /api/refresh before overwriting). Shows who followed/unfollowed
+// since the last refresh — the dashboard's "network change" view.
+func login_list(rows) {
+  let out = [];
+  for (let r in rows) { push(out, str(get(r, "login", ""))); }
+  return out;
+}
+func diff_login_lists(cur, prev) {
+  let prev_set = {};
+  for (let l in prev) { put(prev_set, l, 1); }
+  let cur_set = {};
+  for (let l in cur) { put(cur_set, l, 1); }
+  let added = [];
+  let gone = [];
+  for (let l in cur) { if (get(prev_set, l, null) == null) { push(added, l); } }
+  for (let l in prev) { if (get(cur_set, l, null) == null) { push(gone, l); } }
+  return { added: added, gone: gone };
+}
+
+get "/api/people_diff", (req) => {
+  let owner = owner_param(req);
+  if (owner == "") { owner = default_owner(); }
+  let cur = load_people(owner);
+  if (cur == null) { return { ok: false, status: 404, err: "no people snapshot" }; }
+  let prev_raw = read_file("data/github/" + owner + "/people.prev.json");
+  let has_history = (prev_raw != null and prev_raw != "");
+  let out = { ok: true, owner: owner, has_history: has_history, added: { followers: [], following: [] }, gone: { followers: [], following: [] } };
+  if (has_history) {
+    let prev = json(prev_raw);
+    if (prev != null) {
+      let cf = login_list(get(cur, "followers", []));
+      let pf = login_list(get(prev, "followers", []));
+      let df = diff_login_lists(cf, pf);
+      put(out.added, "followers", df.added);
+      put(out.gone, "followers", df.gone);
+      let cg = login_list(get(cur, "following", []));
+      let pg = login_list(get(prev, "following", []));
+      let dg = diff_login_lists(cg, pg);
+      put(out.added, "following", dg.added);
+      put(out.gone, "following", dg.gone);
+    }
+  }
+  return out;
 };
 
 // ------------------------------------------------ SSR pages
