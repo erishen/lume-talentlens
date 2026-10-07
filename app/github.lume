@@ -961,5 +961,27 @@ post "/api/follow", (req) => {
   return { ok: false, status: up, err: str(get(r, "err", "")) };
 };
 
+// ------------------------------------------------ /api/unfollow
+// Unfollow a water-account from the people toolbar. DELETE /user/following/
+// <login> with the PAT (204 whether you just unfollowed or never followed).
+delete "/api/unfollow", (req) => {
+  let b = str(get(req, "body", ""));
+  let d = json(b);
+  if (d == null or str(get(d, "login", "")) == "") {
+    return { ok: false, status: 400, err: "missing login" };
+  }
+  let tok = env("GH_ANALYZER_PAT");
+  if (tok == null or tok == "") {
+    return { ok: false, status: 401, err: "GH_TOKEN not set — needs user:follow scope" };
+  }
+  let headers = { "Accept": "application/vnd.github+json", "User-Agent": "lume-talentlens",
+                  "Authorization": "Bearer " + str(tok) };
+  let url = "https://api.github.com/user/following/" + str(get(d, "login", ""));
+  let r = http_delete(url, { headers: headers, timeout: 30, max_bytes: 1024 });
+  let up = int(get(r, "status", 0), 0);
+  if (up == 204) { return { ok: true, status: 204, err: "" }; }
+  return { ok: false, status: up, err: str(get(r, "err", "")) };
+};
+
 // ------------------------------------------------ run
 run();

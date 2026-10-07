@@ -112,6 +112,10 @@ main, .agent-wrap, #gh-root {
 }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn:hover:not(:disabled) { filter: brightness(1.05); }
+.btn.danger {
+  background: #b91c1c;
+  color: #fff;
+}
 
 /* ---- KPI tiles ---- */
 .kpis {

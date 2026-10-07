@@ -78,6 +78,45 @@ export function Dashboard() {
     loadPeople(owner, !!live);
   }
 
+  // Unfollow-all for high-confidence water accounts in the following list —
+  // one DELETE per login via /api/unfollow. Confirm first: unfollowing is
+  // hard to reverse by hand at scale.
+  const [unfollowState, setUnfollowState] = React.useState<{
+    busy: boolean; done: number; failed: number; err: string;
+  }>({ busy: false, done: 0, failed: 0, err: "" });
+  const waterFollowing = people && people.following
+    ? people.following.filter((p) => p.suspect === "high")
+    : [];
+  async function unfollowWater() {
+    if (unfollowState.busy || waterFollowing.length === 0) return;
+    if (!window.confirm(t("people.unfollow_confirm", { n: waterFollowing.length }))) return;
+    setUnfollowState({ busy: true, done: 0, failed: 0, err: "" });
+    let done = 0;
+    let failed = 0;
+    let firstErr = "";
+    for (const p of waterFollowing) {
+      try {
+        const r = await fetch("/api/unfollow", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ login: p.login }),
+        });
+        const j = await r.json().catch(() => null);
+        if (j && j.ok) done = done + 1;
+        else {
+          failed = failed + 1;
+          if (firstErr === "") firstErr = (j && j.err) || `HTTP ${r.status}`;
+        }
+      } catch {
+        failed = failed + 1;
+        if (firstErr === "") firstErr = "network error";
+      }
+      setUnfollowState({ busy: true, done: done, failed: failed, err: firstErr });
+    }
+    setUnfollowState({ busy: false, done: done, failed: failed, err: firstErr });
+    loadPeople(owner, !!live);
+  }
+
   // relation insights over the people snapshot:
   // - mutual = followers who are also followed back (双向关注)
   // - worth = high-influence followers not yet followed back (值得关注)
@@ -356,7 +395,23 @@ export function Dashboard() {
                   <button className="btn" onClick={() => exportPeopleCsv(people, mutualPeople, worthPeople, radar)}>
                     {t("people.export_csv")}
                   </button>
+                  {waterFollowing.length > 0 && (
+                    <button
+                      className="btn danger"
+                      onClick={unfollowWater}
+                      disabled={unfollowState.busy}
+                    >
+                      {unfollowState.busy
+                        ? t("people.unfollowing", { done: unfollowState.done, total: waterFollowing.length })
+                        : t("people.unfollow_water", { n: waterFollowing.length })}
+                    </button>
+                  )}
                 </div>
+                {unfollowState.err && (
+                  <p className="muted" style={{ gridColumn: "1 / -1" }}>
+                    {t("people.follow_err")}: {unfollowState.err}
+                  </p>
+                )}
                 {peopleDiff && peopleDiff.has_history && (
                   <div className="panel people-diff" style={{ gridColumn: "1 / -1" }}>
                     <h2>{t("people.diff_title")}</h2>
