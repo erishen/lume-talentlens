@@ -42,6 +42,13 @@ if [ -d "$ROOT/.data/sessions" ]; then
   echo "dev: agent sessions pruned (keeping newest 30, $remain remain)"
 fi
 
+# 1c) rotate the access log: keep the previous run's log as access.log.1,
+#     then start fresh — the file grows one line per request and never
+#     rotates otherwise.
+if [ -f "$ROOT/logs/access.log" ]; then
+  mv -f "$ROOT/logs/access.log" "$ROOT/logs/access.log.1"
+fi
+
 # 2) pick a free port: the target, else the next free one above it. If the
 #    target is held by an unkillable zombie we fall through to a fresh port
 #    instead of refusing to start — make dev should always get you a server.

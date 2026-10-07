@@ -27,7 +27,7 @@ PORT    ?= 8091
 -include .env
 export OWNER GH_TOKEN LUME_GITHUB_PORT LLM_API_URL LLM_API_KEY LLM_MODEL LLM_TIMEOUT LLM_SYSTEM_EXTRA AGENTHTTPD_CSP_IMG_SRC
 
-.PHONY: dev check fetch ui clean people-scan
+.PHONY: dev check fetch ui clean people-scan suspects unfollow
 
 dev:
 	@echo "== dev loop: kill :$(PORT) + rebuild + watch + run =="
@@ -36,6 +36,8 @@ dev:
 check:
 	@echo "== type-checking .lume =="
 	$(LUME) --check app/lib/github.lume app/lib/ui.lume $(APP)
+	@echo "== runtime sanity (constructs the app relies on) =="
+	$(LUME) app/sanity.lume
 
 fetch:
 	@echo "== fetching GitHub snapshot (owner: $(or $(OWNER),last_owner)) =="
@@ -55,6 +57,21 @@ ui:
 people-scan:
 	@OWNER="$(or $(OWNER),$(shell cat data/github/last_owner 2>/dev/null))" \
 	  bash scripts/people-scan.sh
+
+# Flag water accounts / recruiters among an owner's followers AND following.
+# Local-only (avatar-uid age + login patterns), no GitHub API cost. Writes
+# data/github/<owner>/suspects.json, which the server merges into /api/people
+# and unfollow.sh consumes (kind=following).
+#   make suspects                  # default owner, both lists
+#   KIND=following make suspects   # one list only
+suspects:
+	@OWNER="$(or $(OWNER),$(shell cat data/github/last_owner 2>/dev/null))" \
+	  KIND="$(or $(KIND),all)" python3 scripts/people-suspects.py
+
+# Dry-run the following-suspect unfollow list (actually unfollowing needs
+# GH_TOKEN with 'user:follow' — see scripts/unfollow.sh --help).
+unfollow:
+	@bash scripts/unfollow.sh --dry-run
 
 clean:
 	rm -f ./.run ./.api-ov.json
