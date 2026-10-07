@@ -307,3 +307,40 @@ export func insight(repos, snap) {
     top_repos: a.top_by_stars,
   };
 }
+
+// ------------------------------------------------ career-story pack
+// Resume-grade material for the LLM agent to turn into interview stories:
+// the owner's top repos (name/language/stars/forks/recency/description),
+// language mix, activity cadence, talent signals, and profile basics —
+// deliberately shaped (compact, flat) rather than the raw snapshot.
+export func story_pack(repos, snap) {
+  let a = analyze(repos, snap);
+  let prof = get(snap, "profile", {});
+  let top = [];
+  for (let r in a.top_by_stars) {
+    push(top, {
+      name: str(get(r, "name", "")),
+      lang: str(get(r, "lang", "")),
+      stars: int(get(r, "stars", 0)),
+      forks: int(get(r, "forks", 0)),
+      recency: str(get(r, "recency", "unknown")),
+      desc: str(get(r, "desc", "")),
+      url: str(get(r, "url", "")),
+    });
+  }
+  return {
+    owner: a.owner,
+    profile: {
+      name: str(get(prof, "name", "")),
+      bio: str(get(prof, "bio", "")),
+      company: str(get(prof, "company", "")),
+      location: str(get(prof, "location", "")),
+      followers: int(get(prof, "followers", 0)),
+    },
+    totals: a.totals,
+    languages: a.languages,
+    recency: a.recency,
+    top_repos: top,
+    talent: a.talent,
+  };
+}

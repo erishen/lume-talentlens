@@ -23,7 +23,7 @@
 // Agent tools (all accept an optional { owner } param, default = last owner
 // fetched; repo_search also takes { q }):
 //   repo_insights / repo_search / repo_language / repo_recency /
-//   repo_year / repo_stats / github_owners
+//   repo_year / repo_stats / github_story / github_owners
 //
 // When an owner has no local snapshot, JSON routes answer
 //   { "status": 404, "error": "no_snapshot", "owner": …, "hint": "run: make fetch OWNER=…" }
@@ -874,6 +874,16 @@ tool "repo_stats",
        let snap = load_snap(tool_owner(arg));
        let a = gh.analyze(repos, snap);
        return a.totals;
+     };
+
+tool "github_story",
+     "Career-story material for a GitHub owner, shaped for generating an interview self-intro / project stories: profile basics, repo totals, language mix, activity cadence, talent signals, and the top starred repos (name/language/stars/recency/description/url). Optional owner.",
+     { owner: string },
+     (arg) => {
+       let repos = tool_repos(arg);
+       if (repos == null) { return tool_no_snapshot(arg); }
+       let snap = load_snap(tool_owner(arg));
+       return gh.story_pack(repos, snap);
      };
 
 tool "github_owners",
