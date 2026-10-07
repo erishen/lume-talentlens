@@ -70,7 +70,7 @@ async function fetchGithubOnce(path: string, owner: string, signal?: AbortSignal
   } catch (e) {
     throw new Error(
       "Could not reach the Lume live proxy (" + String((e as Error)?.message || e) + "). " +
-      "Make sure the app server is running (make run / make dev)."
+      "Make sure the app server is running (make dev)."
     );
   }
   // The proxy always answers 200 with a JSON envelope; surface its status.
