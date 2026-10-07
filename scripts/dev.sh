@@ -21,14 +21,30 @@ cd "$ROOT"
 . "$ROOT/scripts/env.sh"
 export GH_ANALYZER_PAT="${GH_ANALYZER_PAT:-${GH_TOKEN:-}}"
 
-# Lume release binary from PATH by default (Makefile default is `lume` too).
-# LUME=/path/to/lume overrides; a missing binary fails fast with a clear
-# message instead of a cryptic "No such file".
-LUME="${LUME:-$(command -v lume || true)}"
+# Default to the full Lume build checked out under work/research/lume (built
+# via `make` there); the public release binary on PATH ships WITHOUT the
+# outbound-HTTP builtins (http_get/http_put/http_delete) that this app's
+# live / refresh / follow endpoints need, so a release binary is rejected by
+# the capability probe below. LUME=/path/to/lume overrides; a missing binary
+# or an incapable one fails fast with a clear message.
+DEFAULT_LUME="$(cd "$ROOT/.." && pwd)/research/lume/bin/lume"
+LUME="${LUME:-$DEFAULT_LUME}"
 if [ -z "$LUME" ] || [ ! -x "$LUME" ]; then
-  echo "dev: no Lume binary found — install the release build on PATH (e.g. ~/.local/bin/lume) or set LUME=/path/to/lume" >&2
+  echo "dev: no Lume binary found at $LUME — build it (make in work/research/lume) or set LUME=/path/to/lume" >&2
   exit 1
 fi
+
+# capability probe: a release build (agent-httpd 1.0) has no http_get and the
+# app would crash at server boot with "undefined variable 'http_get'". Detect
+# it up front so make dev fails with a usable message instead.
+PROBE="$(mktemp -t lume-probe.XXXXXX.lume)"
+printf 'print(http_get);\n' > "$PROBE"
+if ! "$LUME" "$PROBE" >/dev/null 2>&1; then
+  rm -f "$PROBE"
+  echo "dev: $LUME lacks the outbound-HTTP builtins — this app needs a FULL lume build (release builds ship without http_get/http_put/http_delete). Default full build: $DEFAULT_LUME; override with LUME=/path/to/lume" >&2
+  exit 1
+fi
+rm -f "$PROBE"
 WANT_PORT="${PORT:-${LUME_GITHUB_PORT:-8091}}"
 
 # shared kill/port-release helpers (kill_matching, wait_port_free, port_busy)

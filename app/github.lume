@@ -30,30 +30,14 @@
 // ============================================================================
 
 // ============================================================================
-// Outbound-HTTP capability gate
-// -----------------------------
-// The live proxy (/api/live/github), the people refresh (/api/refresh) and the
-// follow/unfollow endpoints rely on Lume's outbound-HTTP builtins
-// (http_get / http_put / http_delete). Those exist only in full builds; the
-// public release binary (agent-httpd 1.0) ships WITHOUT them, so the whole app
-// would fail to compile on a release binary. These stubs keep a release build
-// bootable: any outbound call answers a clear "unavailable" result and the
-// routes above surface it as a 501-ish error instead of a crash.
-//
-// To restore live/follow/unfollow, run the app on a full build and delete this
-// block (the builtins then resolve normally).
-
-let HTTP_UNAVAILABLE_MSG = "outbound http unavailable in this lume build (release build lacks http_get/http_put/http_delete) — use a full build for live fetch / refresh / follow / unfollow";
-
-func http_get(url, opts) {
-  return { status: -1, err: HTTP_UNAVAILABLE_MSG, body: "" };
-}
-func http_put(url, opts) {
-  return { status: -1, err: HTTP_UNAVAILABLE_MSG, body: "" };
-}
-func http_delete(url, opts) {
-  return { status: -1, err: HTTP_UNAVAILABLE_MSG, body: "" };
-}
+// Outbound-HTTP builtins
+// ----------------------
+// /api/live/github, /api/refresh and the follow/unfollow endpoints rely on
+// Lume's outbound-HTTP builtins (http_get / http_put / http_delete). This app
+// is meant to run on a full Lume build; the public release binary (agent-httpd
+// 1.0) ships WITHOUT those builtins and will fail at runtime — run this app
+// with a full build (e.g. the one built in work/research/lume via `make`).
+// ============================================================================
 
 // port is env-overridable (LUME_GITHUB_PORT) so a dev can shift it if the
 // default 8091 is taken.
@@ -67,9 +51,6 @@ func server_port() {
 
 server {
   port = server_port();
-  // A few more prefork workers than the default 2: /api/people merges
-  // suspects + scores over ~700 rows and can take a few seconds on the
-  // release interpreter — one slow request used to block the whole pool.
   workers = 4;
   bind = "127.0.0.1";
   docroot = "./www";
@@ -305,19 +286,20 @@ func load_people(owner) {
 }
 
 // merge a suspects.json pre-screen entry into a person row (no-op when absent)
-// NOTE: keep rows slim — the release server's response path collapses for
-// bodies around/above ~64KB (a full people payload took ~5s), so only fields
-// the UI actually uses are carried. The API-confirmation evidence is flattened
-// to a single note string (api_note) the UI shows in the hover tooltip.
 func tag_suspect(p, lookup) {
   let s = get(lookup, str(get(p, "login", "")), null);
   if (s == null) { return p; }
   return {
     login: str(get(p, "login", "")),
+    name: str(get(p, "name", "")),
     avatar: str(get(p, "avatar", "")),
+    url: str(get(p, "url", "")),
+    type: str(get(p, "type", "")),
     suspect: str(get(s, "level", "")),
     recruiter: bool(get(s, "maybe_recruiter", false)),
-    api_note: str(get(get(s, "api", {}), "note", "")),
+    // API-confirmation evidence (followers/repos/created/note), when a
+    // confirmation round has run — lets the UI show why an account is flagged
+    api: get(s, "api", null),
   };
 }
 
@@ -328,10 +310,13 @@ func tag_score(p, lookup) {
   if (s == null) { return p; }
   return {
     login: str(get(p, "login", "")),
+    name: str(get(p, "name", "")),
     avatar: str(get(p, "avatar", "")),
+    url: str(get(p, "url", "")),
+    type: str(get(p, "type", "")),
     suspect: str(get(p, "suspect", "")),
     recruiter: bool(get(p, "recruiter", false)),
-    api_note: str(get(p, "api_note", "")),
+    api: get(p, "api", null),
     score: int(get(s, "score", 0), 0),
   };
 }

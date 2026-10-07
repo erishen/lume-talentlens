@@ -17,12 +17,15 @@ const RECCOLOR: Record<string, string> = {
 };
 
 // tooltip for a suspect chip — API-confirmation evidence when available, else
-// a plain hint that this is a pre-screen flag (no per-account data fetched).
-// The server flattens the confirmation object to a single note string
-// (api_note) to keep the /api/people payload under the response-size cliff.
+// a plain hint that this is a pre-screen flag (no per-account data fetched)
 function evidenceTitle(t: (k: string, p?: Record<string, string | number>) => string, p: PersonView): string {
-  if (p.api_note) {
-    return p.api_note;
+  if (p.api) {
+    return t("people.evidence", {
+      followers: p.api.followers,
+      repos: p.api.repos,
+      created: p.api.created,
+      note: p.api.note || "-",
+    });
   }
   return t("people.click_name", { login: p.login });
 }
