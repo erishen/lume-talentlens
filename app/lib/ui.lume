@@ -60,9 +60,14 @@ func lang_dict(lang, key) {
     api_ep_recency: "— x 的活跃度直方图（active/recent/dormant/stale/unknown）",
     api_ep_year: "— x 的创建年份直方图",
     api_ep_search: "— 按名称/描述/主题/语言子串筛选 x 的仓库",
+    api_ep_people_diff: "— 自上次刷新以来新关注/取关的变化（首次刷新 has_history: false）",
+    api_ep_radar: "— 高手盈利模式分类（需先 make radar；未生成返回 404 + 提示）",
+    api_ep_live: "— 服务端 GitHub 代理（?path=，同源绕开 CORS/出口限制）",
+    api_ep_follow: "— 关注某人（需 GH_TOKEN，user:follow scope；幂等 204）",
+    api_ep_unfollow: "— 取关某人（需 GH_TOKEN，user:follow scope；幂等 204）",
     api_tool_1: "repo_insights / repo_language / repo_recency / repo_year / repo_stats / github_story — 可选 { owner }",
     api_tool_2: "repo_search — { owner?, q } 名称/描述/主题/语言子串",
-    api_tool_3: "github_owners — 列出本地缓存账号",
+    api_tool_3: "github_owners / github_radar / github_people — 网络分析与盈利模式",
   };
   let en = {
     nav_dashboard: "Dashboard",
@@ -108,9 +113,14 @@ func lang_dict(lang, key) {
     api_ep_recency: " — recency histogram for x (active/recent/dormant/stale/unknown)",
     api_ep_year: " — creation-year histogram for x",
     api_ep_search: " — filter x's repos by name/desc/topic/language substring",
+    api_ep_people_diff: " — follow/unfollow changes since the last refresh (has_history: false on first refresh)",
+    api_ep_radar: " — talent money-pattern classification (run make radar first; 404 + hint when absent)",
+    api_ep_live: " — server-side GitHub proxy (?path=, same-origin, bypasses CORS/egress limits)",
+    api_ep_follow: " — follow a user (needs GH_TOKEN, user:follow scope; idempotent 204)",
+    api_ep_unfollow: " — unfollow a user (needs GH_TOKEN, user:follow scope; idempotent 204)",
     api_tool_1: "repo_insights / repo_language / repo_recency / repo_year / repo_stats / github_story — optional { owner }",
     api_tool_2: "repo_search — { owner?, q } substring across name/desc/topics/lang",
-    api_tool_3: "github_owners — list locally-cached owners",
+    api_tool_3: "github_owners / github_radar / github_people — network & money-pattern analysis",
   };
   let v = get(zh, key, null);
   if (lang == "en") { v = get(en, key, null); }

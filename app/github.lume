@@ -790,6 +790,7 @@ get "/api", (req) => {
   let rows = [
     el("li", {}, el("code", {}, "GET /api/owners"), ui.t(lang, "api_ep_owners")),
     el("li", {}, el("code", {}, "GET /api/people?owner=x"), ui.t(lang, "api_ep_people")),
+    el("li", {}, el("code", {}, "GET /api/people_diff?owner=x"), ui.t(lang, "api_ep_people_diff")),
     el("li", {}, el("code", {}, "GET /api/overview?owner=x"), ui.t(lang, "api_ep_overview")),
     el("li", {}, el("code", {}, "GET /api/repos?owner=x&offset=0&limit=25"), ui.t(lang, "api_ep_repos")),
     el("li", {}, el("code", {}, "GET /api/top?owner=x"), ui.t(lang, "api_ep_top")),
@@ -797,6 +798,10 @@ get "/api", (req) => {
     el("li", {}, el("code", {}, "GET /api/recency?owner=x"), ui.t(lang, "api_ep_recency")),
     el("li", {}, el("code", {}, "GET /api/year?owner=x"), ui.t(lang, "api_ep_year")),
     el("li", {}, el("code", {}, "GET /api/search?owner=x&q=rust"), ui.t(lang, "api_ep_search")),
+    el("li", {}, el("code", {}, "GET /api/radar"), ui.t(lang, "api_ep_radar")),
+    el("li", {}, el("code", {}, "GET /api/live/github?path=/users/x"), ui.t(lang, "api_ep_live")),
+    el("li", {}, el("code", {}, "POST /api/follow  {login}"), ui.t(lang, "api_ep_follow")),
+    el("li", {}, el("code", {}, "DELETE /api/unfollow  {login}"), ui.t(lang, "api_ep_unfollow")),
   ];
   let body = [
     el("section", { class: "hero" },
