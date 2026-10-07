@@ -121,6 +121,8 @@ export interface PersonView {
     note: string;
     confirmed?: string;
   };
+  /** talent-radar influence score from scores.json (0 when not scored yet) */
+  score?: number;
 }
 
 export interface People {

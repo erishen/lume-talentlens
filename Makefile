@@ -71,5 +71,14 @@ suspects:
 unfollow:
 	@bash scripts/unfollow.sh --dry-run
 
+# Rank followers AND following by technical influence ("talent radar": the
+# positive counterpart to the water-account pre-screen). One GitHub API call
+# per person — set GH_TOKEN (5000 req/h) for a real run. Writes
+# data/github/<owner>/scores.json, which the server merges into /api/people.
+#   make score                  # both lists
+#   KIND=followers make score   # one list only
+score:
+	@OWNER="$(OWNER)" bash scripts/people-score.sh
+
 clean:
 	rm -f ./.run ./.api-ov.json

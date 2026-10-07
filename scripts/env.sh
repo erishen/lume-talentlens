@@ -34,7 +34,9 @@ load_env() {
       export "$line"
     fi
   done < "$f"
-  [ "$xtrace_on" = 1 ] && set -x
+  # NOTE: `[ ... ] && cmd` would leak a nonzero exit when the test fails,
+  # which under `set -e` makes the whole source fail — use an if.
+  if [ "$xtrace_on" = 1 ]; then set -x; fi
 }
 
 load_env "$ROOT/.env"

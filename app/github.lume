@@ -293,6 +293,24 @@ func tag_suspect(p, lookup) {
   };
 }
 
+// merge a scores.json talent-radar entry into a person row (no-op when
+// absent); keeps any suspect/recruiter tags already attached by tag_suspect.
+func tag_score(p, lookup) {
+  let s = get(lookup, str(get(p, "login", "")), null);
+  if (s == null) { return p; }
+  return {
+    login: str(get(p, "login", "")),
+    name: str(get(p, "name", "")),
+    avatar: str(get(p, "avatar", "")),
+    url: str(get(p, "url", "")),
+    type: str(get(p, "type", "")),
+    suspect: str(get(p, "suspect", "")),
+    recruiter: bool(get(p, "recruiter", false)),
+    api: get(p, "api", null),
+    score: int(get(s, "score", 0), 0),
+  };
+}
+
 get "/api/people", (req) => {
   let owner = owner_param(req);
   if (owner == "") { owner = default_owner(); }
@@ -319,6 +337,16 @@ get "/api/people", (req) => {
     }
     followers = map((p) => tag_suspect(p, lookup), followers);
     following = map((p) => tag_suspect(p, lookup), following);
+  }
+  // talent-radar scores (data/github/<owner>/scores.json, if present):
+  // merged per-login so the UI can sort by influence and badge high-scorers.
+  let scores_raw = read_file("data/github/" + owner + "/scores.json");
+  if (scores_raw != null) {
+    let smap = json(scores_raw);
+    if (smap != null) {
+      followers = map((p) => tag_score(p, smap), followers);
+      following = map((p) => tag_score(p, smap), following);
+    }
   }
   let totals = get(people, "totals", {});
   // fall back to the profile counts when people.json predates the capture

@@ -667,3 +667,19 @@ footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 24
   color: var(--fg, #333);
   overflow-wrap: anywhere;
 }
+
+/* talent-radar (make score) — by-influence sort + high-scorer badge */
+.chip.btn-sort {
+  margin-left: 10px;
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  cursor: pointer;
+  background: var(--panel, #fff);
+  border: 1px solid var(--accent, #3b82f6);
+  color: var(--accent, #3b82f6);
+}
+.chip.btn-sort:hover { background: var(--accent, #3b82f6); color: #fff; }
+.chip.radar {
+  border-color: #d97706;
+  color: #d97706;
+}

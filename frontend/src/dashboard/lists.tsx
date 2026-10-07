@@ -32,20 +32,35 @@ function evidenceTitle(t: (k: string, p?: Record<string, string | number>) => st
 
 // Followers / Following — a list of GitHub logins. Clicking one analyzes that
 // person *in-app* (onOpen), it does NOT link out to their GitHub profile.
+// When scores.json exists (make score), the header offers a by-influence sort
+// and high scorers get a "radar" badge (the positive counterpart to the
+// water-account flags).
+const RADAR_SCORE = 120; // influence score at/above which a person is "radar"
+
 function PersonList({ title, people, totals, note, onOpen }: {
   title: string; people: PersonView[]; totals: number; note?: string;
   onOpen: (login: string) => void;
 }) {
   const t = useT();
+  const [byScore, setByScore] = React.useState(false);
+  const scored = people.some((p) => typeof p.score === "number" && p.score > 0);
+  const sorted = byScore
+    ? [...people].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    : people;
   return (
     <div className="panel">
       <h2>
         {title} <span className="muted">{t("people.shown_total", { shown: people.length, total: totals })}</span>
+        {scored && (
+          <button className="chip btn-sort" onClick={() => setByScore(!byScore)}>
+            {byScore ? t("people.sort_default") : t("people.sort_score")}
+          </button>
+        )}
       </h2>
       {people.length === 0 && <p className="muted">{note || t("people.no_data")}</p>}
       {people.length > 0 && (
         <div className="person-list">
-          {people.map((p, i) => (
+          {sorted.map((p, i) => (
             <button
               key={i}
               className="person-chip"
@@ -65,6 +80,7 @@ function PersonList({ title, people, totals, note, onOpen }: {
               {p.recruiter ? <span className="chip recruiter">{t("people.recruiter")}</span> : null}
               {p.suspect === "high" ? <span className="chip suspect" title={evidenceTitle(t, p)}>{t("people.water")}</span> : null}
               {p.suspect === "medium" ? <span className="chip suspect-med" title={evidenceTitle(t, p)}>{t("people.maybe_water")}</span> : null}
+              {(p.score ?? 0) >= RADAR_SCORE ? <span className="chip radar">{t("people.radar")}</span> : null}
             </button>
           ))}
         </div>
