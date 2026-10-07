@@ -1,0 +1,143 @@
+// lib/ssr.lume — SSR pages (/overview, /repos, /api reference).
+//
+// "/" is owned by the React SPA (static, views dir). SSR pages use distinct
+// paths and accept ?owner=; unknown/invalid owners fall back to the default.
+
+import "shared.lume" as sh;
+import "github.lume" as gh;
+import "ui.lume" as ui;
+
+func ssr_owner(req) {
+  let o = sh.owner_param(req);
+  if (o == "") { return sh.default_owner(); }
+  return o;
+}
+
+func ssr_block(owner, lang) {
+  // owner page with a hint card when its snapshot is missing
+  return el("section", { class: "panel error" },
+    el("h2", {}, ui.t(lang, "ssr_no_snap_title") + owner),
+    el("p", {}, ui.t(lang, "ssr_no_snap_fetch")),
+    el("code", {}, "OWNER=" + owner + " make fetch"),
+    el("p", {}, ui.t(lang, "ssr_no_snap_cached")
+      + str(reduce((acc, e) => acc + str(e) + " ", sh.cached_owners(), ""))));
+}
+
+get "/overview", (req) => {
+  let owner = ssr_owner(req);
+  let lang = sh.lang_param(req);
+  let snap = sh.load_snap(owner);
+  if (snap == null) {
+    return ui.page("Overview · " + owner, "home", [ssr_block(owner, lang)], lang);
+  }
+  let a = sh.bundle(sh.active_repos(snap), snap);
+  let tot = a.totals;
+  let body = [
+    el("section", { class: "hero" },
+            el("h1", {}, str(get(a.profile, "name", "")) + ui.t(lang, "ov_hero_1") + owner + ui.t(lang, "ov_hero_2")),
+      el("p", {}, ui.t(lang, "ov_hero_3") + str(a.count) + ui.t(lang, "ov_hero_4")
+        + a.fetched_at + ui.t(lang, "ov_hero_5"))),
+
+    el("section", { class: "kpis" },
+      ui.kpi(str(a.count), ui.t(lang, "ov_kpi_repos")),
+      ui.kpi(str(a.non_fork_count), ui.t(lang, "ov_kpi_original")),
+      ui.kpi(str(int(get(tot, "stars", 0))), ui.t(lang, "ov_kpi_stars")),
+      ui.kpi(str(int(get(tot, "forks", 0))), ui.t(lang, "ov_kpi_forks"))),
+
+    el("section", { class: "grid" },
+      el("div", { class: "panel" },
+        el("h2", {}, ui.t(lang, "ov_langs")),
+        el("div", { class: "bars" }, ui.bars(a.languages))),
+      el("div", { class: "panel" },
+        el("h2", {}, ui.t(lang, "ov_recency")),
+        el("div", { class: "bars" }, ui.bars(a.recency)))),
+
+    el("section", { class: "panel" },
+      el("h2", {}, ui.t(lang, "ov_top10")),
+      el("ol", { class: "top-list" }, top_list(a.top_by_stars, lang))),
+
+    el("section", { class: "links" },
+      el("a", { class: "btn", href: "/repos?lang=" + lang }, ui.t(lang, "ov_browse")),
+      el("a", { class: "btn", href: "/api?lang=" + lang }, ui.t(lang, "ov_api")),
+      el("a", { class: "btn", href: "/chat?lang=" + lang }, ui.t(lang, "ov_chat"))),
+  ];
+  return ui.page("Overview · " + owner, "home", body, lang);
+};
+
+func top_list(rows, lang) {
+  let out = [];
+  let i = 0;
+  for (let r in rows) {
+    push(out, ui.repo_row(r, i + 1, lang));
+    i = i + 1;
+  }
+  return out;
+}
+
+// "owner's repositories (110 total)" / "owner 的仓库（110 个）"
+func repos_title(lang, owner, n) {
+  return owner + ui.t(lang, "repos_title_1") + str(n) + ui.t(lang, "repos_title_2");
+}
+
+get "/repos", (req) => {
+  let owner = ssr_owner(req);
+  let lang = sh.lang_param(req);
+  let snap = sh.load_snap(owner);
+  if (snap == null) {
+    return ui.page("Repos · " + owner, "repos", [ssr_block(owner, lang)], lang);
+  }
+  let all = map(gh.repo_view, sh.active_repos(snap));
+  let rows = [];
+  let i = 0;
+  for (let r in all) {
+    push(rows, ui.repo_row(r, i + 1, lang));
+    i = i + 1;
+  }
+  let body = [
+    el("section", { class: "hero" },
+      el("h1", {}, repos_title(lang, owner, len(all))),
+      el("p", {}, ui.t(lang, "repos_hero_2") + owner + ui.t(lang, "repos_hero_3"))),
+    el("ol", { class: "top-list all" }, rows),
+  ];
+  return ui.page("Repos · " + owner, "repos", body, lang);
+};
+
+get "/api", (req) => {
+  let lang = sh.lang_param(req);
+  let rows = [
+    el("li", {}, el("code", {}, "GET /api/owners"), ui.t(lang, "api_ep_owners")),
+    el("li", {}, el("code", {}, "GET /api/people?owner=x"), ui.t(lang, "api_ep_people")),
+    el("li", {}, el("code", {}, "GET /api/people_diff?owner=x"), ui.t(lang, "api_ep_people_diff")),
+    el("li", {}, el("code", {}, "GET /api/overview?owner=x"), ui.t(lang, "api_ep_overview")),
+    el("li", {}, el("code", {}, "GET /api/repos?owner=x&offset=0&limit=25"), ui.t(lang, "api_ep_repos")),
+    el("li", {}, el("code", {}, "GET /api/top?owner=x"), ui.t(lang, "api_ep_top")),
+    el("li", {}, el("code", {}, "GET /api/langs?owner=x"), ui.t(lang, "api_ep_langs")),
+    el("li", {}, el("code", {}, "GET /api/recency?owner=x"), ui.t(lang, "api_ep_recency")),
+    el("li", {}, el("code", {}, "GET /api/year?owner=x"), ui.t(lang, "api_ep_year")),
+    el("li", {}, el("code", {}, "GET /api/search?owner=x&q=rust"), ui.t(lang, "api_ep_search")),
+    el("li", {}, el("code", {}, "GET /api/radar"), ui.t(lang, "api_ep_radar")),
+    el("li", {}, el("code", {}, "GET /api/live/github?path=/users/x"), ui.t(lang, "api_ep_live")),
+    el("li", {}, el("code", {}, "POST /api/follow  {login}"), ui.t(lang, "api_ep_follow")),
+    el("li", {}, el("code", {}, "DELETE /api/unfollow  {login}"), ui.t(lang, "api_ep_unfollow")),
+  ];
+  let body = [
+    el("section", { class: "hero" },
+      el("h1", {}, "JSON API"),
+      el("p", {}, ui.t(lang, "api_hero_2"))),
+    el("section", { class: "panel" },
+      el("h2", {}, ui.t(lang, "api_endpoints")),
+      el("ul", {}, rows)),
+    el("section", { class: "panel" },
+      el("h2", {}, ui.t(lang, "api_tools")),
+      el("ul", {},
+        el("li", {}, ui.t(lang, "api_tool_1")),
+        el("li", {}, ui.t(lang, "api_tool_2")),
+        el("li", {}, ui.t(lang, "api_tool_3"))
+      )
+    ),
+    el("section", { class: "panel" },
+      el("h2", {}, ui.t(lang, "api_add")),
+      el("p", {}, el("code", {}, "OWNER=acme make fetch"), ui.t(lang, "api_add_desc"))),
+  ];
+  return ui.page("API", "api", body, lang);
+};

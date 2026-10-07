@@ -1,0 +1,164 @@
+// lib/shared.lume — application-level helpers shared by the entry module and
+// every route/tool module: owner resolution, snapshot loading, and the local
+// string helpers Lume lacks.
+//
+// Import from sibling modules as `import "shared.lume" as sh;` (import paths
+// resolve relative to the importing module's own directory).
+
+import "github.lume" as gh;
+
+// ------------------------------------------------ owner resolution
+// Lume module exports do not propagate mutations into the importer, so every
+// route/tool resolves its owner + snapshot locally and passes them into the
+// pure gh.* helpers.
+
+// read data/github/last_owner (written by scripts/fetch-github.sh), or the
+// OWNER env (CWD .env is loaded at server start) — in that order; empty when
+// neither is set, so a public clone without local config shows a clear
+// "no owner" state instead of silently defaulting to someone's login.
+export func default_owner() {
+  let me = env("OWNER");
+  if (me != null and str(me) != "") { return str(me); }
+  let raw = read_file("data/github/last_owner");
+  if (raw == null) { return ""; }
+  let s = replace(raw, "\n", "");
+  s = replace(s, " ", "");
+  if (s == "") { return ""; }
+  return s;
+}
+
+// A safe owner is a single path component (GitHub logins): <= 39 chars, and
+// must not contain any of . / % space # ? — these keep snapshot lookups from
+// ever escaping data/github/<owner>/.
+export func sanitize_owner(s) {
+  if (s == null) { return ""; }
+  s = str(s);
+  if (s == "") { return ""; }
+  if (len(s) > 39) { return ""; }
+  if (contains(s, ".") or contains(s, "/") or contains(s, "%")
+      or contains(s, " ") or contains(s, "#") or contains(s, "?")
+      or contains(s, "\n")) {
+    return "";
+  }
+  return s;
+}
+
+// owner from ?owner= (req-based); empty string when the param is absent.
+// (Lume `.` member access requires the field to exist; use get() with a
+// default so a missing owner param yields "".)
+export func owner_param(req) {
+  let qp = get(req, "query_params", {});
+  return sanitize_owner(get(qp, "owner", ""));
+}
+
+// language from ?lang= (req-based); "zh" default, "en" accepted, anything
+// else (including absent) falls back to "zh" — matches the React shell's
+// localStorage default so both entry points agree out of the box.
+export func lang_param(req) {
+  let qp = get(req, "query_params", {});
+  let l = str(get(qp, "lang", "zh"));
+  if (l == "en") { return "en"; }
+  return "zh";
+}
+
+// owner from a tool argument map; empty string when the arg is absent.
+export func owner_arg(arg) {
+  return sanitize_owner(get(arg, "owner", ""));
+}
+
+// snapshot for one owner, or null when that owner has not been fetched yet.
+export func load_snap(owner) {
+  let raw = read_file("data/github/" + owner + "/snapshot.json");
+  if (raw == null) { return null; }
+  let s = json(raw);
+  if (s == null) { return null; }
+  return s;
+}
+
+// repos that public views should surface: archived repositories are excluded
+// everywhere (lists, search, histograms, KPIs) — the raw snapshot still keeps
+// them for history, this is purely a display/analysis filter.
+export func active_repos(snap) {
+  let all = get(snap, "repos", []);
+  return filter((r) => not bool(get(r, "archived", false)), all);
+}
+
+// shared no-snapshot JSON error shape (JSON routes)
+export func no_snapshot(owner) {
+  return {
+    status: 404,
+    error: "no_snapshot",
+    owner: owner,
+    hint: "run: OWNER=" + owner + " make fetch   (or make fetch OWNER=" + owner + ")",
+  };
+}
+
+export func bundle(repos, snap) {
+  // /overview renders aggregates only (KPIs, histograms, top-10 lists) and
+  // never touches the full `all` array — analyze_lite skips building it.
+  return gh.analyze_lite(repos, snap);
+}
+
+// locally-cached owners = sub-directories of data/github (files() marks dirs
+// with a trailing "/"; a bare "last_owner" file has no slash).
+export func cached_owners() {
+  let entries = files("data/github");
+  let out = [];
+  for (let e in entries) {
+    let s = str(e);
+    let stripped = replace(s, "/", "");
+    if (s != stripped and stripped != "") {
+      push(out, stripped);
+    }
+  }
+  return out;
+}
+
+// ------------------------------------------------ local string helpers
+// Lume has no lower/contains builtins; implement them over `replace`.
+export func lower(x) {
+  x = replace(x, "A", "a"); x = replace(x, "B", "b"); x = replace(x, "C", "c");
+  x = replace(x, "D", "d"); x = replace(x, "E", "e"); x = replace(x, "F", "f");
+  x = replace(x, "G", "g"); x = replace(x, "H", "h"); x = replace(x, "I", "i");
+  x = replace(x, "J", "j"); x = replace(x, "K", "k"); x = replace(x, "L", "l");
+  x = replace(x, "M", "m"); x = replace(x, "N", "n"); x = replace(x, "O", "o");
+  x = replace(x, "P", "p"); x = replace(x, "Q", "q"); x = replace(x, "R", "r");
+  x = replace(x, "S", "s"); x = replace(x, "T", "t"); x = replace(x, "U", "u");
+  x = replace(x, "V", "v"); x = replace(x, "W", "w"); x = replace(x, "X", "x");
+  x = replace(x, "Y", "y"); x = replace(x, "Z", "z");
+  return x;
+}
+export func contains(s, needle) {
+  if (needle == "") { return true; }
+  return len(replace(s, needle, "")) < len(s);
+}
+export func join_topics(topics) {
+  return reduce((acc, t) => acc + str(t) + " ", topics, "");
+}
+export func haystack(v) {
+  return lower(str(get(v, "name", "")) + " "
+    + str(get(v, "desc", "")) + " "
+    + str(get(v, "lang", "")) + " "
+    + join_topics(get(v, "topics", [])));
+}
+
+// ------------------------------------------------ GitHub GET with retry
+// The mainland network intermittently resets TLS handshakes to api.github.com
+// (SSL_ERROR_SYSCALL / http=000 / "TLS handshake failed"); a reset handshake
+// is usually transient, so retry a few times before giving up. Rate-limit
+// responses (403/429) return immediately — retrying those is pointless and
+// burns quota. No sleep primitive in Lume, so attempts are consecutive.
+export func gh_get(url, headers) {
+  let i = 0;
+  let last = { status: 0, body: "", err: "no attempt" };
+  while (i < 3) {
+    let r = http_get(url, { headers: headers, timeout: 30, max_bytes: 4194304 });
+    let up = int(get(r, "status", 0), 0);
+    let herr = str(get(r, "err", ""));
+    if (herr == "" and up >= 200 and up < 300) { return r; }
+    if (up == 403 or up == 429) { return r; }
+    last = r;
+    i = i + 1;
+  }
+  return last;
+}

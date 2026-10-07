@@ -1,0 +1,126 @@
+// lib/live.lume — the live GitHub proxy (/api/live/github + /api/github_auth).
+//
+// The browser can reach the Lume server (same origin) but often has no route
+// to api.github.com (no CORS / no network egress). This route fetches a
+// user-scoped GitHub path server-side via the built-in http_get() (outbound
+// TLS via libssl) and returns a uniform envelope:
+//   { ok: bool, status: <upstream HTTP or 0>, data: <JSON text>, err: <..> }
+// The caller does JSON.parse(data) on ok. Unauthenticated GitHub allows
+// ~60 req/h per shared server IP; set GH_TOKEN to raise it to 5000/h.
+
+import "shared.lume" as sh;
+
+func live_safe_path(p) {
+  if (p == "" or len(p) > 512) { return false; }
+  // must be a user-scoped sub-path; the fixed "https://api.github.com" prefix
+  // plus these guards mean p can never smuggle another host or scheme.
+  if (not sh.contains(p, "/users/")) { return false; }
+  if (sh.contains(p, ":") or sh.contains(p, "//") or sh.contains(p, " ") or sh.contains(p, "..")) { return false; }
+  return true;
+}
+
+// null-safe stringify for fields that may be null in the raw API payload.
+func s(v) {
+  if (v == null) { return ""; }
+  return str(v);
+}
+
+// Slim a GitHub API body to only the fields the app consumes. Raw 100-repo
+// pages are ~150-250KB of JSON — far past the framework's response-size cap —
+// so the proxy must project before returning, or live fetch breaks for any
+// owner with more than a handful of repos. `str()` re-serializes the
+// projected map/array back to JSON text for the same `data` envelope.
+func slim_body(p, body) {
+  if (body == "" or body == "null") { return body; }
+  let d = json(body);
+  if (d == null) { return body; }
+  if (sh.contains(p, "/repos")) {
+    let out = [];
+    for (let r in d) {
+      push(out, {
+        name: s(get(r, "name", null)),
+        full_name: s(get(r, "full_name", null)),
+        language: s(get(r, "language", null)),
+        stargazers_count: int(get(r, "stargazers_count", 0)),
+        forks_count: int(get(r, "forks_count", 0)),
+        open_issues_count: int(get(r, "open_issues_count", 0)),
+        fork: bool(get(r, "fork", false)),
+        archived: bool(get(r, "archived", false)),
+        description: s(get(r, "description", null)),
+        html_url: s(get(r, "html_url", null)),
+        topics: get(r, "topics", []),
+        created_at: s(get(r, "created_at", null)),
+        updated_at: s(get(r, "updated_at", null)),
+        pushed_at: s(get(r, "pushed_at", null)),
+        size: int(get(r, "size", 0)),
+        license: get(r, "license", null),
+      });
+    }
+    return str(out);
+  }
+  if (sh.contains(p, "/followers") or sh.contains(p, "/following")) {
+    let out = [];
+    for (let u in d) {
+      push(out, {
+        login: s(get(u, "login", null)),
+        name: s(get(u, "name", null)),
+        avatar_url: s(get(u, "avatar_url", null)),
+        url: s(get(u, "html_url", null)),
+        type: s(get(u, "type", null)),
+      });
+    }
+    return str(out);
+  }
+  // profile (or any other user-scoped path): keep only the fields the app
+  // reads; null -> "" so the client's truthiness fallbacks don't show "null".
+  return str({
+    login: s(get(d, "login", null)),
+    name: s(get(d, "name", null)),
+    avatar_url: s(get(d, "avatar_url", null)),
+    bio: s(get(d, "bio", null)),
+    company: s(get(d, "company", null)),
+    location: s(get(d, "location", null)),
+    blog: s(get(d, "blog", null)),
+    twitter_username: s(get(d, "twitter_username", null)),
+    hireable: bool(get(d, "hireable", false)),
+    followers: int(get(d, "followers", 0)),
+    following: int(get(d, "following", 0)),
+    public_repos: int(get(d, "public_repos", 0)),
+    public_gists: int(get(d, "public_gists", 0)),
+    created_at: s(get(d, "created_at", null)),
+    html_url: s(get(d, "html_url", null)),
+  });
+}
+
+// auth probe for the frontend: whether GitHub calls are authenticated
+// (5000 req/h) or anonymous (~60 req/h). Never leaks the token itself — the
+// UI uses this to pick throttle params and copy only. GH_ANALYZER_PAT is the
+// Makefile-mapped alias of GH_TOKEN: env() masks any name containing
+// TOKEN/API_KEY/SECRET/PASSWORD, so the trusted app reads the alias instead.
+get "/api/github_auth", (req) => {
+  let tok = env("GH_ANALYZER_PAT");
+  return { authed: (tok != null and tok != "") };
+};
+
+get "/api/live/github", (req) => {
+  let qp = get(req, "query_params", {});
+  let p = str(get(qp, "path", ""));
+  if (not live_safe_path(p)) {
+    return { ok: false, status: 400, data: "", err: "blocked GitHub path" };
+  }
+  let headers = { "Accept": "application/vnd.github+json", "User-Agent": "lume-talentlens" };
+  // GH_ANALYZER_PAT is the Makefile alias of GH_TOKEN (env() masks names
+  // containing TOKEN/API_KEY/SECRET/PASSWORD to keep untrusted scripts from
+  // exfiltrating keys; the trusted live proxy reads the alias instead).
+  let tok = env("GH_ANALYZER_PAT");
+  if (tok != null and tok != "") { put(headers, "Authorization", "Bearer " + str(tok)); }
+  let url = "https://api.github.com" + p;
+  let r = sh.gh_get(url, headers);
+  let up = int(get(r, "status", 0), 0);
+  let body = str(get(r, "body", ""));
+  let herr = str(get(r, "err", ""));
+  let ok = (up >= 200 and up < 300) and (herr == "");
+  // project big payloads down before returning (see slim_body)
+  if (ok and body != "") { body = slim_body(p, body); }
+  return { ok: ok, status: up, data: body, err: herr };
+};
