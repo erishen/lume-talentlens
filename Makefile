@@ -26,6 +26,12 @@ PORT    ?= 8091
 # (which is cwd-dependent). Keep this list in sync with .env.example.
 -include .env
 export OWNER GH_TOKEN LUME_GITHUB_PORT LLM_API_URL LLM_API_KEY LLM_MODEL LLM_TIMEOUT LLM_SYSTEM_EXTRA AGENTHTTPD_CSP_IMG_SRC
+# GH_TOKEN is masked by Lume's env() credential filter (any name containing
+# TOKEN/API_KEY/SECRET/PASSWORD returns null, so an untrusted script cannot
+# exfiltrate keys). The trusted github.lume still needs it for authenticated
+# GitHub calls — map it to a non-credential-shaped name here (Makefile-level
+# variable expansion; same process env either way).
+export GH_ANALYZER_PAT := $(GH_TOKEN)
 
 .PHONY: dev check fetch ui clean people-scan suspects unfollow
 

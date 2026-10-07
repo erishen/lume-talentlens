@@ -6,6 +6,7 @@ import { Bars, Kpi } from "./dashboard/bars";
 import { PersonList, RepoRow, BrowsePage } from "./dashboard/lists";
 import { deriveTalent } from "./talent";
 import { useLang, useT } from "./i18n";
+import { detectGhAuth } from "./live";
 
 // Pure render component: all state, loaders and derived rankings live in
 // useDashboardData (dashboard/useDashboard.ts) — this file only wires the
@@ -14,6 +15,19 @@ export function Dashboard() {
   const t = useT();
   const { lang } = useLang();
   const d = useDashboardData(t, lang);
+
+  // Whether the server has a GH_TOKEN — flips the rate-limit copy and the
+  // fetch throttle. Probed once on mount (cheap same-origin call).
+  const [ghAuthed, setGhAuthed] = React.useState<boolean | null>(null);
+  React.useEffect(() => {
+    let on = true;
+    detectGhAuth().then((a) => {
+      if (on) setGhAuthed(a);
+    });
+    return () => {
+      on = false;
+    };
+  }, []);
 
   const {
     owner, cached, weights, setWeights,
@@ -169,7 +183,7 @@ export function Dashboard() {
           ) : (
             <p className="muted">{t("live.pulling")}</p>
           )}
-          <p className="muted">{t("live.rate_note")}</p>
+          <p className="muted">{ghAuthed ? t("live.rate_note_authed") : t("live.rate_note_anon")}</p>
         </div>
       )}
 
@@ -197,7 +211,7 @@ export function Dashboard() {
             <code className="hint-cmd">{`OWNER=${noSnap.owner} make fetch`}</code>
           </div>
           <p className="muted">
-            {t("live.proxy_note")}
+            {ghAuthed ? t("live.proxy_note_authed") : t("live.proxy_note_anon")}
           </p>
         </div>
       )}

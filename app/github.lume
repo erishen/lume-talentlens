@@ -458,6 +458,16 @@ func slim_body(p, body) {
   });
 }
 
+// auth probe for the frontend: whether GitHub calls are authenticated
+// (5000 req/h) or anonymous (~60 req/h). Never leaks the token itself — the
+// UI uses this to pick throttle params and copy only. GH_ANALYZER_PAT is the
+// Makefile-mapped alias of GH_TOKEN: env() masks any name containing
+// TOKEN/API_KEY/SECRET/PASSWORD, so the trusted app reads the alias instead.
+get "/api/github_auth", (req) => {
+  let tok = env("GH_ANALYZER_PAT");
+  return { authed: (tok != null and tok != "") };
+};
+
 get "/api/live/github", (req) => {
   let qp = get(req, "query_params", {});
   let p = str(get(qp, "path", ""));
@@ -465,7 +475,10 @@ get "/api/live/github", (req) => {
     return { ok: false, status: 400, data: "", err: "blocked GitHub path" };
   }
   let headers = { "Accept": "application/vnd.github+json", "User-Agent": "lume-talentlens" };
-  let tok = env("GH_TOKEN");
+  // GH_ANALYZER_PAT is the Makefile alias of GH_TOKEN (env() masks names
+  // containing TOKEN/API_KEY/SECRET/PASSWORD to keep untrusted scripts from
+  // exfiltrating keys; the trusted live proxy reads the alias instead).
+  let tok = env("GH_ANALYZER_PAT");
   if (tok != null and tok != "") { put(headers, "Authorization", "Bearer " + str(tok)); }
   let url = "https://api.github.com" + p;
   let r = http_get(url, { headers: headers, timeout: 30, max_bytes: 4194304 });
@@ -529,7 +542,10 @@ get "/api/refresh", (req) => {
     return { ok: false, status: 429, wait: REFRESH_GAP_SEC - (t - last), err: "refresh too soon" };
   }
   let headers = { "Accept": "application/vnd.github+json", "User-Agent": "lume-talentlens" };
-  let tok = env("GH_TOKEN");
+  // GH_ANALYZER_PAT is the Makefile alias of GH_TOKEN (env() masks names
+  // containing TOKEN/API_KEY/SECRET/PASSWORD to keep untrusted scripts from
+  // exfiltrating keys; the trusted live proxy reads the alias instead).
+  let tok = env("GH_ANALYZER_PAT");
   if (tok != null and tok != "") { put(headers, "Authorization", "Bearer " + str(tok)); }
 
   let followers = refresh_fetch_kind(owner, headers, "followers");

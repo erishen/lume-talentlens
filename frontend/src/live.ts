@@ -12,16 +12,36 @@ import type { Overview, RepoView, People, PersonView } from "./types";
 // browser can always reach its own host even without egress to GitHub.
 const LIVE_GITHUB = "/api/live/github";
 
-// ---- unauthenticated rate-limit guard -----------------------------------
-// GitHub's unauthenticated limit is 60 req/h per server IP — much tighter
-// than the concurrency/gap below. The throttle here only paces bursts and
-// caps in-flight calls; the real protection is the circuit-breaker: the
-// first 429/403 trips ghTripped and the rest of the batch fails fast instead
-// of hammering the limit.
+// ---- GitHub auth-aware rate-limit guard --------------------------------
+// The throttle paces bursts and caps in-flight calls. Anonymous GitHub is
+// limited to ~60 req/h per server IP, so the guard is conservative; with a
+// GH_TOKEN the ceiling jumps to 5000 req/h and the pacing is relaxed. The
+// circuit-breaker stays: the first 429/403 trips ghTripped and the rest of
+// the batch fails fast instead of hammering the limit.
 let ghBusy = 0;        // in-flight GitHub calls
 let ghNextAt = 0;     // earliest timestamp a new call may start
 const GH_CONCURRENCY = 3;
-const GH_MIN_GAP_MS = 800; // pace between requests (~75 req/min ceiling)
+const GH_MIN_GAP_MS = 800; // anonymous pace (~75 req/min ceiling)
+const GH_CONCURRENCY_AUTHED = 6;
+const GH_MIN_GAP_MS_AUTHED = 100; // with token (~600 req/min ceiling)
+
+// null = not probed yet; acquireGithubSlot lazily probes and caches this.
+let ghAuthed: boolean | null = null;
+
+// Probe whether the server has a GH_TOKEN configured (it never leaks the
+// token itself — the route only returns a boolean). Cached after the first
+// call; this is a same-origin request, not subject to GitHub limits.
+export async function detectGhAuth(): Promise<boolean> {
+  if (ghAuthed !== null) return ghAuthed;
+  try {
+    const r = await fetch("/api/github_auth", { cache: "no-store" });
+    const d = (await r.json()) as { authed?: boolean };
+    ghAuthed = !!d.authed;
+  } catch {
+    ghAuthed = false;
+  }
+  return ghAuthed;
+}
 
 // true after we've seen a rate-limit; getGithub stops issuing new calls.
 let ghTripped = false;
@@ -36,12 +56,17 @@ async function acquireGithubSlot(): Promise<void> {
   if (ghTripped) {
     throw new Error("GitHub rate limit already hit earlier — stop here (add GH_TOKEN or use cached owners)");
   }
+  if (ghAuthed === null) {
+    ghAuthed = await detectGhAuth();
+  }
+  const concurrency = ghAuthed ? GH_CONCURRENCY_AUTHED : GH_CONCURRENCY;
+  const gapMs = ghAuthed ? GH_MIN_GAP_MS_AUTHED : GH_MIN_GAP_MS;
   for (;;) {
-    if (ghBusy < GH_CONCURRENCY) {
+    if (ghBusy < concurrency) {
       ghBusy++;
       const wait = Math.max(0, ghNextAt - Date.now());
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      ghNextAt = Math.max(ghNextAt, Date.now()) + GH_MIN_GAP_MS;
+      ghNextAt = Math.max(ghNextAt, Date.now()) + gapMs;
       return;
     }
     await new Promise((r) => setTimeout(r, 60)); // poll for a free slot
