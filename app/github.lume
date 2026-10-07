@@ -927,6 +927,62 @@ tool "github_owners",
        return { owners: cached_owners(), current: default_owner() };
      };
 
+tool "github_radar",
+     "Talent radar — the default account's mutual high scorers (score >= 120) classified by money pattern: each person's mode (startup / crypto / company / content / tools / hunting / other), one-line evidence, score, and hireable flag. When the user asks who among their network is a real talent, how those people make money, or which startups/crypto/content people to learn from, use this and answer grouped by mode with the evidence notes. If the data is missing, suggest running make radar.",
+     {},
+     (arg) => {
+       let raw = read_file("data/github/" + default_owner() + "/radar.json");
+       if (raw == null or raw == "") {
+         return { status: 404, error: "no_radar", hint: "run: make radar" };
+       }
+       return json(raw);
+     };
+
+tool "github_people",
+     "Network snapshot for the default account — followers/following (first page each), totals, water-account pre-screen flags (suspect: high/medium), and the mutual-following overlap. Useful to answer who follows the user, who the user follows, how many are mutual, and which are likely water accounts. Computed from local data only (suspects.json merge); no live GitHub calls.",
+     {},
+     (arg) => {
+       let o = default_owner();
+       let raw = read_file("data/github/" + o + "/people.json");
+       if (raw == null or raw == "") {
+         return { status: 404, error: "no_people", owner: o, hint: "refresh the people view or run people-scan" };
+       }
+       let p = json(raw);
+       if (p == null) { return { status: 500, error: "bad_people" }; }
+       // merge suspect flags so the agent sees the same chips the UI does
+       let suspects = read_file("data/github/" + o + "/suspects.json");
+       if (suspects != null and suspects != "") {
+         let by = {};
+         let sd = json(suspects);
+         let arr = get(sd, "suspects", sd);
+         // for-in walks both lists and maps; if suspects.json wraps the
+         // array under "suspects" the default above already unwraps it
+         for (let s in arr) {
+           if (s == null) { continue; }
+           put(by, str(get(s, "login", "")), str(get(s, "level", "medium")));
+         }
+         // Lume has no block-scoped func — inline the flag merge for both
+         // lists, rebuilding each list so the suspect flags are baked in
+         let fl = [];
+         for (let row in get(p, "followers", [])) {
+           let login = str(get(row, "login", ""));
+           let lv = str(get(by, login, ""));
+           if (lv != "") { put(row, "suspect", lv); }
+           push(fl, row);
+         }
+         put(p, "followers", fl);
+         let fg = [];
+         for (let row in get(p, "following", [])) {
+           let login = str(get(row, "login", ""));
+           let lv = str(get(by, login, ""));
+           if (lv != "") { put(row, "suspect", lv); }
+           push(fg, row);
+         }
+         put(p, "following", fg);
+       }
+       return p;
+     };
+
 // ------------------------------------------------ /discovery
 get "/discovery", (req) => {
   return {

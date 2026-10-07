@@ -130,6 +130,14 @@ normal env var (e.g. `OWNER=acme make fetch`), which always wins.
 
 `repo_insights`, `repo_search`, `repo_language`, `repo_recency`, `repo_year`,
 `repo_stats` — all read the in-memory snapshot and return compact JSON.
+`github_story` shapes the same data into interview self-intro / project-story
+material. Network-side tools: `github_owners` (cached owners + default),
+`github_radar` (mutual high scorers grouped by money pattern — startup /
+crypto / company / content / tools / hunting / other, with one-line evidence)
+and `github_people` (followers/following first pages + totals + merged
+water-account suspect flags + mutual overlap). Ask the agent "who in my
+network are real talents / how do they make money / who are the water
+accounts" and it answers from local data with the radar/people tools.
 
 ## Data pipeline
 
