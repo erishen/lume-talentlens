@@ -112,8 +112,9 @@ function RepoRow({ r, rank }: { r: RepoView; rank: number }) {
 
 // paged browser over /api/repos?owner= — OR, when liveAll is provided,
 // paginate the in-memory live-fetched array client-side (no server call).
-function BrowsePage({ limit, setLimit, owner, liveAll }: {
-  limit: number; setLimit: (n: number) => void; owner: string; liveAll: RepoView[] | null;
+function BrowsePage({ limit, setLimit, owner, liveAll, totalRepos }: {
+  limit: number; setLimit: (n: number) => void; owner: string;
+  liveAll: RepoView[] | null; totalRepos?: number;
 }) {
   const t = useT();
   const [offset, setOffset] = React.useState(0);
@@ -155,7 +156,11 @@ function BrowsePage({ limit, setLimit, owner, liveAll }: {
         <button className="chip" onClick={() => setLimitSafe(10)} disabled={limit === 10}>10</button>
         <button className="chip" onClick={() => setLimitSafe(25)} disabled={limit === 25}>25</button>
         <button className="chip" onClick={() => setLimitSafe(50)} disabled={limit === 50}>50</button>
-        <span className="muted">{cur}/{pages} · {total} {t("all.repos_short")}</span>
+        <span className="muted">{cur}/{pages} · {total} {t("all.repos_short")}
+          {liveAll && totalRepos && totalRepos > liveAll.length
+            ? ` · ${t("all.live_cap", { shown: liveAll.length, total: totalRepos })}`
+            : ""}
+        </span>
       </div>
       <ol className="top-list all">
         {page.map((r, i) => (

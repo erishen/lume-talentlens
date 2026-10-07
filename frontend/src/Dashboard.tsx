@@ -357,45 +357,49 @@ export function Dashboard() {
             )}
           </div>
 
-          <section className="panel">
-            <h2>{t("all.top10")}</h2>
-            <ol className="top-list">
-              {ov.top_by_stars.map((r, i) => (
-                <RepoRow key={r.name} r={r} rank={i + 1} />
-              ))}
-            </ol>
-          </section>
+          {!ov.partial && (
+            <>
+              <section className="panel">
+                <h2>{t("all.top10")}</h2>
+                <ol className="top-list">
+                  {ov.top_by_stars.map((r, i) => (
+                    <RepoRow key={r.name} r={r} rank={i + 1} />
+                  ))}
+                </ol>
+              </section>
 
-          <section className="panel">
-            <h2>{owner ? t("search.in", { owner }) : t("search.btn")}</h2>
-            <div className="search-row">
-              <input
-                className="search-input"
-                value={q}
-                placeholder={t("search.placeholder")}
-                onChange={(e) => setQ(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && onSearch()}
-              />
-              <button className="btn" onClick={onSearch} disabled={searching || !owner}>
-                {searching ? "…" : t("search.btn")}
-              </button>
-            </div>
-            {searched && (
-              <ol className="top-list">
-                {hits.map((r, i) => (
-                  <RepoRow key={r.name} r={r} rank={i + 1} />
-                ))}
-                {hits.length === 0 && <li className="muted">{t("search.no_matches", { q })}</li>}
-                {hits.length > 0 && <li className="muted">{hitsTotal} {t("search.match")}</li>}
-              </ol>
-            )}
-          </section>
+              <section className="panel">
+                <h2>{owner ? t("search.in", { owner }) : t("search.btn")}</h2>
+                <div className="search-row">
+                  <input
+                    className="search-input"
+                    value={q}
+                    placeholder={t("search.placeholder")}
+                    onChange={(e) => setQ(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && onSearch()}
+                  />
+                  <button className="btn" onClick={onSearch} disabled={searching || !owner}>
+                    {searching ? "…" : t("search.btn")}
+                  </button>
+                </div>
+                {searched && (
+                  <ol className="top-list">
+                    {hits.map((r, i) => (
+                      <RepoRow key={r.name} r={r} rank={i + 1} />
+                    ))}
+                    {hits.length === 0 && <li className="muted">{t("search.no_matches", { q })}</li>}
+                    {hits.length > 0 && <li className="muted">{hitsTotal} {t("search.match")}</li>}
+                  </ol>
+                )}
+              </section>
 
-          <section className="panel">
-            <h2>{t("all.repos")}</h2>
-            <BrowsePage limit={limit} setLimit={setLimit} owner={owner}
-              liveAll={live ? live.all : null} />
-          </section>
+              <section className="panel">
+                <h2>{t("all.repos")}</h2>
+                <BrowsePage limit={limit} setLimit={setLimit} owner={owner}
+                  liveAll={live ? live.all : null} totalRepos={ov.profile.public_repos} />
+              </section>
+            </>
+          )}
         </>
       )}
     </div>
@@ -473,11 +477,16 @@ function RadarPanel({ radar, t, onOpen }: {
     .map((m) => ({ mode: m, people: radar.people.filter((p) => p.mode === m) }))
     .filter((g) => g.people.length > 0);
   if (groups.length === 0) return null;
+  // freshness: profiles/classifications go stale — nudge a rescan when the
+  // scan is more than a week old
+  const scanMs = new Date(radar.scanned_at).getTime();
+  const stale = Number.isFinite(scanMs) && Date.now() - scanMs > 7 * 86400000;
   return (
     <div className="panel radar-panel" style={{ gridColumn: "1 / -1" }}>
       <h2>
         {t("people.radar_title")}{" "}
         <span className="muted">{t("people.radar_meta", { n: radar.people.length, at: radar.scanned_at.slice(0, 10) })}</span>
+        {stale && <span className="chip radar">{t("people.radar_stale")}</span>}
       </h2>
       <div className="radar-groups">
         {groups.map((g) => (

@@ -128,9 +128,13 @@ export function useDashboardData(t: T, lang: Lang) {
         if (seq === peopleSeq.current && d && d.ok) setPeopleDiff(d);
       }).catch(() => {});
       // talent-radar profit patterns — best-effort; 404 (no make radar yet)
-      // just leaves the panel hidden
+      // just leaves the panel hidden. Guard the shape too: a 404 object or a
+      // malformed body must not reach RadarPanel (which filters people[]).
       api.radar(target).then((rr) => {
-        if (seq === peopleSeq.current && rr && !isNoSnapshot(rr)) setRadar(rr as Radar);
+        if (seq === peopleSeq.current && rr && !isNoSnapshot(rr) &&
+            "people" in rr && Array.isArray((rr as Radar).people)) {
+          setRadar(rr as Radar);
+        }
       }).catch(() => {});
     }).catch(() => {
       if (seq !== peopleSeq.current) return;
@@ -203,6 +207,10 @@ export function useDashboardData(t: T, lang: Lang) {
     setRepoErr("");
     setNoSnap(null);
     setLiveProgress(null);
+    // clear the previous owner's profile immediately — phase 1 takes a few
+    // seconds, and showing the old card under the new owner is misleading
+    setOv(null);
+    setLive(null);
     try {
       // Phase 1 — profile + latest push (~2 requests): render the ProfileCard
       // immediately instead of holding it hostage to full repo pagination
