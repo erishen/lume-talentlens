@@ -28,7 +28,7 @@ PORT    ?= 8091
 OWNER ?=
 PORT ?= 8091
 
-.PHONY: dev check fetch ui clean people-scan suspects unfollow
+.PHONY: dev check fetch ui clean people-scan suspects unfollow score follow-worthy
 
 dev:
 	@echo "== dev loop: kill :$(PORT) + rebuild + watch + run =="
@@ -79,6 +79,13 @@ unfollow:
 #   KIND=followers make score   # one list only
 score:
 	@OWNER="$(OWNER)" bash scripts/people-score.sh
+
+# Follow back the high-influence followers you haven't followed yet
+# ("worth following": score >= 120). Needs GH_TOKEN with 'user:follow'.
+#   make follow-worthy           # follow them
+#   DRY_RUN=1 make follow-worthy # list only
+follow-worthy:
+	@OWNER="$(OWNER)" bash scripts/follow-worthy.sh
 
 clean:
 	rm -f ./.run ./.api-ov.json
