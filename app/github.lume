@@ -877,7 +877,7 @@ tool "repo_stats",
      };
 
 tool "github_story",
-     "Career-story material for a GitHub owner, shaped for generating an interview self-intro / project stories: profile basics, repo totals, language mix, activity cadence, talent signals, and the top starred repos (name/language/stars/recency/description/url). Optional owner.",
+     "Career-story material for a GitHub owner, shaped for generating an interview self-intro / project stories: profile basics, repo totals, language mix, activity cadence, talent signals, and the top starred repos (name/language/stars/recency/description/url). Optional owner. When the user asks for a self-intro or project story, structure the answer as: (1) a 60-90s spoken self-intro (path: past stack -> current focus, backed by real repo counts), (2) 2-3 project stories each as background / my role / technical challenge / outcome, grounded in real repo names & stats, (3) a short skill-tag line. Do NOT invent repos, stars, or roles the tool data does not show.",
      { owner: string },
      (arg) => {
        let repos = tool_repos(arg);

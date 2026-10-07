@@ -3,7 +3,7 @@ import { useDashboardData } from "./dashboard/useDashboard";
 import { OwnerPicker } from "./dashboard/pickers";
 import { ProfileCard, TalentPanel, ComparePanel, PushTrend } from "./dashboard/panels";
 import { Bars, Kpi } from "./dashboard/bars";
-import { PersonList, RepoRow, BrowsePage } from "./dashboard/lists";
+import { PersonList, RepoRow, BrowsePage, RADAR_SCORE } from "./dashboard/lists";
 import { deriveTalent } from "./talent";
 import { useLang, useT } from "./i18n";
 import { detectGhAuth } from "./live";
@@ -40,6 +40,18 @@ export function Dashboard() {
     onRefresh, loadPeople, loadOverview, loadLive, loadCompare, loadPool,
     openOwner, onOwnerPick, onSearch,
   } = d;
+
+  // relation insights over the people snapshot:
+  // - mutual = followers who are also followed back (双向关注)
+  // - worth = high-influence followers not yet followed back (值得关注)
+  const mutualPeople = people
+    ? people.followers.filter((f) => people.following.some((g) => g.login === f.login))
+    : [];
+  const worthPeople = people
+    ? people.followers.filter(
+        (f) => (f.score ?? 0) >= RADAR_SCORE && !people.following.some((g) => g.login === f.login)
+      )
+    : [];
 
   return (
     <div>
@@ -276,6 +288,18 @@ export function Dashboard() {
                     </div>
                   </div>
                 )}
+                <RelationPanel
+                  title={t("people.mutual")}
+                  people={mutualPeople}
+                  emptyNote={t("people.mutual_none")}
+                  t={t}
+                />
+                <RelationPanel
+                  title={t("people.worth")}
+                  people={worthPeople}
+                  emptyNote={t("people.worth_none")}
+                  t={t}
+                />
                 <PersonList
                   title={t("people.followers")}
                   people={people.followers}
@@ -355,6 +379,43 @@ function DiffLine({ label, items, t }: { label: string; items: string[]; t: (k: 
     <div className="diff-cell">
       <span className="diff-label">{label}</span>
       <span className="diff-items">{shown}{more}</span>
+    </div>
+  );
+}
+
+// Mutual / worth-following — a chip list whose entries link OUT to the
+// GitHub profile (unlike PersonList, where clicking analyzes in-app).
+function RelationPanel({ title, people, emptyNote, t }: {
+  title: string; people: PersonView[]; emptyNote: string;
+  t: (k: string, p?: Record<string, string | number>) => string;
+}) {
+  return (
+    <div className="panel" style={{ gridColumn: "1 / -1" }}>
+      <h2>
+        {title} <span className="muted">{people.length}</span>
+      </h2>
+      {people.length === 0 ? (
+        <p className="muted">{emptyNote}</p>
+      ) : (
+        <div className="person-list">
+          {people.map((p, i) => (
+            <a
+              key={i}
+              className="person-chip person-link"
+              href={p.url}
+              target="_blank"
+              rel="noreferrer"
+              title={p.url}
+            >
+              {p.avatar ? (
+                <img className="person-avatar" src={p.avatar} alt="" referrerPolicy="no-referrer" />
+              ) : null}
+              <span className="person-login">@{p.login}</span>
+              {(p.score ?? 0) >= RADAR_SCORE ? <span className="chip radar">{t("people.radar")}</span> : null}
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

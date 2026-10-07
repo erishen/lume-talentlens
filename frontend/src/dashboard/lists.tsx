@@ -34,8 +34,10 @@ function evidenceTitle(t: (k: string, p?: Record<string, string | number>) => st
 // person *in-app* (onOpen), it does NOT link out to their GitHub profile.
 // When scores.json exists (make score), the header offers a by-influence sort
 // and high scorers get a "radar" badge (the positive counterpart to the
-// water-account flags).
-const RADAR_SCORE = 120; // influence score at/above which a person is "radar"
+// water-account flags). A high score also suppresses the water-account badge
+// for the same person — a genuinely productive account flagged as a suspect
+// is a false positive on the pre-screen, so radar wins.
+export const RADAR_SCORE = 120; // influence score at/above which a person is "radar"
 
 function PersonList({ title, people, totals, note, onOpen }: {
   title: string; people: PersonView[]; totals: number; note?: string;
@@ -78,8 +80,8 @@ function PersonList({ title, people, totals, note, onOpen }: {
               <span className="person-login">@{p.login}</span>
               {p.type === "Bot" ? <span className="chip bot">{t("people.bot")}</span> : null}
               {p.recruiter ? <span className="chip recruiter">{t("people.recruiter")}</span> : null}
-              {p.suspect === "high" ? <span className="chip suspect" title={evidenceTitle(t, p)}>{t("people.water")}</span> : null}
-              {p.suspect === "medium" ? <span className="chip suspect-med" title={evidenceTitle(t, p)}>{t("people.maybe_water")}</span> : null}
+              {(p.score ?? 0) < RADAR_SCORE && p.suspect === "high" ? <span className="chip suspect" title={evidenceTitle(t, p)}>{t("people.water")}</span> : null}
+              {(p.score ?? 0) < RADAR_SCORE && p.suspect === "medium" ? <span className="chip suspect-med" title={evidenceTitle(t, p)}>{t("people.maybe_water")}</span> : null}
               {(p.score ?? 0) >= RADAR_SCORE ? <span className="chip radar">{t("people.radar")}</span> : null}
             </button>
           ))}

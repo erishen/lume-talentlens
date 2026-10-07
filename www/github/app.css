@@ -683,3 +683,12 @@ footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 24
   border-color: #d97706;
   color: #d97706;
 }
+
+/* relation panels (mutual / worth-following) — chips link out to GitHub */
+.person-link {
+  text-decoration: none;
+  color: inherit;
+}
+.person-link:hover .person-login {
+  text-decoration: underline;
+}
