@@ -21,7 +21,14 @@ cd "$ROOT"
 . "$ROOT/scripts/env.sh"
 export GH_ANALYZER_PAT="${GH_ANALYZER_PAT:-${GH_TOKEN:-}}"
 
-LUME="${LUME:-$ROOT/../research/lume/bin/lume}"
+# Lume release binary from PATH by default (Makefile default is `lume` too).
+# LUME=/path/to/lume overrides; a missing binary fails fast with a clear
+# message instead of a cryptic "No such file".
+LUME="${LUME:-$(command -v lume || true)}"
+if [ -z "$LUME" ] || [ ! -x "$LUME" ]; then
+  echo "dev: no Lume binary found — install the release build on PATH (e.g. ~/.local/bin/lume) or set LUME=/path/to/lume" >&2
+  exit 1
+fi
 WANT_PORT="${PORT:-${LUME_GITHUB_PORT:-8091}}"
 
 # shared kill/port-release helpers (kill_matching, wait_port_free, port_busy)

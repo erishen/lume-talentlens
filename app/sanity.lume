@@ -1,6 +1,6 @@
 // sanity.lume — validates the exact Lume constructs the github app relies on.
-// Run:  ../research/lume/bin/lume app/sanity.lume   (from work/lume)
-// and:  ../research/lume/bin/lume --check app/sanity.lume
+// Run:  lume app/sanity.lume   (the Lume release binary from PATH)
+// and:  lume --check app/sanity.lume
 
 // 1) read + json + get-with-default. Snapshots live under
 //    data/github/<owner>/ — resolve the same default the app uses

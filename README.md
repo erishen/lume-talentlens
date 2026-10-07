@@ -3,12 +3,28 @@
 A recruiting dashboard that reads a person's GitHub footprint and surfaces
 **talent signals** — profile (open-to-work, socials), engineering rigor,
 output cadence, focus, community — built on the
-**[Lume](../research/lume)** single-binary C framework with a
-**React + TypeScript** client.
+**Lume** single-binary C framework (installed from its **release build**; see
+[Requirements](#requirements)) with a **React + TypeScript** client.
 
 > Lume gives you a `.lume` DSL for routes/SSR/agent-tools plus a native HTTP
 > server (loopback-only) and a built-in LLM chat agent. This project wires it
 > to a local snapshot of `github.com` repos so the whole thing runs offline.
+
+## Requirements
+
+- **Lume release binary** on `PATH` (the app defaults to `LUME ?= lume`;
+  override with `LUME=/path/to/lume`). No source tree or compile needed.
+- **Node 18+ / pnpm** for the frontend (`(cd frontend && pnpm install)`).
+- Optional: `.env` with `OWNER` / `GH_TOKEN` / `LLM_*` (see
+  [Configuration](#configuration-env)).
+
+> **Outbound HTTP note:** the Lume *release* binary ships without the
+> `http_get` / `http_put` / `http_delete` builtins, so the live-fetch proxy
+> (`/api/live/github`), the people refresh (`/api/refresh`) and the
+> follow/unfollow endpoints answer a clear *unavailable* error on a release
+> build. The whole app still boots and all snapshot analysis works. Running on
+> a **full build** restores those endpoints — remove the stub block at the top
+> of `app/github.lume` when you do.
 
 ## Layout
 
@@ -245,3 +261,7 @@ The `hireable` flag is cross-checked against repo activity (≤90d push =
 genuinely job-hunting) and against founder signals (bio/company shows
 founder/CEO/CTO → the chip reads "open to collab/hiring" instead of "open
 to work", since founders keep the flag on to recruit).
+
+## License
+
+MIT — see [LICENSE](LICENSE).

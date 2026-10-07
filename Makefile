@@ -1,7 +1,15 @@
 # lume-talentlens — Lume recruiting dashboard for GitHub footprints
 #
-# Reuses the prebuilt Lume binary from the research tree (no compile needed).
-# Default: LUME = ../research/lume/bin/lume (a sibling of this project).
+# Uses the Lume release binary from PATH (e.g. ~/.local/bin/lume, installed
+# from the project's release artifacts). No compile or local source tree
+# needed. Override with LUME=/path/to/lume for a different build:
+#   LUME=/opt/lume/bin/lume make dev
+#
+# NOTE (outbound HTTP): the release binary ships without the http_get/
+# http_put/http_delete builtins, so live fetch / people refresh / follow /
+# unfollow answer a clear "unavailable" error (the app boots fine and all
+# snapshot analysis still works). A full build restores those — delete the
+# stub block at the top of app/github.lume when running one.
 #
 # Common targets:
 #   make dev      THE dev loop: kill any server on the port, rebuild UI,
@@ -15,7 +23,7 @@
 # foreground (Ctrl-C stops server + watcher). `make dev` also kills whatever
 # already holds the port, so it is safe to re-run at any time.
 
-LUME    ?= ../research/lume/bin/lume
+LUME    ?= lume
 APP     := app/github.lume
 PORT    ?= 8091
 

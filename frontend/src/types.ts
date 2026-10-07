@@ -117,14 +117,8 @@ export interface PersonView {
   suspect?: string;
   /** login name carries recruiter/HR vocabulary — likely a hiring-side account */
   recruiter?: boolean;
-  /** API-confirmation evidence (followers/repos/created/note), when a confirmation round has run */
-  api?: {
-    followers: number;
-    repos: number;
-    created: string;
-    note: string;
-    confirmed?: string;
-  };
+  /** flattened API-confirmation evidence — single note string (kept slim to stay under the release server's response-size cliff) */
+  api_note?: string;
   /** talent-radar influence score from scores.json (0 when not scored yet) */
   score?: number;
 }
