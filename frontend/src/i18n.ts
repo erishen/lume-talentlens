@@ -68,7 +68,8 @@ const zh: Record<string, string> = {
   // live fetch / no snapshot
   "live.fetching": "正在从 GitHub 实时获取 {owner}…",
   "live.pulling": "拉取仓库中…",
-  "live.page_progress": "仓库第 {page}/{total} 页 · 已拉取 {repos} 个仓库",
+  "live.pulling_repos": "正在拉取 {owner} 的仓库…",
+  "live.repos_failed": "仓库拉取失败（资料已显示）",  "live.page_progress": "仓库第 {page}/{total} 页 · 已拉取 {repos} 个仓库",
   "live.failed": "实时获取失败 @{owner}",
   "live.rate_note_authed": "GitHub 已认证（5000 次/时），实时拉取较快；结果已缓存，重复查看秒回。",
   "live.rate_note_anon": "GitHub 未认证限速（约 60 次/时），首次拉取较慢；结果已缓存，重复查看秒回。配 GH_TOKEN 可提速数十倍。",
@@ -262,6 +263,8 @@ const en: Record<string, string> = {
   "cmp.note": "Accent value wins each row · higher is better for all metrics shown.",
   "live.fetching": "Fetching {owner} live from GitHub…",
   "live.pulling": "pulling repos…",
+  "live.pulling_repos": "Pulling {owner} repositories…",
+  "live.repos_failed": "Repo fetch failed (profile is shown)",
   "live.page_progress": "repos page {page}/{total} · {repos} repos pulled",
   "live.failed": "Live fetch failed @{owner}",
   "live.rate_note_authed": "GitHub authenticated (5000 req/h) — live fetches are fast; results are cached, revisits are instant.",

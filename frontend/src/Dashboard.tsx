@@ -32,7 +32,7 @@ export function Dashboard() {
 
   const {
     owner, cached, weights, setWeights,
-    ov, live, noSnap, loading, liveLoading, liveErr, liveProgress,
+    ov, live, noSnap, loading, liveLoading, liveErr, liveProgress, repoErr,
     err, q, setQ, hits, hitsTotal, searched, searching, limit, setLimit,
     people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, radar,
     cmp, setCmp,
@@ -233,26 +233,63 @@ export function Dashboard() {
         <>
           <ProfileCard ov={ov} />
 
-          <TalentPanel t={deriveTalent(ov, lang)} ov={ov} weights={weights} onWeights={setWeights} />
+          {ov.partial ? (
+            // Phase-1 live view: profile is here, repo aggregates still
+            // streaming in — show a compact pulling note in place of the
+            // repo-derived panels instead of a misleading all-zero board.
+            <div className="panel" style={{ gridColumn: "1 / -1" }}>
+              <h2>{t("live.pulling_repos", { owner })}</h2>
+              {liveProgress && liveProgress.total > 0 ? (
+                <>
+                  <div className="pool-prog-bar">
+                    <div
+                      className="pool-prog-fill"
+                      style={{ width: `${(Math.min(liveProgress.page, liveProgress.total) / liveProgress.total) * 100}%` }}
+                    />
+                  </div>
+                  <p className="muted">
+                    {t("live.page_progress", {
+                      page: Math.min(liveProgress.page, liveProgress.total),
+                      total: liveProgress.total,
+                      repos: liveProgress.repos,
+                    })}
+                  </p>
+                </>
+              ) : (
+                <p className="muted">{t("live.pulling")}</p>
+              )}
+            </div>
+          ) : (
+            <>
+              <TalentPanel t={deriveTalent(ov, lang)} ov={ov} weights={weights} onWeights={setWeights} />
 
-          <section className="kpis">
-            <Kpi n={String(ov.count)} label={t("kpi.repos")} />
-            <Kpi n={String(ov.non_fork_count)} label={t("kpi.original")} />
-            <Kpi n={String(ov.totals.stars)} label={t("kpi.stars_total")} />
-            <Kpi n={String(ov.totals.forks)} label={t("kpi.forks_total")} />
-            <Kpi n={String(ov.recency.active || 0)} label={t("kpi.active_90d")} />
-          </section>
+              <section className="kpis">
+                <Kpi n={String(ov.count)} label={t("kpi.repos")} />
+                <Kpi n={String(ov.non_fork_count)} label={t("kpi.original")} />
+                <Kpi n={String(ov.totals.stars)} label={t("kpi.stars_total")} />
+                <Kpi n={String(ov.totals.forks)} label={t("kpi.forks_total")} />
+                <Kpi n={String(ov.recency.active || 0)} label={t("kpi.active_90d")} />
+              </section>
 
-          <section className="grid">
-            <Bars title={t("bars.languages")} data={ov.languages} />
-            <Bars title={t("bars.recency")} data={ov.recency} color="#22c55e" />
-            <Bars title={t("bars.created_per_year")} data={ov.years} color="#f59e0b" />
-          </section>
+              <section className="grid">
+                <Bars title={t("bars.languages")} data={ov.languages} />
+                <Bars title={t("bars.recency")} data={ov.recency} color="#22c55e" />
+                <Bars title={t("bars.created_per_year")} data={ov.years} color="#f59e0b" />
+              </section>
 
-          {ov.push_trend && (
-            <section className="grid">
-              <PushTrend data={ov.push_trend} />
-            </section>
+              {ov.push_trend && (
+                <section className="grid">
+                  <PushTrend data={ov.push_trend} />
+                </section>
+              )}
+            </>
+          )}
+
+          {repoErr && !ov.partial && (
+            <div className="panel error" style={{ gridColumn: "1 / -1" }}>
+              <h2>{t("live.repos_failed")}</h2>
+              <p>{repoErr}</p>
+            </div>
           )}
 
           <div className="grid two">

@@ -6,7 +6,7 @@ import React from "react";
 import { api } from "../api";
 import type { Overview, RepoView, NoSnapshot, People, PeopleDiff, Radar } from "../types";
 import { isNoSnapshot } from "../types";
-import { fetchLive, fetchLivePeople, searchLocal, type LiveResult, type LiveProgress } from "../live";
+import { fetchLive, fetchLiveProfile, fetchLiveRepos, buildOverviewPartial, buildOverviewFull, ovRepos, writeLiveCacheResult, fetchLivePeople, searchLocal, type LiveResult, type LiveProgress } from "../live";
 import { deriveTalent, healthScore, loadHealthWeights, saveHealthWeights, type HealthWeights } from "../talent";
 import type { Lang } from "../i18n";
 
@@ -43,6 +43,7 @@ export function useDashboardData(t: T, lang: Lang) {
   const [loading, setLoading] = React.useState(true);
   const [liveLoading, setLiveLoading] = React.useState(false);
   const [liveErr, setLiveErr] = React.useState("");
+  const [repoErr, setRepoErr] = React.useState("");
   const [liveProgress, setLiveProgress] = React.useState<LiveProgress | null>(null);
   const [err, setErr] = React.useState("");
   const [q, setQ] = React.useState("");
@@ -199,18 +200,39 @@ export function useDashboardData(t: T, lang: Lang) {
     const seq = ++reqSeq.current;
     setLiveLoading(true);
     setLiveErr("");
+    setRepoErr("");
     setNoSnap(null);
     setLiveProgress(null);
     try {
-      const res = await fetchLive(target, undefined, (p) => {
-        if (seq === reqSeq.current) setLiveProgress(p);
-      });
+      // Phase 1 — profile + latest push (~2 requests): render the ProfileCard
+      // immediately instead of holding it hostage to full repo pagination
+      // (owners with thousands of repos used to take tens of seconds).
+      const { user, lastPush, estTotal } = await fetchLiveProfile(target);
       if (seq !== reqSeq.current) return;
-      setOv(res.overview);
-      setLive(res);
-      setLiveProgress(null);
-      loadPeople(target, true);
+      setOv(buildOverviewPartial(target, user, lastPush));
+      setLiveLoading(false);
       setLoading(false);
+      // Phase 2 — keep paginating repos in the background; on completion fill
+      // in the aggregates, the browse list and the 10-min cache.
+      try {
+        const reposRaw = await fetchLiveRepos(target, estTotal, undefined, (p) => {
+          if (seq === reqSeq.current) setLiveProgress(p);
+        });
+        if (seq !== reqSeq.current) return;
+        const ov = buildOverviewFull(target, user, lastPush, reposRaw);
+        const liveRes = { overview: ov, all: ovRepos(reposRaw) };
+        setOv(ov);
+        setLive(liveRes);
+        writeLiveCacheResult(target, liveRes);
+        setLiveProgress(null);
+      } catch (e2) {
+        // Phase-2 failure keeps the profile visible; the repo area shows the
+        // error instead of nuking the whole card (phase 1 already succeeded).
+        if (seq !== reqSeq.current) return;
+        setLiveProgress(null);
+        setRepoErr(e2 instanceof Error ? e2.message : String(e2));
+      }
+      loadPeople(target, true);
     } catch (e) {
       if (seq !== reqSeq.current) return;
       setLiveErr(e instanceof Error ? e.message : String(e));
@@ -392,7 +414,7 @@ export function useDashboardData(t: T, lang: Lang) {
   return {
     owner, setOwner, cached,
     weights, setWeights,
-    ov, live, noSnap, loading, liveLoading, liveErr, liveProgress,
+    ov, live, noSnap, loading, liveLoading, liveErr, liveProgress, repoErr,
     err, q, setQ, hits, hitsTotal, searched, searching, limit, setLimit,
     people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, radar,
     cmp, setCmp,

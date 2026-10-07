@@ -215,31 +215,61 @@ export interface LiveProgress {
 }
 export type LiveProgressFn = (p: LiveProgress) => void;
 
-export async function fetchLive(
-  owner: string,
-  signal?: AbortSignal,
-  onProgress?: LiveProgressFn
-): Promise<LiveResult> {
-  // Cache hit: re-analyzing the same owner within the TTL skips GitHub
-  // entirely — the unauthenticated 60 req/h shared limit makes a live fetch
-  // the slowest path in the app, and revisiting a just-fetched owner is the
-  // common case after a page refresh or an owner switch.
-  const cached = readLiveCache(owner);
-  if (cached) return cached;
+// ---- two-phase live fetch ----------------------------------------------
+// Owners with thousands of repos (e.g. 4k+ for @idimetrix) take tens of
+// seconds to paginate; holding the whole ProfileCard hostage to that made
+// "实时获取" feel broken. Phase 1 (fetchLiveProfile) returns the profile +
+// most recent push in ~2 requests so the card renders immediately; phase 2
+// (fetchLiveRepos) keeps paginating and the dashboard fills in the rest.
 
+export interface LiveProfilePhase {
+  user: any;
+  lastPush: string;
+  estTotal: number; // estimated repo pages (0 when unknown)
+}
+
+// Phase 1 — profile + the single most recently pushed repo (sort=pushed
+// desc). Two requests, always fast; enough for ProfileCard + the hireable
+// cross-check.
+export async function fetchLiveProfile(
+  owner: string,
+  signal?: AbortSignal
+): Promise<LiveProfilePhase> {
   const user = await getGithub("/users/" + encodeURIComponent(owner), owner, signal);
   // the proxy returns null on an empty 200 body; guard so a malformed
   // upstream response degrades to an empty profile instead of crashing
   const u = user ?? {};
-
-  // estimate the page count from the profile so the UI can show "page 2/3";
-  // 0 when unknown (the progress bar degrades to a spinner-style message).
+  // sort=pushed&direction=desc page 1 = the globally most recent push, so a
+  // single lightweight call replaces scanning every repo page for lastPush
+  // (and is more accurate than the old sort=updated scan).
+  let lastPush = "";
+  try {
+    const recent = await getGithub(
+      "/users/" + encodeURIComponent(owner) +
+      "/repos?type=owner&sort=pushed&direction=desc&per_page=1",
+      owner,
+      signal
+    );
+    const first = Array.isArray(recent) ? recent[0] : null;
+    lastPush = first?.pushed_at ?? "";
+  } catch {
+    // repo fetch failed — keep profile-only render; lastPush stays ""
+  }
   const estTotal =
     u && typeof u.public_repos === "number" && u.public_repos > 0
       ? Math.max(1, Math.ceil(u.public_repos / 100))
       : 0;
+  return { user: u, lastPush, estTotal };
+}
 
-  // paginate the owner's own repos (type=owner), up to a sensible cap
+// Phase 2 — paginate the owner's own repos (type=owner), up to a sensible
+// cap. Returns the raw list (caller derives RepoView[] / aggregates).
+export async function fetchLiveRepos(
+  owner: string,
+  estTotal: number,
+  signal?: AbortSignal,
+  onProgress?: LiveProgressFn
+): Promise<any[]> {
   const reposRaw: any[] = [];
   let page = 1;
   for (;;) {
@@ -255,24 +285,26 @@ export async function fetchLive(
     if (batch.length < 100 || page >= 10) break; // cap ~1000 repos
     page += 1;
   }
+  return reposRaw;
+}
 
+// Shared Overview builder. `partial` marks the phase-1 view (profile only,
+// no repo stats yet). Cached/server views are never partial.
+function buildOverview(
+  owner: string,
+  u: any,
+  lastPush: string,
+  reposRaw: any[],
+  partial: boolean
+): Overview {
   // archived repos are excluded from every public view (server parity: the
   // cached path filters via active_repos() too)
   const all = reposRaw.map(toView).filter((r) => !r.archived).sort((a, b) => (a.updated < b.updated ? 1 : -1));
   const originals = all.filter((r) => !r.is_fork);
-
-  // most recent push across all repos — cross-check for the hireable flag:
-  // "available for hire" + active pushes = genuinely job-hunting, while the
-  // flag alone may be stale (someone forgot to turn it off after landing).
-  let lastPush = "";
-  for (const r of reposRaw) {
-    const p = r?.pushed_at ?? "";
-    if (p && p > lastPush) lastPush = p;
-  }
-
-  const overview: Overview = {
+  return {
     owner,
     fetched_at: new Date().toISOString().replace("T", " ").slice(0, 19),
+    partial,
     profile: {
       name: u.name,
       avatar_url: u.avatar_url,
@@ -312,8 +344,65 @@ export async function fetchLive(
     ),
     push_trend: pushTrend(all),
   };
+}
 
-  const result: LiveResult = { overview, all };
+// Phase-1 Overview — profile only; the dashboard renders the ProfileCard and
+// shows a "pulling repos" note until phase 2 fills the rest in.
+export function buildOverviewPartial(
+  owner: string,
+  u: any,
+  lastPush: string
+): Overview {
+  return buildOverview(owner, u, lastPush, [], true);
+}
+
+// Phase-2 Overview — full aggregates, replaces the partial one.
+export function buildOverviewFull(
+  owner: string,
+  u: any,
+  lastPush: string,
+  reposRaw: any[]
+): Overview {
+  return buildOverview(owner, u, lastPush, reposRaw, false);
+}
+
+// RepoView[] for the dashboard's browse list (same derivation as the
+// overview's internal all()).
+export function ovRepos(reposRaw: any[]): RepoView[] {
+  return reposRaw
+    .map(toView)
+    .filter((r) => !r.archived)
+    .sort((a, b) => (a.updated < b.updated ? 1 : -1));
+}
+
+// Persist a finished LiveResult into the 10-min browser cache (phase-2
+// completion path writes it; fetchLive keeps doing it inline for the
+// compare panel).
+export function writeLiveCacheResult(owner: string, result: LiveResult): void {
+  try {
+    writeLiveCache(owner, result);
+  } catch {
+    // storage quota/unavailable — live still works, just uncached
+  }
+}
+
+export async function fetchLive(
+  owner: string,
+  signal?: AbortSignal,
+  onProgress?: LiveProgressFn
+): Promise<LiveResult> {
+  // Cache hit: re-analyzing the same owner within the TTL skips GitHub
+  // entirely — the unauthenticated 60 req/h shared limit makes a live fetch
+  // the slowest path in the app, and revisiting a just-fetched owner is the
+  // common case after a page refresh or an owner switch.
+  const cached = readLiveCache(owner);
+  if (cached) return cached;
+
+  const { user: u, lastPush, estTotal } = await fetchLiveProfile(owner, signal);
+  const reposRaw = await fetchLiveRepos(owner, estTotal, signal, onProgress);
+  const overview = buildOverview(owner, u, lastPush, reposRaw, false);
+
+  const result: LiveResult = { overview, all: ovRepos(reposRaw) };
   writeLiveCache(owner, result);
   return result;
 }

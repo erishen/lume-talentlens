@@ -27,6 +27,8 @@ export interface RepoView {
 export interface Overview {
   owner: string;
   fetched_at: string;
+  /** phase-1 live view (profile only, repo stats still loading) — cached/server views are never partial */
+  partial?: boolean;
   profile: {
     login?: string;
     name?: string;
