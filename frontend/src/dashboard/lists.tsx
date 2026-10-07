@@ -44,7 +44,9 @@ function PersonList({ title, people, totals, note, onOpen }: {
   onOpen: (login: string) => void;
 }) {
   const t = useT();
-  const [byScore, setByScore] = React.useState(false);
+  // Default to the influence (score) sort — that's what the lists are for;
+  // the toggle flips back to GitHub's native order.
+  const [byScore, setByScore] = React.useState(true);
   const scored = people.some((p) => typeof p.score === "number" && p.score > 0);
   const sorted = byScore
     ? [...people].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
@@ -55,7 +57,7 @@ function PersonList({ title, people, totals, note, onOpen }: {
         {title} <span className="muted">{t("people.shown_total", { shown: people.length, total: totals })}</span>
         {scored && (
           <button className="chip btn-sort" onClick={() => setByScore(!byScore)}>
-            {byScore ? t("people.sort_default") : t("people.sort_score")}
+            {byScore ? t("people.sort_score") : t("people.sort_default")}
           </button>
         )}
       </h2>
