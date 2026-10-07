@@ -130,6 +130,8 @@ const zh: Record<string, string> = {
   "people.sort_default": "默认排序",
   "people.radar": "高手",
   "people.mutual": "互相关注（双向）",
+  "people.radar_empty": "尚未扫描。运行 make radar 生成高手盈利模式分类（基于互相关注高分账号）。",
+  "people.radar_owner_only": "高手洞察仅针对默认账号 {owner} 生成，切换到 {owner} 查看。",
   "people.mutual_none": "暂无互相关注",
   "people.worth": "值得关注的高手（未关注）",
   "people.follow_all": "全部关注",
@@ -329,6 +331,8 @@ const en: Record<string, string> = {
   "people.sort_default": "default order",
   "people.radar": "radar",
   "people.mutual": "Mutual follows",
+  "people.radar_empty": "Not scanned yet. Run make radar to classify high-score mutuals by money pattern.",
+  "people.radar_owner_only": "Radar is generated for the default account {owner} only — switch to {owner} to view it.",
   "people.mutual_none": "No mutual follows yet",
   "people.worth": "High-score not followed back",
   "people.follow_all": "Follow all",
@@ -440,7 +444,9 @@ export function useT(): (key: string, params?: Record<string, string | number>) 
     let s = dicts[lang][key] ?? dicts.en[key] ?? key;
     if (params) {
       for (const [k, v] of Object.entries(params)) {
-        s = s.replace("{" + k + "}", String(v));
+        // split/join (not replace) — every occurrence of the placeholder is
+        // substituted, so a template may reference {owner} more than once
+        s = s.split("{" + k + "}").join(String(v));
       }
     }
     return s;

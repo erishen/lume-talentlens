@@ -24,6 +24,7 @@ export interface PoolRow {
 export function useDashboardData(t: T, lang: Lang) {
   const [owner, setOwner] = React.useState("");
   const [cached, setCached] = React.useState<string[]>([]);
+  const [defaultOwner, setDefaultOwner] = React.useState<string>("");
   // request-sequence guards: the latest load wins, older in-flight responses
   // are dropped instead of clobbering the view when the user switches owners
   // quickly (or compares several candidates in a row).
@@ -354,6 +355,7 @@ export function useDashboardData(t: T, lang: Lang) {
     // cached owners + default (last fetched) owner
     api.owners().then((r) => {
       setCached(r.owners);
+      setDefaultOwner(r.current);
       if (owner === "") setOwner(r.current); // adopt the server default
       loadOverview(r.current);
     }).catch((e) => setErr(e.message));
@@ -420,7 +422,7 @@ export function useDashboardData(t: T, lang: Lang) {
     : 0;
 
   return {
-    owner, setOwner, cached,
+    owner, setOwner, cached, defaultOwner,
     weights, setWeights,
     ov, live, noSnap, loading, liveLoading, liveErr, liveProgress, repoErr,
     err, q, setQ, hits, hitsTotal, searched, searching, limit, setLimit,

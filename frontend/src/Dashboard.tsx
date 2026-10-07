@@ -40,7 +40,7 @@ export function Dashboard() {
     poolInput, setPoolInput, poolLoading, poolProgress, pool, setPool,
     rankedPool, poolFrac,
     onRefresh, loadPeople, loadOverview, loadLive, loadCompare, loadPool,
-    openOwner, onOwnerPick, onSearch,
+    openOwner, onOwnerPick, onSearch, defaultOwner,
   } = d;
 
   // Follow-all for the "worth following" panel — one PUT per login via the
@@ -399,7 +399,18 @@ export function Dashboard() {
                     {t("people.follow_err")}: {followState.err}
                   </p>
                 )}
-                {radar && <RadarPanel radar={radar} t={t} onOpen={openOwner} />}
+                {radar ? (
+                  <RadarPanel radar={radar} t={t} onOpen={openOwner} />
+                ) : (
+                  <div className="panel" style={{ gridColumn: "1 / -1" }}>
+                    <h2>{t("people.radar_title")}</h2>
+                    <p className="muted">
+                      {owner === defaultOwner
+                        ? t("people.radar_empty")
+                        : t("people.radar_owner_only", { owner: defaultOwner || "OWNER" })}
+                    </p>
+                  </div>
+                )}
                 <PersonList
                   title={t("people.followers")}
                   people={people.followers}
