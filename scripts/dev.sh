@@ -30,6 +30,18 @@ if ! wait_port_free "$WANT_PORT"; then
   echo "dev: :$WANT_PORT still held (unkillable) — will fall back below"
 fi
 
+# 1b) prune agent session transcripts: every chat writes one JSON file under
+#     .data/sessions/ and nothing ever deletes them (the Lume runtime has no
+#     file-remove builtin). Keep only the 30 newest at dev-loop start.
+if [ -d "$ROOT/.data/sessions" ]; then
+  stale="$(ls -t "$ROOT"/.data/sessions/gh-*.json 2>/dev/null | tail -n +31)"
+  if [ -n "$stale" ]; then
+    echo "$stale" | xargs rm -f
+  fi
+  remain="$(ls "$ROOT"/.data/sessions/gh-*.json 2>/dev/null | wc -l | tr -d ' ')"
+  echo "dev: agent sessions pruned (keeping newest 30, $remain remain)"
+fi
+
 # 2) pick a free port: the target, else the next free one above it. If the
 #    target is held by an unkillable zombie we fall through to a fresh port
 #    instead of refusing to start — make dev should always get you a server.
