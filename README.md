@@ -197,3 +197,43 @@ GH_TOKEN=ghp_xxx bash scripts/unfollow.sh
 
 Precise per-account confirmation (followers_count / repo count / account
 age) needs the GitHub API — see `scripts/people-scan.sh --help`.
+
+## Talent radar, scoring & follow-worthy
+
+`scripts/people-score.sh` ranks every follower/following by an influence
+score (`min(50, repos*2) + min(50, followers/20) + min(30, age_years*3) +
+5·hireable + 3·bio`) into `scores.json` (gitignored). The dashboard sorts by
+score and badges `高分`; it also computes the **mutual-following** and
+**worth-following** (high-score followers you don't follow yet) lists, and
+shows a network-change diff after each refresh:
+
+```bash
+make score                 # re-rank everyone (default owner)
+```
+
+`scripts/follow-worthy.sh` follows back the high-score followers who haven't
+been followed yet (idempotent, `user:follow` PAT required):
+
+```bash
+DRY_RUN=1 make follow-worthy        # list only
+make follow-worthy                  # follow them
+```
+
+`scripts/radar-scan.sh` (make radar) scans your **mutual high scorers**
+(score ≥ 120) and classifies each by money pattern — startup / crypto /
+company / content / tools / hunting / other — from live profile + top repos
+(2 API calls per person) into `data/github/<owner>/radar.json`. The
+dashboard's **高手洞察 · 盈利模式** panel groups them, and each person chip
+analyzes in-app on click:
+
+```bash
+make radar                 # re-scan (fresh profiles)
+```
+
+| GET | `/api/people_diff` | who followed/unfollowed since the last refresh (`has_history: false` on first refresh) |
+| GET | `/api/radar` | radar.json as-is (`{status:404,…}` when `make radar` hasn't run) |
+
+The `hireable` flag is cross-checked against repo activity (≤90d push =
+genuinely job-hunting) and against founder signals (bio/company shows
+founder/CEO/CTO → the chip reads "open to collab/hiring" instead of "open
+to work", since founders keep the flag on to recruit).

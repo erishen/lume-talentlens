@@ -289,6 +289,9 @@ export function Dashboard() {
             <div className="panel error" style={{ gridColumn: "1 / -1" }}>
               <h2>{t("live.repos_failed")}</h2>
               <p>{repoErr}</p>
+              <div className="no-snap-actions">
+                <button className="btn" onClick={() => loadLive(owner)}>{t("live.retry")}</button>
+              </div>
             </div>
           )}
 
