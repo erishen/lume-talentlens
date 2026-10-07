@@ -749,6 +749,17 @@ footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 24
 }
 .radar-person:first-of-type { border-top: none; }
 .radar-person:hover .radar-login { text-decoration: underline; }
+.radar-row { display: flex; align-items: center; gap: 6px; }
+.radar-row .radar-person { flex: 1; }
+.radar-ext {
+  color: var(--muted, #6b7280);
+  text-decoration: none;
+  font-size: 0.8rem;
+  padding: 4px 6px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.radar-ext:hover { color: var(--ink); background: var(--line, #e5e7eb); }
 .radar-login { font-weight: 600; font-size: 0.82rem; color: var(--ink); }
 .radar-note {
   display: block;

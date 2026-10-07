@@ -622,10 +622,21 @@ function RadarPanel({ radar, t, onOpen }: {
           <div key={g.mode} className="radar-group" data-mode={g.mode}>
             <div className="radar-mode">{t("people.radar_mode_" + g.mode)} <span className="muted">{g.people.length}</span></div>
             {g.people.map((p) => (
-              <button key={p.login} className="radar-person" onClick={() => onOpen(p.login)}>
-                <span className="radar-login">@{p.login} <span className="chip radar">{p.score}☆</span></span>
-                <span className="radar-note">{p.note}</span>
-              </button>
+              <div key={p.login} className="radar-row">
+                <button className="radar-person" onClick={() => onOpen(p.login)}>
+                  <span className="radar-login">@{p.login} <span className="chip radar">{p.score}☆</span></span>
+                  <span className="radar-note">{p.note}</span>
+                </button>
+                <a
+                  className="radar-ext"
+                  href={"https://github.com/" + p.login}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={"github.com/" + p.login}
+                >
+                  ↗
+                </a>
+              </div>
             ))}
           </div>
         ))}
