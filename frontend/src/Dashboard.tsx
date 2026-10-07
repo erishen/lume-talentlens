@@ -129,6 +129,13 @@ export function Dashboard() {
       )
     : [];
 
+  // One screen at a time — the dashboard used to stack the account analysis,
+  // the full repo browser and the whole people/radar area on one long page.
+  // Tabs keep each view focused: overview (profile + signals + charts +
+  // top repos + compare/pool), repos (search + full paged list), people
+  // (followers/following/radar/mutual + the action toolbar).
+  const [tab, setTab] = React.useState<"overview" | "repos" | "people">("overview");
+
   return (
     <div>
       <section className="hero">
@@ -138,6 +145,21 @@ export function Dashboard() {
 
       <OwnerPicker value={owner} cached={cached} onPick={onOwnerPick} onAnalyze={loadOverview} busy={loading} />
 
+      <div className="tabs">
+        <button className={tab === "overview" ? "tab active" : "tab"} onClick={() => setTab("overview")}>
+          {t("tabs.overview")}
+        </button>
+        <button className={tab === "repos" ? "tab active" : "tab"} onClick={() => setTab("repos")}>
+          {t("tabs.repos")}
+        </button>
+        <button className={tab === "people" ? "tab active" : "tab"} onClick={() => setTab("people")}>
+          {t("tabs.people")}
+        </button>
+      </div>
+
+
+      {tab === "overview" && (
+        <>
       <div className="pool-row">
         <span className="muted">{t("pool.label")}</span>
         <input
@@ -244,6 +266,8 @@ export function Dashboard() {
       {ov && cmp.ov && ov.owner !== cmp.target ? (
         <ComparePanel ovA={ov} ovB={cmp.ov} weights={weights} />
       ) : null}
+        </>
+      )}
 
       {err && <div className="panel error">{err}</div>}
 
@@ -306,6 +330,8 @@ export function Dashboard() {
 
       {ov && !loading && !noSnap && !liveLoading && (
         <>
+          {tab === "overview" && (
+            <>
           <ProfileCard ov={ov} />
 
           {ov.partial ? (
@@ -360,7 +386,22 @@ export function Dashboard() {
             </>
           )}
 
-          {repoErr && !ov.partial && (
+          {!ov.partial && (
+            <section className="panel">
+              <h2>{t("all.top10")}</h2>
+              <ol className="top-list">
+                {ov.top_by_stars.map((r, i) => (
+                  <RepoRow key={r.name} r={r} rank={i + 1} />
+                ))}
+              </ol>
+            </section>
+          )}
+            </>
+          )}
+
+          {tab === "repos" && (
+            <>
+          {repoErr && (
             <div className="panel error" style={{ gridColumn: "1 / -1" }}>
               <h2>{t("live.repos_failed")}</h2>
               <p>{repoErr}</p>
@@ -369,7 +410,49 @@ export function Dashboard() {
               </div>
             </div>
           )}
+          {ov.partial ? (
+            <div className="panel" style={{ gridColumn: "1 / -1" }}>
+              <h2>{t("live.pulling_repos", { owner })}</h2>
+              <p className="muted">{t("live.pulling")}</p>
+            </div>
+          ) : (
+            <>
+              <section className="panel">
+                <h2>{owner ? t("search.in", { owner }) : t("search.btn")}</h2>
+                <div className="search-row">
+                  <input
+                    className="search-input"
+                    value={q}
+                    placeholder={t("search.placeholder")}
+                    onChange={(e) => setQ(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && onSearch()}
+                  />
+                  <button className="btn" onClick={onSearch} disabled={searching || !owner}>
+                    {searching ? "…" : t("search.btn")}
+                  </button>
+                </div>
+                {searched && (
+                  <ol className="top-list">
+                    {hits.map((r, i) => (
+                      <RepoRow key={r.name} r={r} rank={i + 1} />
+                    ))}
+                    {hits.length === 0 && <li className="muted">{t("search.no_matches", { q })}</li>}
+                    {hits.length > 0 && <li className="muted">{hitsTotal} {t("search.match")}</li>}
+                  </ol>
+                )}
+              </section>
 
+              <section className="panel">
+                <h2>{t("all.repos")}</h2>
+                <BrowsePage limit={limit} setLimit={setLimit} owner={owner}
+                  liveAll={live ? live.all : null} totalRepos={ov.profile.public_repos} />
+              </section>
+            </>
+          )}
+            </>
+          )}
+
+          {tab === "people" && (
           <div className="grid two">
             {peopleLoading && (
               <div className="panel">
@@ -483,49 +566,6 @@ export function Dashboard() {
               </>
             )}
           </div>
-
-          {!ov.partial && (
-            <>
-              <section className="panel">
-                <h2>{t("all.top10")}</h2>
-                <ol className="top-list">
-                  {ov.top_by_stars.map((r, i) => (
-                    <RepoRow key={r.name} r={r} rank={i + 1} />
-                  ))}
-                </ol>
-              </section>
-
-              <section className="panel">
-                <h2>{owner ? t("search.in", { owner }) : t("search.btn")}</h2>
-                <div className="search-row">
-                  <input
-                    className="search-input"
-                    value={q}
-                    placeholder={t("search.placeholder")}
-                    onChange={(e) => setQ(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && onSearch()}
-                  />
-                  <button className="btn" onClick={onSearch} disabled={searching || !owner}>
-                    {searching ? "…" : t("search.btn")}
-                  </button>
-                </div>
-                {searched && (
-                  <ol className="top-list">
-                    {hits.map((r, i) => (
-                      <RepoRow key={r.name} r={r} rank={i + 1} />
-                    ))}
-                    {hits.length === 0 && <li className="muted">{t("search.no_matches", { q })}</li>}
-                    {hits.length > 0 && <li className="muted">{hitsTotal} {t("search.match")}</li>}
-                  </ol>
-                )}
-              </section>
-
-              <section className="panel">
-                <h2>{t("all.repos")}</h2>
-                <BrowsePage limit={limit} setLimit={setLimit} owner={owner}
-                  liveAll={live ? live.all : null} totalRepos={ov.profile.public_repos} />
-              </section>
-            </>
           )}
         </>
       )}

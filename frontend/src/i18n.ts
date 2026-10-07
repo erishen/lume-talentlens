@@ -28,6 +28,9 @@ const zh: Record<string, string> = {
   "nav.agent": "智能体",
   // hero
   "hero.title": "GitHub 足迹上的招聘视角",
+  "tabs.overview": "概览",
+  "tabs.repos": "仓库",
+  "tabs.people": "人脉",
   "hero.subtitle": "选择一个账号，读取其人才信号——画像、工程严谨度、产出、专注度（本地快照，离线可用）。",
   // owner picker
   "owner.label": "GitHub 账号",
@@ -238,6 +241,9 @@ const en: Record<string, string> = {
   "nav.api": "API",
   "nav.agent": "Agent",
   "hero.title": "Recruiting lens over a GitHub footprint",
+  "tabs.overview": "Overview",
+  "tabs.repos": "Repos",
+  "tabs.people": "People",
   "hero.subtitle": "Pick an owner to read their talent signals — profile, engineering rigor, output, focus (local snapshots, offline).",
   "owner.label": "GitHub owner",
   "owner.placeholder": "enter a GitHub username",

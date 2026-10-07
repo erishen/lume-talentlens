@@ -72,6 +72,30 @@ main, .agent-wrap, #gh-root {
 .hero { margin-bottom: 22px; }
 .hero h1 { margin: 0 0 6px; font-size: 1.6rem; }
 .hero p { margin: 0; color: var(--muted); }
+
+/* ---- top-level tabs (overview / repos / people) ---- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin: 14px 0 18px;
+  border-bottom: 1px solid var(--line, #e5e7eb);
+  padding-bottom: 8px;
+}
+.tab {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 16px;
+  font-size: .92rem;
+  font-weight: 600;
+  color: var(--muted, #6b7280);
+  cursor: pointer;
+}
+.tab:hover { color: var(--ink); background: var(--line, #e5e7eb); }
+.tab.active {
+  color: var(--accent, #2f6feb);
+  background: color-mix(in srgb, var(--accent, #2f6feb) 12%, transparent);
+}
 .muted { color: var(--muted); }
 .panel {
   background: var(--panel);
