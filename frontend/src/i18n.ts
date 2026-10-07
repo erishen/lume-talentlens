@@ -184,6 +184,7 @@ const zh: Record<string, string> = {
   "agent.upstream_timeout": "上游响应超时（长时间无数据，已停止等待）",
   "agent.copy": "复制",
   "agent.copied": "已复制",
+  "agent.retry": "重试",
   // misc
   "misc.loading": "加载中…",
 };
@@ -339,6 +340,7 @@ const en: Record<string, string> = {
   "agent.upstream_timeout": "upstream timed out (no data for a while, stopped waiting)",
   "agent.copy": "Copy",
   "agent.copied": "Copied",
+  "agent.retry": "Retry",
   "misc.loading": "Loading…",
 };
 

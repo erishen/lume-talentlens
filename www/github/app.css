@@ -538,6 +538,9 @@ main, .agent-wrap, #gh-root {
 }
 .msg.note.welcome .msg-tag { display: none; }
 .msg.error { align-self: flex-start; background: rgba(248,113,113,.12); border: 1px solid var(--bad); color: var(--bad); }
+/* retry affordance under a trailing error: a quiet row, button only */
+.msg.error-retry { align-self: flex-start; background: none; border: none; padding: 2px 0 0 2px; }
+.msg.error-retry .btn { font-size: .8rem; padding: 3px 12px; }
 .msg .msg-tag {
   display: inline-block;
   font-size: .68rem;

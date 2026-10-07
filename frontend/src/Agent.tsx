@@ -45,6 +45,13 @@ export function Agent() {
     const message = input.trim();
     if (!message || busy) return;
     setInput("");
+    sendText(message);
+  }
+
+  // Shared send path: `send()` feeds it from the input box, `retry()` re-feeds
+  // the last user message (upstream hiccups, timeouts, transport errors).
+  function sendText(message: string) {
+    if (busy) return;
     setBusy(true);
     setMsgs((m) => [...m, { role: "user", text: message }]);
 
@@ -176,6 +183,17 @@ export function Agent() {
     setMsgs([{ role: "note", text: t("agent.note") }]);
   }
 
+  // Re-send the most recent user message — shown after an error bubble so a
+  // failed upstream call is one click away instead of retyping.
+  function retry() {
+    if (busy) return;
+    const lastUser = [...msgs].reverse().find((m) => m.role === "user");
+    if (lastUser) sendText(lastUser.text);
+  }
+
+  // The retry affordance attaches to a trailing error message (last row).
+  const trailingError = !busy && msgs.length > 0 && msgs[msgs.length - 1].role === "error";
+
   return (
     <div className="agent-panel">
       <div className="agent-header">
@@ -218,6 +236,11 @@ export function Agent() {
             <span className="dot" />
             <span className="dot" />
             <span className="dot" />
+          </div>
+        )}
+        {trailingError && (
+          <div className="msg error-retry">
+            <button className="btn" onClick={retry}>{t("agent.retry")}</button>
           </div>
         )}
       </div>
