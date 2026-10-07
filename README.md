@@ -55,7 +55,7 @@ data/github/         # snapshot produced by scripts/fetch-github.sh
 scripts/
   fetch-github.sh    # paginate /users/<owner>/repos, pre-compute derived fields
   build-ui.sh        # pnpm-managed deps + run esbuild
-Makefile             # check / fetch / ui / run
+Makefile             # check / fetch / ui / dev
 ```
 
 ## Quick start
@@ -139,12 +139,18 @@ normal env var (e.g. `OWNER=acme make fetch`), which always wins.
 | GET | `/api/overview` | aggregates + talent signals + push_trend |
 | GET | `/api/repos?offset=&limit=` | paged normalized repos (cap 50/page) |
 | GET | `/api/owners` | locally-cached owners + current default |
-| GET | `/api/people?owner=x` | followers / following (first page, up to 100 each) |
+| GET | `/api/people?owner=x` | followers / following (first page, up to 100 each) + merged water-account / recruiter pre-screen + influence scores |
 | GET | `/api/top` | top-10 by stars + by recency |
 | GET | `/api/langs` `/api/recency` `/api/year` | single histograms |
 | GET | `/api/search?q=rust` | substring match across name/desc/lang/topic — returns `{ owner, q, total, shown }` (shown ≤ 10) |
+| GET | `/api/radar` | talent radar as-is — `{status:404,…}` until `make radar` has run |
+| GET | `/api/people_diff` | who followed / unfollowed since the last refresh (`has_history: false` on first refresh) |
+| GET | `/api/refresh` | server-side re-fetch of followers/following + profile totals, rewrites `people.json` (rate-limited, 60s per owner) |
 | GET | `/api/live/github?path=/users/<x>` | server-side GitHub proxy (outbound `http_get`); returns `{ ok, status, data, err }` — big payloads are slim-projected before returning |
+| GET | `/api/github_auth` | `{ authed: bool }` — whether live calls carry `GH_TOKEN` (5000 req/h); never leaks the token |
 | GET | `/discovery` | boot-time tool/skill/MCP catalog |
+| POST | `/api/follow` | follow a login with the PAT — body `{ "login": … }` (idempotent, 204; needs `user:follow`) |
+| DELETE | `/api/unfollow` | unfollow a login with the PAT — body `{ "login": … }` (idempotent, 204; needs `user:follow`) |
 
 > The framework caps a single response body, so `/api/overview` ships
 > aggregates only, the full repo list is paged via `/api/repos`, and the live
@@ -261,9 +267,6 @@ analyzes in-app on click:
 ```bash
 make radar                 # re-scan (fresh profiles)
 ```
-
-| GET | `/api/people_diff` | who followed/unfollowed since the last refresh (`has_history: false` on first refresh) |
-| GET | `/api/radar` | radar.json as-is (`{status:404,…}` when `make radar` hasn't run) |
 
 The `hireable` flag is cross-checked against repo activity (≤90d push =
 genuinely job-hunting) and against founder signals (bio/company shows
