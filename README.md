@@ -43,7 +43,7 @@ make dev          # kill any server on the port + build UI + esbuild watch +
 # or step by step:
 make fetch        # snapshot your repos -> data/github/
 make ui           # esbuild React bundle -> www/github/app.js
-make check        # type-check the .lume files
+make check        # type-check the .lume files + runtime sanity (sanity.lume)
 make dev PORT=9000
 ```
 
@@ -72,9 +72,12 @@ cp .env.example .env   # then edit OWNER=your-github-login
 | `LLM_API_URL` / `LLM_API_KEY` / `LLM_MODEL` | Optional, for the `/chat` agent and agent tools: point Lume's built-in LLM bridge at any OpenAI-compatible endpoint (e.g. `https://api.openai.com/v1` + `gpt-4o-mini`). Leave unset to get the canned offline engine. |
 | `LLM_TIMEOUT` | Optional; seconds to wait on the upstream LLM stream (default 60). |
 | `LLM_SYSTEM_EXTRA` | Optional raw text **appended to the agent's system prompt** — scenario guidance the agent must always follow (which data to answer from, how to cite evidence, output language). Single line only (the `.env` loader reads line by line). |
+| `AGENTHTTPD_CSP_IMG_SRC` | Optional space-separated origins **appended to the server's `Content-Security-Policy` `img-src`** (default policy: `'self' data:`). Needed when the UI loads third-party images — this app uses it to allow GitHub avatar CDNs: `AGENTHTTPD_CSP_IMG_SRC=https://avatars.githubusercontent.com`. |
 
-The Lume server loads `.env` at startup (including the `LLM_*` keys); the
-shell/python scripts source it too. Any of these can also be passed as a
+Every key above is **exported to the app/server processes by the Makefile**
+(`export …` next to `-include .env`) at `make dev` startup — the server also
+has a lazy `.env` loader, but the explicit export is the reliable path. The
+shell/python scripts source `.env` too. Any of these can also be passed as a
 normal env var (e.g. `OWNER=acme make fetch`), which always wins.
 
 > The server binds `127.0.0.1` only. The agent and dashboard run against the
@@ -95,7 +98,10 @@ normal env var (e.g. `OWNER=acme make fetch`), which always wins.
 > server-fetched live data for uncached owners. Prefer the React dashboard for
 > anything an HR / recruiter would act on.
 >
-> `make stop` kills the Lume server and the dev-loop esbuild watcher.
+> `make dev` is the one dev loop (Ctrl-C stops server + watcher); it kills any
+> previous server on the port, prunes stale agent session transcripts
+> (`.data/sessions`, newest 30 kept) and rotates `logs/access.log` before
+> starting.
 
 ## Routes
 
@@ -164,3 +170,30 @@ Supporting plumbing:
   that as the two-option panel above.
 - **Agent tools**: all `repo_*` tools take an optional `owner` argument;
   `github_owners` lists the locally cached owners.
+
+## Water-account / recruiter pre-screen
+
+`scripts/people-suspects.py` flags likely mass-registered water accounts
+(zombie/bulk-follow) among an owner's **followers and following** using only
+local data (avatar-uid account-age proxy + login-name patterns) — **no GitHub
+API cost**. It writes `data/github/<owner>/suspects.json`, and the server
+merges that pre-screen into `/api/people` by login, so the dashboard shows
+`水号 / maybe 水号 / 招聘方` chips on both lists:
+
+```bash
+make suspects                  # default owner, both lists (KIND=all)
+KIND=following make suspects   # one list only
+```
+
+`scripts/unfollow.sh` is **data-driven** — it reads the `kind=following`
+suspects from `suspects.json` (default level `high`; `--level medium` /
+`--also "login …"` to widen) and unfollows them with a `user:follow` PAT.
+Try it without a token first:
+
+```bash
+bash scripts/unfollow.sh --dry-run   # prints the candidate list, changes nothing
+GH_TOKEN=ghp_xxx bash scripts/unfollow.sh
+```
+
+Precise per-account confirmation (followers_count / repo count / account
+age) needs the GitHub API — see `scripts/people-scan.sh --help`.
