@@ -4,6 +4,7 @@ import { OwnerPicker } from "./dashboard/pickers";
 import { ProfileCard, TalentPanel, ComparePanel, PushTrend } from "./dashboard/panels";
 import { Bars, Kpi } from "./dashboard/bars";
 import { PersonList, RepoRow, BrowsePage, RADAR_SCORE } from "./dashboard/lists";
+import type { PersonView } from "./types";
 import { deriveTalent } from "./talent";
 import { useLang, useT } from "./i18n";
 import { detectGhAuth } from "./live";

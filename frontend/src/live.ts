@@ -261,6 +261,15 @@ export async function fetchLive(
   const all = reposRaw.map(toView).filter((r) => !r.archived).sort((a, b) => (a.updated < b.updated ? 1 : -1));
   const originals = all.filter((r) => !r.is_fork);
 
+  // most recent push across all repos — cross-check for the hireable flag:
+  // "available for hire" + active pushes = genuinely job-hunting, while the
+  // flag alone may be stale (someone forgot to turn it off after landing).
+  let lastPush = "";
+  for (const r of reposRaw) {
+    const p = r?.pushed_at ?? "";
+    if (p && p > lastPush) lastPush = p;
+  }
+
   const overview: Overview = {
     owner,
     fetched_at: new Date().toISOString().replace("T", " ").slice(0, 19),
@@ -277,6 +286,7 @@ export async function fetchLive(
       following: u.following,
       public_repos: u.public_repos,
       public_gists: u.public_gists,
+      last_push: lastPush,
       created_at: u.created_at,
       html_url: u.html_url,
     },

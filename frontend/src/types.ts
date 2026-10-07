@@ -43,6 +43,8 @@ export interface Overview {
     public_gists?: number;
     created_at?: string;
     html_url?: string;
+    /** most recent pushed_at across the owner's repos (live fetch only) — cross-check for the hireable flag */
+    last_push?: string;
   };
   count: number;
   non_fork_count: number;

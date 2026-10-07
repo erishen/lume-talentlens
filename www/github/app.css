@@ -692,3 +692,13 @@ footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 24
 .person-link:hover .person-login {
   text-decoration: underline;
 }
+
+/* open-to-work cross-checked against repo activity (live fetch) */
+.chip.o2w-active {
+  border-color: #16a34a;
+  color: #16a34a;
+}
+.chip.o2w-stale {
+  border-color: #9ca3af;
+  color: #6b7280;
+}

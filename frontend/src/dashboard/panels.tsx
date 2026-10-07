@@ -40,7 +40,7 @@ function ProfileCard({ ov }: { ov: Overview }) {
           </h2>
           <p className="pc-bio">{p?.bio || tr("pc.no_bio")}</p>
           <div className="pc-badges">
-            {p?.hireable ? <span className="chip o2w" title={tr("pc.o2w_title")}>{tr("pc.open_to_work")}</span> : null}
+            {p?.hireable ? <OpenToWork p={p} tr={tr} /> : null}
             {p?.location ? <span className="chip">📍 {p.location}</span> : null}
             {p?.company ? <span className="chip">🏢 {p.company}</span> : null}
             {year ? <span className="chip">{tr("pc.since", { year })}</span> : null}
@@ -69,6 +69,23 @@ function ProfileCard({ ov }: { ov: Overview }) {
       <p className="pc-snapshot muted">{tr("pc.snapshot", { fetched: ov.fetched_at, count: ov.count, non_fork: ov.non_fork_count })}</p>
     </section>
   );
+}
+
+// "Open to work" chip cross-checked against repo activity. The GitHub
+// hireable flag is self-reported and often stale (left on after landing a
+// job); a recent push (<= 90d) means the person is likely genuinely
+// job-hunting, while a stale one flags the switch as possibly outdated.
+// Falls back to the plain chip when no repo activity is known (cached path).
+function OpenToWork({ p, tr }: { p: Overview["profile"]; tr: (k: string, p?: Record<string, string | number>) => string }) {
+  const last = p?.last_push;
+  const days = last ? Math.max(0, Math.floor((Date.now() - new Date(last).getTime()) / 86400000)) : -1;
+  if (days >= 0 && days <= 90) {
+    return <span className="chip o2w o2w-active" title={tr("pc.o2w_active_title")}>{tr("pc.o2w_active")}</span>;
+  }
+  if (days > 90) {
+    return <span className="chip o2w o2w-stale" title={tr("pc.o2w_stale_title")}>{tr("pc.o2w_stale")}</span>;
+  }
+  return <span className="chip o2w" title={tr("pc.o2w_title")}>{tr("pc.open_to_work")}</span>;
 }
 
 // Recruiter-facing summary: tenure, output, rigor, focus, influence.
