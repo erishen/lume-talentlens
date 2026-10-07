@@ -164,3 +164,23 @@ export function isNoSnapshot(x: unknown): x is NoSnapshot {
     (x as NoSnapshot).error === "no_snapshot"
   );
 }
+
+// talent-radar profit patterns (make radar -> data/github/<owner>/radar.json)
+export interface RadarPerson {
+  login: string;
+  mode: string; // startup | crypto | company | content | tools | hunting | other
+  note: string;
+  score: number;
+  followers: number;
+  hireable?: boolean;
+  loc?: string;
+  blog?: string;
+  company?: string;
+  top_repos?: { name: string; stars: number; desc: string }[];
+}
+export interface Radar {
+  owner: string;
+  scanned_at: string;
+  min_score: number;
+  people: RadarPerson[];
+}

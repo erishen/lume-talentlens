@@ -4,7 +4,7 @@ import { OwnerPicker } from "./dashboard/pickers";
 import { ProfileCard, TalentPanel, ComparePanel, PushTrend } from "./dashboard/panels";
 import { Bars, Kpi } from "./dashboard/bars";
 import { PersonList, RepoRow, BrowsePage, RADAR_SCORE } from "./dashboard/lists";
-import type { PersonView } from "./types";
+import type { PersonView, Radar } from "./types";
 import { deriveTalent } from "./talent";
 import { useLang, useT } from "./i18n";
 import { detectGhAuth } from "./live";
@@ -34,7 +34,7 @@ export function Dashboard() {
     owner, cached, weights, setWeights,
     ov, live, noSnap, loading, liveLoading, liveErr, liveProgress,
     err, q, setQ, hits, hitsTotal, searched, searching, limit, setLimit,
-    people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff,
+    people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, radar,
     cmp, setCmp,
     poolInput, setPoolInput, poolLoading, poolProgress, pool, setPool,
     rankedPool, poolFrac,
@@ -301,6 +301,7 @@ export function Dashboard() {
                   emptyNote={t("people.worth_none")}
                   t={t}
                 />
+                {radar && <RadarPanel radar={radar} t={t} onOpen={openOwner} />}
                 <PersonList
                   title={t("people.followers")}
                   people={people.followers}
@@ -417,6 +418,43 @@ function RelationPanel({ title, people, emptyNote, t }: {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// Talent-radar profit patterns (make radar) — mutual high scorers grouped by
+// money pattern. Each person chip analyzes in-app (onOpen) and carries the
+// one-line evidence note. Group order is fixed so the panel reads as a
+// "who makes money how" map, not a score list.
+const RADAR_MODES = ["startup", "crypto", "company", "content", "tools", "hunting", "other"];
+
+function RadarPanel({ radar, t, onOpen }: {
+  radar: Radar; t: (k: string, p?: Record<string, string | number>) => string;
+  onOpen: (login: string) => void;
+}) {
+  const groups = RADAR_MODES
+    .map((m) => ({ mode: m, people: radar.people.filter((p) => p.mode === m) }))
+    .filter((g) => g.people.length > 0);
+  if (groups.length === 0) return null;
+  return (
+    <div className="panel radar-panel" style={{ gridColumn: "1 / -1" }}>
+      <h2>
+        {t("people.radar_title")}{" "}
+        <span className="muted">{t("people.radar_meta", { n: radar.people.length, at: radar.scanned_at.slice(0, 10) })}</span>
+      </h2>
+      <div className="radar-groups">
+        {groups.map((g) => (
+          <div key={g.mode} className="radar-group" data-mode={g.mode}>
+            <div className="radar-mode">{t("people.radar_mode_" + g.mode)} <span className="muted">{g.people.length}</span></div>
+            {g.people.map((p) => (
+              <button key={p.login} className="radar-person" onClick={() => onOpen(p.login)}>
+                <span className="radar-login">@{p.login} <span className="chip radar">{p.score}☆</span></span>
+                <span className="radar-note">{p.note}</span>
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

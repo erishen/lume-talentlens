@@ -28,7 +28,7 @@ PORT    ?= 8091
 OWNER ?=
 PORT ?= 8091
 
-.PHONY: dev check fetch ui clean people-scan suspects unfollow score follow-worthy
+.PHONY: dev check fetch ui clean people-scan suspects unfollow score follow-worthy radar
 
 dev:
 	@echo "== dev loop: kill :$(PORT) + rebuild + watch + run =="
@@ -86,6 +86,13 @@ score:
 #   DRY_RUN=1 make follow-worthy # list only
 follow-worthy:
 	@OWNER="$(OWNER)" bash scripts/follow-worthy.sh
+
+# Talent-radar profit-pattern scan: classify mutual high scorers by money
+# pattern (startup/crypto/company/content/tools/hunting) into radar.json,
+# served by /api/radar and shown in the dashboard's "高手洞察" panel.
+#   make radar                     # re-scan (fresh profiles, ~2 API calls × N)
+radar:
+	@OWNER="$(OWNER)" bash scripts/radar-scan.sh
 
 clean:
 	rm -f ./.run ./.api-ov.json

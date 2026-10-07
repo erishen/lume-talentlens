@@ -702,3 +702,48 @@ footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 24
   border-color: #9ca3af;
   color: #6b7280;
 }
+
+/* talent-radar profit patterns panel */
+.radar-panel { background: var(--panel, #fff); }
+.radar-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+.radar-group {
+  border: 1px solid var(--line, #e5e7eb);
+  border-left: 4px solid var(--accent, #3b82f6);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.radar-group[data-mode="startup"] { border-left-color: #38bdf8; }
+.radar-group[data-mode="crypto"] { border-left-color: #fbbf24; }
+.radar-group[data-mode="company"] { border-left-color: #a78bfa; }
+.radar-group[data-mode="content"] { border-left-color: #4ade80; }
+.radar-group[data-mode="tools"] { border-left-color: #f87171; }
+.radar-group[data-mode="hunting"] { border-left-color: #fb923c; }
+.radar-mode {
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+.radar-person {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-top: 1px dashed var(--line, #e5e7eb);
+  padding: 6px 0;
+  cursor: pointer;
+}
+.radar-person:first-of-type { border-top: none; }
+.radar-person:hover .radar-login { text-decoration: underline; }
+.radar-login { font-weight: 600; font-size: 0.82rem; }
+.radar-note {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted, #6b7280);
+  margin-top: 2px;
+  line-height: 1.5;
+}

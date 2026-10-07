@@ -7,6 +7,7 @@ import type {
   PeopleDiff,
   PersonView,
   NoSnapshot,
+  Radar,
 } from "./types";
 
 // Every route accepts an optional `owner` (defaults server-side to the last
@@ -48,4 +49,6 @@ export const api = {
     j<People | NoSnapshot>("/api/people" + (owner ? "?" + ownerQS(owner) : "")),
   peopleDiff: (owner?: string) =>
     j<PeopleDiff>("/api/people_diff" + (owner ? "?" + ownerQS(owner) : "")),
+  radar: (owner?: string) =>
+    j<Radar | NoSnapshot>("/api/radar" + (owner ? "?" + ownerQS(owner) : "")),
 };

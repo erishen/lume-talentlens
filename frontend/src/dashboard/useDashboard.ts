@@ -4,7 +4,7 @@
 // ranking. Dashboard.tsx now only renders JSX against this hook.
 import React from "react";
 import { api } from "../api";
-import type { Overview, RepoView, NoSnapshot, People, PeopleDiff } from "../types";
+import type { Overview, RepoView, NoSnapshot, People, PeopleDiff, Radar } from "../types";
 import { isNoSnapshot } from "../types";
 import { fetchLive, fetchLivePeople, searchLocal, type LiveResult, type LiveProgress } from "../live";
 import { deriveTalent, healthScore, loadHealthWeights, saveHealthWeights, type HealthWeights } from "../talent";
@@ -55,6 +55,7 @@ export function useDashboardData(t: T, lang: Lang) {
   const [peopleLoading, setPeopleLoading] = React.useState(false);
   const [peopleError, setPeopleError] = React.useState("");
   const [peopleDiff, setPeopleDiff] = React.useState<PeopleDiff | null>(null);
+  const [radar, setRadar] = React.useState<Radar | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
   const [refreshMsg, setRefreshMsg] = React.useState("");
 
@@ -106,6 +107,7 @@ export function useDashboardData(t: T, lang: Lang) {
     setPeople(null);
     setPeopleError("");
     setPeopleLoading(true);
+    setRadar(null);
     const target = o.trim();
     if (!target) return;
     if (viaLive) {
@@ -123,6 +125,11 @@ export function useDashboardData(t: T, lang: Lang) {
       // network change diff rides along — best-effort, failures are silent
       api.peopleDiff(target).then((d) => {
         if (seq === peopleSeq.current && d && d.ok) setPeopleDiff(d);
+      }).catch(() => {});
+      // talent-radar profit patterns — best-effort; 404 (no make radar yet)
+      // just leaves the panel hidden
+      api.radar(target).then((rr) => {
+        if (seq === peopleSeq.current && rr && !isNoSnapshot(rr)) setRadar(rr as Radar);
       }).catch(() => {});
     }).catch(() => {
       if (seq !== peopleSeq.current) return;
@@ -387,7 +394,7 @@ export function useDashboardData(t: T, lang: Lang) {
     weights, setWeights,
     ov, live, noSnap, loading, liveLoading, liveErr, liveProgress,
     err, q, setQ, hits, hitsTotal, searched, searching, limit, setLimit,
-    people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff,
+    people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, radar,
     cmp, setCmp,
     poolInput, setPoolInput, poolLoading, poolProgress, pool, setPool,
     rankedPool, poolFrac,
