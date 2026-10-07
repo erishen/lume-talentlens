@@ -1,4 +1,4 @@
-// lib/github.lume — pure analysis helpers over a GitHub repo snapshot.
+// lib/analyze.lume — pure analysis helpers over a GitHub repo snapshot.
 //
 // All functions are stateless: the snapshot (`snap`) and repo list are passed
 // in explicitly by the entry module, because Lume module exports do NOT

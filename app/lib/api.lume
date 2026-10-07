@@ -5,7 +5,7 @@
 // analysis helpers come from "github.lume".
 
 import "shared.lume" as sh;
-import "github.lume" as gh;
+import "analyze.lume" as gh;
 
 // NOTE: the HTTP framework caps a single response body, so the "overview"
 // endpoint ships aggregates only (no full list). The full list is paged via

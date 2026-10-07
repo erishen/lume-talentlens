@@ -40,7 +40,7 @@ dev:
 
 check:
 	@echo "== type-checking .lume =="
-	$(LUME) --check app/lib/github.lume app/lib/ui.lume $(APP)
+	$(LUME) --check app/lib/analyze.lume app/lib/ui.lume $(APP)
 	@echo "== runtime sanity (constructs the app relies on) =="
 	$(LUME) app/sanity.lume
 

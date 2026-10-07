@@ -5,7 +5,7 @@
 // are per-call, so no stale shared state.
 
 import "shared.lume" as sh;
-import "github.lume" as gh;
+import "analyze.lume" as gh;
 
 func tool_owner(arg) {
   let o = sh.owner_arg(arg);

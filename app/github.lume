@@ -17,6 +17,8 @@
 //   lib/ssr.lume      SSR pages (/overview, /repos, /api reference)
 //   lib/tools.lume    LLM agent tools (repo_* / github_*)
 //   lib/actions.lume  /discovery + POST /api/follow + DELETE /api/unfollow
+//   lib/analyze.lume  pure analysis helpers (imported by the modules above)
+//   lib/ui.lume       SSR page components (imported by lib/ssr.lume)
 //
 // Run:  make dev   (full Lume build, see Makefile LUME)
 //

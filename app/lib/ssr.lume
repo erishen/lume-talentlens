@@ -4,7 +4,7 @@
 // paths and accept ?owner=; unknown/invalid owners fall back to the default.
 
 import "shared.lume" as sh;
-import "github.lume" as gh;
+import "analyze.lume" as gh;
 import "ui.lume" as ui;
 
 func ssr_owner(req) {

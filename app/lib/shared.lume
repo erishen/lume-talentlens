@@ -5,7 +5,7 @@
 // Import from sibling modules as `import "shared.lume" as sh;` (import paths
 // resolve relative to the importing module's own directory).
 
-import "github.lume" as gh;
+import "analyze.lume" as gh;
 
 // ------------------------------------------------ owner resolution
 // Lume module exports do not propagate mutations into the importer, so every

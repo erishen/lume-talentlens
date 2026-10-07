@@ -32,8 +32,14 @@ output cadence, focus, community — built on the
 
 ```
 app/
-  github.lume        # entry: server{}, JSON routes, SSR pages, agent tools, run()
-  lib/github.lume    # pure analysis helpers (histograms, sort, view, bundle)
+  github.lume        # entry: imports the lib modules, server{}, run()
+  lib/analyze.lume   # pure analysis helpers (histograms, sort, view, bundle)
+  lib/shared.lume    # owner/snapshot/string helpers + gh_get (shared by modules)
+  lib/api.lume       # JSON APIs: owners/overview/repos/…/people/refresh/people_diff
+  lib/live.lume      # live GitHub proxy (/api/live/github) + auth probe
+  lib/ssr.lume       # SSR pages (/overview, /repos, /api reference)
+  lib/tools.lume     # LLM agent tools (repo_* / github_*)
+  lib/actions.lume   # /discovery + POST /api/follow + DELETE /api/unfollow
   lib/ui.lume        # SSR page components (nav, kpi, bars, repo_row, page)
 frontend/
   src/main.tsx       # React entry — Dashboard (default) or Agent (data-page=chat)
