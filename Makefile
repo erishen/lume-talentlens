@@ -23,6 +23,10 @@ PORT    ?= 8091
 # `export` makes OWNER visible to the scripts/app child processes too.
 -include .env
 export OWNER
+# CSP img-src extension (AGENTHTTPD_CSP_IMG_SRC) — read by the Lume server
+# (agent-httpd) at response time; .env sets it, this exports it to the server
+# process like OWNER does.
+export AGENTHTTPD_CSP_IMG_SRC
 
 .PHONY: dev check fetch ui clean people-scan
 
