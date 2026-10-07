@@ -76,7 +76,18 @@ function ProfileCard({ ov }: { ov: Overview }) {
 // job); a recent push (<= 90d) means the person is likely genuinely
 // job-hunting, while a stale one flags the switch as possibly outdated.
 // Falls back to the plain chip when no repo activity is known (cached path).
+//
+// Founder exception: for accounts whose bio/company carries founder/CEO/CTO
+// signals, hireable almost never means "looking for a job" — founders keep
+// the flag on to recruit, find co-founders or take consulting. Label those
+// "open to collaborate / hiring" instead of "job hunting".
+const FOUNDER_RE = /(founder|co-?founder|\bceo\b|\bcto\b|\bcreator\b|\bowner\b)/i;
+
 function OpenToWork({ p, tr }: { p: Overview["profile"]; tr: (k: string, p?: Record<string, string | number>) => string }) {
+  const founder = FOUNDER_RE.test(`${p?.bio ?? ""} ${p?.company ?? ""}`);
+  if (founder) {
+    return <span className="chip o2w o2w-founder" title={tr("pc.o2w_founder_title")}>{tr("pc.o2w_founder")}</span>;
+  }
   const last = p?.last_push;
   const days = last ? Math.max(0, Math.floor((Date.now() - new Date(last).getTime()) / 86400000)) : -1;
   if (days >= 0 && days <= 90) {

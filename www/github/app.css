@@ -702,6 +702,12 @@ footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 24
   border-color: #9ca3af;
   color: #6b7280;
 }
+/* founder exception: hireable = recruiting/collab, not job hunting */
+.chip.o2w-founder {
+  border-color: #a855f7;
+  color: #a855f7;
+  background: rgba(168, 85, 247, .12);
+}
 
 /* talent-radar profit patterns panel */
 .radar-panel { background: var(--panel, #fff); }
