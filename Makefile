@@ -19,14 +19,13 @@ LUME    ?= ../research/lume/bin/lume
 APP     := app/github.lume
 PORT    ?= 8091
 
-# local config: OWNER / GH_TOKEN / LUME_GITHUB_PORT from .env (gitignored).
-# `export` makes OWNER visible to the scripts/app child processes too.
+# local config: OWNER / GH_TOKEN / LUME_GITHUB_PORT / LLM_* /
+# AGENTHTTPD_CSP_IMG_SRC from .env (gitignored). `export` makes every key
+# visible to the scripts/app child processes — the server gets them on the
+# environment at startup instead of relying on its own lazy .env loader
+# (which is cwd-dependent). Keep this list in sync with .env.example.
 -include .env
-export OWNER
-# CSP img-src extension (AGENTHTTPD_CSP_IMG_SRC) — read by the Lume server
-# (agent-httpd) at response time; .env sets it, this exports it to the server
-# process like OWNER does.
-export AGENTHTTPD_CSP_IMG_SRC
+export OWNER GH_TOKEN LUME_GITHUB_PORT LLM_API_URL LLM_API_KEY LLM_MODEL LLM_TIMEOUT LLM_SYSTEM_EXTRA AGENTHTTPD_CSP_IMG_SRC
 
 .PHONY: dev check fetch ui clean people-scan
 
