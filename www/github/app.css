@@ -240,6 +240,13 @@ main, .agent-wrap, #gh-root {
   border-color: var(--accent);
   color: var(--accent);
 }
+.person-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
 .person-chip .chip.bot {
   font-size: .68rem;
   color: var(--warn);

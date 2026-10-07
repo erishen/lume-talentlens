@@ -52,7 +52,15 @@ function PersonList({ title, people, totals, note, onOpen }: {
               onClick={() => onOpen(p.login)}
               title={t("people.click_name", { login: p.login })}
             >
-              @{p.login}
+              {p.avatar ? (
+                <img
+                  className="person-avatar"
+                  src={p.avatar}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                />
+              ) : null}
+              <span className="person-login">@{p.login}</span>
               {p.type === "Bot" ? <span className="chip bot">{t("people.bot")}</span> : null}
               {p.recruiter ? <span className="chip recruiter">{t("people.recruiter")}</span> : null}
               {p.suspect === "high" ? <span className="chip suspect" title={evidenceTitle(t, p)}>{t("people.water")}</span> : null}
