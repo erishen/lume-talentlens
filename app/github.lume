@@ -496,6 +496,27 @@ get "/api/github_auth", (req) => {
   return { authed: (tok != null and tok != "") };
 };
 
+// gh_get — GitHub GET with retry. The mainland network intermittently resets
+// TLS handshakes to api.github.com (SSL_ERROR_SYSCALL / http=000 / "TLS
+// handshake failed"); a reset handshake is usually transient, so retry a few
+// times before giving up. Rate-limit responses (403/429) return immediately —
+// retrying those is pointless and burns quota. No sleep primitive in Lume, so
+// attempts are consecutive.
+func gh_get(url, headers) {
+  let i = 0;
+  let last = { status: 0, body: "", err: "no attempt" };
+  while (i < 3) {
+    let r = http_get(url, { headers: headers, timeout: 30, max_bytes: 4194304 });
+    let up = int(get(r, "status", 0), 0);
+    let herr = str(get(r, "err", ""));
+    if (herr == "" and up >= 200 and up < 300) { return r; }
+    if (up == 403 or up == 429) { return r; }
+    last = r;
+    i = i + 1;
+  }
+  return last;
+}
+
 get "/api/live/github", (req) => {
   let qp = get(req, "query_params", {});
   let p = str(get(qp, "path", ""));
@@ -509,7 +530,7 @@ get "/api/live/github", (req) => {
   let tok = env("GH_ANALYZER_PAT");
   if (tok != null and tok != "") { put(headers, "Authorization", "Bearer " + str(tok)); }
   let url = "https://api.github.com" + p;
-  let r = http_get(url, { headers: headers, timeout: 30, max_bytes: 4194304 });
+  let r = gh_get(url, headers);
   let up = int(get(r, "status", 0), 0);
   let body = str(get(r, "body", ""));
   let herr = str(get(r, "err", ""));
@@ -536,7 +557,7 @@ func refresh_fetch_kind(owner, headers, kind) {
   let page = 1;
   while (true) {
     let url = "https://api.github.com/users/" + owner + "/" + kind + "?per_page=100&page=" + str(page);
-    let r = http_get(url, { headers: headers, timeout: 30, max_bytes: 4194304 });
+    let r = gh_get(url, headers);
     let up = int(get(r, "status", 0), 0);
     let body = str(get(r, "body", ""));
     if (up < 200 or up >= 300) { break; }
@@ -595,7 +616,7 @@ get "/api/refresh", (req) => {
     return { ok: false, status: 502, err: "upstream unreachable (network or rate limit)" };
   }
   // profile totals; fall back to fetched lengths when the profile call fails
-  let prof = http_get("https://api.github.com/users/" + owner, { headers: headers, timeout: 30, max_bytes: 4194304 });
+  let prof = gh_get("https://api.github.com/users/" + owner, headers);
   let pd = json(str(get(prof, "body", "")));
   let tot = { followers: len(followers), following: len(following) };
   if (pd != null) {
