@@ -43,6 +43,41 @@ export function Dashboard() {
     openOwner, onOwnerPick, onSearch,
   } = d;
 
+  // Follow-all for the "worth following" panel — one PUT per login via the
+  // server's /api/follow proxy (needs GH_TOKEN with user:follow scope).
+  const [followState, setFollowState] = React.useState<{
+    busy: boolean; done: number; failed: number; err: string;
+  }>({ busy: false, done: 0, failed: 0, err: "" });
+  async function followAll(targets: PersonView[]) {
+    if (followState.busy || targets.length === 0) return;
+    setFollowState({ busy: true, done: 0, failed: 0, err: "" });
+    let done = 0;
+    let failed = 0;
+    let firstErr = "";
+    for (const p of targets) {
+      try {
+        const r = await fetch("/api/follow", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ login: p.login }),
+        });
+        const j = await r.json().catch(() => null);
+        if (j && j.ok) done = done + 1;
+        else {
+          failed = failed + 1;
+          if (firstErr === "") firstErr = (j && j.err) || `HTTP ${r.status}`;
+        }
+      } catch {
+        failed = failed + 1;
+        if (firstErr === "") firstErr = "network error";
+      }
+      setFollowState({ busy: true, done: done, failed: failed, err: firstErr });
+    }
+    setFollowState({ busy: false, done: done, failed: failed, err: firstErr });
+    // refresh the people view so the followed logins leave the worth list
+    loadPeople(owner, !!live);
+  }
+
   // relation insights over the people snapshot:
   // - mutual = followers who are also followed back (双向关注)
   // - worth = high-influence followers not yet followed back (值得关注)
@@ -344,7 +379,26 @@ export function Dashboard() {
                   people={worthPeople}
                   emptyNote={t("people.worth_none")}
                   t={t}
+                  action={
+                    worthPeople.length > 0 && (
+                      <button
+                        className="btn chip"
+                        style={{ marginLeft: 8 }}
+                        onClick={() => followAll(worthPeople)}
+                        disabled={followState.busy}
+                      >
+                        {followState.busy
+                          ? t("people.follow_all_busy", { done: followState.done, total: worthPeople.length })
+                          : t("people.follow_all")}
+                      </button>
+                    )
+                  }
                 />
+                {followState.err && (
+                  <p className="muted" style={{ gridColumn: "1 / -1" }}>
+                    {t("people.follow_err")}: {followState.err}
+                  </p>
+                )}
                 {radar && <RadarPanel radar={radar} t={t} onOpen={openOwner} />}
                 <PersonList
                   title={t("people.followers")}
@@ -435,14 +489,16 @@ function DiffLine({ label, items, t }: { label: string; items: string[]; t: (k: 
 
 // Mutual / worth-following — a chip list whose entries link OUT to the
 // GitHub profile (unlike PersonList, where clicking analyzes in-app).
-function RelationPanel({ title, people, emptyNote, t }: {
+function RelationPanel({ title, people, emptyNote, t, action }: {
   title: string; people: PersonView[]; emptyNote: string;
   t: (k: string, p?: Record<string, string | number>) => string;
+  action?: React.ReactNode;
 }) {
   return (
     <div className="panel" style={{ gridColumn: "1 / -1" }}>
       <h2>
         {title} <span className="muted">{people.length}</span>
+        {action}
       </h2>
       {people.length === 0 ? (
         <p className="muted">{emptyNote}</p>
