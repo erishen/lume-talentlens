@@ -4,6 +4,7 @@ import { OwnerPicker } from "./dashboard/pickers";
 import { ProfileCard, TalentPanel, ComparePanel, PushTrend } from "./dashboard/panels";
 import { Bars, Kpi } from "./dashboard/bars";
 import { PersonList, RepoRow, BrowsePage, RADAR_SCORE } from "./dashboard/lists";
+import { exportPeopleCsv } from "./exportCsv";
 import type { PersonView, Radar } from "./types";
 import { deriveTalent } from "./talent";
 import { useLang, useT } from "./i18n";
@@ -316,6 +317,9 @@ export function Dashboard() {
                   <span className="muted">{refreshMsg}</span>
                   <button className="btn" onClick={onRefresh} disabled={refreshing}>
                     {refreshing ? t("people.refreshing") : t("people.refresh")}
+                  </button>
+                  <button className="btn" onClick={() => exportPeopleCsv(people, mutualPeople, worthPeople, radar)}>
+                    {t("people.export_csv")}
                   </button>
                 </div>
                 {peopleDiff && peopleDiff.has_history && (
