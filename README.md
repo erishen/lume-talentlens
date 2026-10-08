@@ -20,7 +20,8 @@ client.
   (`/api/refresh`) and the follow/unfollow endpoints — `make dev` probes the
   binary and refuses to start with an incapable one. See the
   [Lume version](#lume-version) note below.
-- **Node 18+ / pnpm** for the frontend (`(cd frontend && pnpm install)`).
+- **Node 22+ / pnpm** for the frontend (`(cd frontend && pnpm install)`) — the
+  vitest/jsdom stack pulls in undici 8, which needs Node 22+ (CI runs 24).
 - Optional: `.env` with `OWNER` / `GH_TOKEN` / `LLM_*` (see
   [Configuration](#configuration-env)).
 

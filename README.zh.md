@@ -7,7 +7,7 @@
 ## 环境要求
 
 - **带出站 HTTP 内建的 Lume build** —— 应用默认使用 release 二进制 `~/.local/bin/lume`（绝对路径；可用 `LUME=/path/to/lume` 覆盖）。它需要 `http_get` / `http_put` / `http_delete` 内建函数来支撑实时拉取代理（`/api/live/github`）、人脉刷新（`/api/refresh`）与关注/取关接口 —— `make dev` 会探测二进制能力，能力不足时拒绝启动。见下面的 **Lume 版本** 说明。
-- **Node 18+ / pnpm** 用于前端（`(cd frontend && pnpm install)`）。
+- **Node 22+ / pnpm** 用于前端（`(cd frontend && pnpm install)`）——vitest/jsdom 依赖链引入 undici 8，需要 Node 22+（CI 用 24）。
 - 可选：`.env` 中的 `OWNER` / `GH_TOKEN` / `LLM_*`（见[配置（.env）](#配置env)）。
 
 > **Lume 版本获取：** Lume 没有 `--version` 参数。release 二进制是对 `../lume`（与本仓库平级的 Lume fork）某次构建的产物。要确认当前版本：列出 fork 的 git tag（`git -C ../lume tag`，如 `v0.6.1`），或解析其当前 HEAD（`git -C ../lume describe --tags --always`）。当前安装的 `~/.local/bin/lume` 已含 fork 的代理失效直连回退（2026-10-08 替换；旧二进制保留在 `~/.local/bin/lume.bak-20261008`）。升级 Lume 后重新跑 `make check` + `make dev` —— 能力探测会校验二进制仍带 HTTP 内建。
