@@ -201,6 +201,10 @@ for line in open(raw):
     e["repos"] = int(sc.get("repos", 0) or 0)
     radar.append(e)
 radar.sort(key=lambda r: -r["score"])
+# the people-score gate picks the candidate pool; the panel only shows
+# people whose *radar* quality score clears the line, so the displayed
+# scores are always >= min_score (no sub-threshold rows in the UI)
+radar = [e for e in radar if e["score"] >= min_score]
 
 # --- the owner's own radar-quality score, from the local snapshot (zero
 # API cost) so the panel can show "my score vs the radar line"
