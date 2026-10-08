@@ -43,13 +43,7 @@ tool "repo_search",
        if (repos == null) { return tool_no_snapshot(arg); }
        let q = str(get(arg, "q", ""), "");
        let needle = sh.lower(q);
-       let out = [];
-       for (let r in repos) {
-         let v = gh.repo_view(r);
-         if (sh.contains(sh.haystack(v), needle)) {
-           push(out, v);
-         }
-       }
+       let out = filter((v) => sh.contains(sh.haystack(v), needle), map(gh.repo_view, repos));
        let capped = gh.first_n(out, 10);
        return { owner: tool_owner(arg), q: q, total: len(out), shown: capped };
      };

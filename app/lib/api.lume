@@ -205,12 +205,7 @@ get "/api/search", (req) => {
     out = map(gh.repo_view, repos);
   } else {
     let needle = sh.lower(q);
-    for (let r in repos) {
-      let v = gh.repo_view(r);
-      if (sh.contains(sh.haystack(v), needle)) {
-        push(out, v);
-      }
-    }
+    out = filter((v) => sh.contains(sh.haystack(v), needle), map(gh.repo_view, repos));
   }
   // contract with the client (types.ts SearchResult) + agent tool repo_search:
   // { owner, q, total, shown } — shown capped so the body stays small.
@@ -344,19 +339,15 @@ get "/api/refresh", (req) => {
 // (written by /api/refresh before overwriting). Shows who followed/unfollowed
 // since the last refresh — the dashboard's "network change" view.
 func login_list(rows) {
-  let out = [];
-  for (let r in rows) { push(out, str(get(r, "login", ""))); }
-  return out;
+  return map((r) => str(get(r, "login", "")), rows);
 }
 func diff_login_lists(cur, prev) {
   let prev_set = {};
   for (let l in prev) { put(prev_set, l, 1); }
   let cur_set = {};
   for (let l in cur) { put(cur_set, l, 1); }
-  let added = [];
-  let gone = [];
-  for (let l in cur) { if (get(prev_set, l, null) == null) { push(added, l); } }
-  for (let l in prev) { if (get(cur_set, l, null) == null) { push(gone, l); } }
+  let added = filter((l) => get(prev_set, l, null) == null, cur);
+  let gone = filter((l) => get(cur_set, l, null) == null, prev);
   return { added: added, gone: gone };
 }
 
