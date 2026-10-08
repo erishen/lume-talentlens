@@ -31,7 +31,8 @@ output cadence, focus, community — built on the
 ## Layout
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) (Chinese) for a deep dive on layers,
-data model, data flows and key mechanisms.
+data model, data flows and key mechanisms. See [TODO.md](TODO.md) for the
+development roadmap (prioritised feature/quality backlog).
 
 ```
 app/
