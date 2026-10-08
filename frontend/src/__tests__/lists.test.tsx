@@ -36,7 +36,7 @@ describe("PersonList", () => {
     render(wrap(<PersonList title="关注" people={people} totals={2} onOpen={vi.fn()} />));
     const chips = Array.from(document.querySelectorAll(".person-login")).map((e) => e.textContent);
     expect(chips).toEqual(["@star", "@low"]); // 150 before 5
-    expect(screen.getByText("高手")).toBeInTheDocument();
+    expect(screen.getByText("★ 150")).toBeInTheDocument();
   });
   it("flags a high-suspect low-score account as a water account with evidence tooltip", () => {
     const people = [
@@ -57,8 +57,21 @@ describe("PersonList", () => {
       PERSON({ login: "star", score: 150, suspect: "high" }),
     ];
     render(wrap(<PersonList title="关注" people={people} totals={1} onOpen={vi.fn()} />));
-    expect(screen.getByText("高手")).toBeInTheDocument();
+    expect(screen.getByText("★ 150")).toBeInTheDocument();
     expect(screen.queryByText("水号?")).toBeNull();
+  });
+  it("shows the real name when it differs from the login, and drops it when identical", () => {
+    const people = [
+      PERSON({ login: "idimetrix", name: "Dmitry Selikhov", score: 78 }),
+      PERSON({ login: "LuoZijun", name: "LuoZijun", score: 64 }),
+    ];
+    render(wrap(<PersonList title="互相关注" people={people} totals={2} onOpen={vi.fn()} />));
+    expect(screen.getByText("Dmitry Selikhov")).toBeInTheDocument();
+    // identical name/login renders once (@login only, no duplicate name row)
+    const rows = Array.from(document.querySelectorAll(".person-id")).map(
+      (e) => (e.textContent || "").replace(/\s+/g, "")
+    );
+    expect(rows[1]).toBe("@LuoZijun");
   });
   it("badges bots and recruiters, and marks medium suspects", () => {
     const people = [

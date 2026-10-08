@@ -344,12 +344,39 @@ main, .agent-wrap, #gh-root {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
   transition: border-color .15s, background .15s, transform .08s;
 }
 .person-chip:hover {
   border-color: var(--accent);
   color: var(--accent);
   background: #0f1a30;
+}
+.person-id {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.25;
+  min-width: 0;
+}
+.person-name {
+  font-family: system-ui, -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 190px;
+}
+.person-login {
+  font-size: .68rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.chip.score-muted {
+  border-color: #64748b;
+  color: #94a3b8;
 }
 .person-avatar {
   width: 40px;

@@ -6,7 +6,7 @@ import {
   DEFAULT_HEALTH_WEIGHTS, type HealthWeights,
 } from "../talent";
 import { SignalBar } from "./bars";
-import { RADAR_SCORE } from "./lists";
+import { RADAR_SCORE, PersonChip } from "./lists";
 
 // Recruiter-facing summary panels: the profile card ("who are they"), the
 // talent-signal panel with re-weightable health score, the side-by-side
@@ -392,20 +392,7 @@ function RelationPanel({ title, people, emptyNote, t, action }: {
       ) : (
         <div className="person-list">
           {people.map((p, i) => (
-            <a
-              key={i}
-              className="person-chip person-link"
-              href={p.url}
-              target="_blank"
-              rel="noreferrer"
-              title={p.url}
-            >
-              {p.avatar ? (
-                <img className="person-avatar" src={p.avatar} alt="" referrerPolicy="no-referrer" />
-              ) : null}
-              <span className="person-login">@{p.login}</span>
-              {(p.score ?? 0) >= RADAR_SCORE ? <span className="chip radar">{t("people.radar")}</span> : null}
-            </a>
+            <PersonChip key={i} p={p} t={t} href={p.url} />
           ))}
         </div>
       )}

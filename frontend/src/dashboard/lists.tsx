@@ -41,6 +41,70 @@ function evidenceTitle(t: (k: string, p?: Record<string, string | number>) => st
 // is a false positive on the pre-screen, so radar wins.
 export const RADAR_SCORE = 60; // people-score threshold for radar candidacy (2026-10 rework: quality-weighted, cap 93; radar re-scores with stars/activity)
 
+// Shared person chip used by both the follower/following lists and the
+// relation panels: avatar (or letter fallback), real name + @login, the
+// water/recruiter/bot/radar labels and — when scored — the influence score
+// (★ n; radar-green at >= RADAR_SCORE, muted grey below).
+export function PersonChip({ p, t, onOpen, href }: {
+  p: PersonView;
+  t: (k: string, p2?: Record<string, string | number>) => string;
+  onOpen?: (login: string) => void;
+  href?: string;
+}) {
+  const score = p.score ?? 0;
+  const inner = (
+    <>
+      {p.avatar ? (
+        <img
+          className="person-avatar"
+          src={p.avatar}
+          alt=""
+          referrerPolicy="no-referrer"
+          onError={(e) => {
+            // broken avatar (deleted account / rate-limited CDN): hide
+            // the img and show a letter chip instead
+            (e.target as HTMLImageElement).style.display = "none";
+            const next = (e.target as HTMLImageElement).nextElementSibling as HTMLElement | null;
+            if (next) next.style.display = "inline-flex";
+          }}
+        />
+      ) : null}
+      <span
+        className="person-avatar-letter"
+        style={p.avatar ? { display: "none" } : undefined}
+      >
+        {(p.login || "?").slice(0, 1).toUpperCase()}
+      </span>
+      <span className="person-id">
+        {p.name && p.name !== p.login ? <span className="person-name">{p.name}</span> : null}
+        <span className="person-login">@{p.login}</span>
+      </span>
+      {p.type === "Bot" ? <span className="chip bot">{t("people.bot")}</span> : null}
+      {p.recruiter ? <span className="chip recruiter">{t("people.recruiter")}</span> : null}
+      {score < RADAR_SCORE && p.suspect === "high" ? <span className="chip suspect" title={evidenceTitle(t, p)}>{t("people.water")}</span> : null}
+      {score < RADAR_SCORE && p.suspect === "medium" ? <span className="chip suspect-med" title={evidenceTitle(t, p)}>{t("people.maybe_water")}</span> : null}
+      {score >= RADAR_SCORE ? <span className="chip radar">★ {score}</span> : null}
+      {score > 0 && score < RADAR_SCORE && !p.suspect ? <span className="chip score-muted">★ {score}</span> : null}
+    </>
+  );
+  if (href) {
+    return (
+      <a className="person-chip person-link" href={href} target="_blank" rel="noreferrer" title={href}>
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <button
+      className="person-chip"
+      onClick={() => onOpen?.(p.login)}
+      title={t("people.click_name", { login: p.login })}
+    >
+      {inner}
+    </button>
+  );
+}
+
 function PersonList({ title, people, totals, note, onOpen }: {
   title: string; people: PersonView[]; totals: number; note?: string;
   onOpen: (login: string) => void;
@@ -67,40 +131,7 @@ function PersonList({ title, people, totals, note, onOpen }: {
       {people.length > 0 && (
         <div className="person-list">
           {sorted.map((p, i) => (
-            <button
-              key={i}
-              className="person-chip"
-              onClick={() => onOpen(p.login)}
-              title={t("people.click_name", { login: p.login })}
-            >
-              {p.avatar ? (
-                <img
-                  className="person-avatar"
-                  src={p.avatar}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  onError={(e) => {
-                    // broken avatar (deleted account / rate-limited CDN): hide
-                    // the img and show a letter chip instead
-                    (e.target as HTMLImageElement).style.display = "none";
-                    const next = (e.target as HTMLImageElement).nextElementSibling as HTMLElement | null;
-                    if (next) next.style.display = "inline-flex";
-                  }}
-                />
-              ) : null}
-              <span
-                className="person-avatar-letter"
-                style={p.avatar ? { display: "none" } : undefined}
-              >
-                {(p.login || "?").slice(0, 1).toUpperCase()}
-              </span>
-              <span className="person-login">@{p.login}</span>
-              {p.type === "Bot" ? <span className="chip bot">{t("people.bot")}</span> : null}
-              {p.recruiter ? <span className="chip recruiter">{t("people.recruiter")}</span> : null}
-              {(p.score ?? 0) < RADAR_SCORE && p.suspect === "high" ? <span className="chip suspect" title={evidenceTitle(t, p)}>{t("people.water")}</span> : null}
-              {(p.score ?? 0) < RADAR_SCORE && p.suspect === "medium" ? <span className="chip suspect-med" title={evidenceTitle(t, p)}>{t("people.maybe_water")}</span> : null}
-              {(p.score ?? 0) >= RADAR_SCORE ? <span className="chip radar">{t("people.radar")}</span> : null}
-            </button>
+            <PersonChip key={i} p={p} t={t} onOpen={onOpen} />
           ))}
         </div>
       )}
