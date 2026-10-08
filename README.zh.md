@@ -83,7 +83,7 @@ cp .env.example .env   # 然后编辑 OWNER=你的 GitHub 登录名
 
 以上每个键都会在 `make dev` 启动时由 **Makefile 导出给应用/服务进程**（`-include .env` 旁有 `export …`）—— 服务器自身也有一个懒加载的 .env 读取器，但显式导出才是可靠路径。shell/python 脚本同样会 source `.env`。其中任何一个也可以用普通环境变量传入（如 `OWNER=acme make fetch`），后者永远优先。
 
-> 服务器只绑定 `127.0.0.1`。智能体与仪表盘针对**本地快照**分析已缓存的 owner；未缓存的 owner 通过服务器的 `/api/live/github` 路由按需拉取 —— 该路由用 Lume 内建 `http_get()` 从宿主机调用 GitHub REST API（经 libssl 出站 TLS），并**把响应投影为应用消费的字段**（原始 100 仓库页约 250KB，会撑破框架的响应上限）。设置 `GH_TOKEN` 拿到 5000 次/时的鉴权配额；不设置时共享服务器 IP 匿名限 ~60 次/时。设置 `LLM_*`（见配置表）启用真实模型聊天；否则由离线兜底引擎应答。
+> 服务器只绑定 `127.0.0.1`。智能体与仪表盘针对**本地快照**分析已缓存的 owner；未缓存的 owner 通过服务器的 `/api/live/github` 路由按需拉取 —— 该路由用 Lume 内建 `http_get()` 从宿主机调用 GitHub REST API（经 libssl 出站 TLS），并**把响应投影为应用消费的字段**（原始 100 仓库页约 250KB，会撑破框架的响应上限）。设置 `GH_TOKEN` 拿到 5000 次/时的鉴权配额；不设置时共享服务器 IP 匿名限 ~60 次/时。设置 `LLM_*`（见配置表）启用真实模型聊天；否则由离线兜底引擎应答。写操作（`/api/follow`、`/api/unfollow`）**只接受 `Content-Type: application/json`**（CSRF 防护：跨站 JSON fetch 被浏览器 preflight 阻断——服务器不发 CORS 头；HTML form / text-plain 载体在解析 body 前被 403 拒绝）。
 
 > **两层视图。** SSR 页面（`/overview`、`/repos`、`/api`）是同一快照的只读、零依赖视图。`/` 的 React 仪表盘才是完整交互产品：人才信号、综合健康分、可复制的 HR 备注、并排对比、push 活跃趋势、以及未缓存 owner 的服务端实时数据。HR / 招聘方要落地使用，优先 React 仪表盘。
 >

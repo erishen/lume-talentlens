@@ -284,6 +284,7 @@ make dev（唯一开发循环，前台）
 | 响应不泄密 | `/api/github_auth` 只回 `{authed:bool}`；live/refresh 响应不含 token |
 | 静态资源 CSP | `img-src 'self' data:` + 可配置追加（`AGENTHTTPD_CSP_IMG_SRC=https://avatars.githubusercontent.com`） |
 | 写操作 | follow/unfollow 幂等（204）；需要 `user:follow` PAT；`unfollow.sh` 支持 `--dry-run` |
+| 写操作 CSRF | follow/unfollow 只接受 `Content-Type: application/json`（前端 fetch 显式携带）：跨站 JSON 被服务器无 CORS 头 + preflight 阻断，HTML form / text-plain 载体在解析 body 前被 403 拒（2026-10-08 加固） |
 | 数据隔离 | 快照/人脉/雷达全在 gitignored 的 `data/github/`；代码无硬编码 owner |
 
 ---

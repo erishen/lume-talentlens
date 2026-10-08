@@ -118,7 +118,11 @@ normal env var (e.g. `OWNER=acme make fetch`), which always wins.
 > Set `GH_TOKEN` for the 5000 req/h authenticated limit; without it the shared
 > server IP is limited to ~60 req/h unauthenticated. Set the `LLM_*` vars (see
 > the Configuration table above) to enable real model-backed chat; otherwise a
-> canned offline engine replies.
+> canned offline engine replies. Write actions (`/api/follow`, `/api/unfollow`)
+> accept **only** `Content-Type: application/json` — a CSRF guard: cross-site
+> JSON fetches are blocked by the browser (no CORS headers, preflight fails)
+> and HTML-form / text-plain carriers are rejected with 403 before the body is
+> parsed.
 
 > **Two view tiers.** The SSR pages (`/overview`, `/repos`, `/api`) are a
 > read-only, dependency-free view of the same snapshot. The React dashboard at

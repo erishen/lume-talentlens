@@ -29,8 +29,23 @@ get "/discovery", (req) => {
 // target login, the server proxies PUT /user/following/<login> with the PAT
 // (idempotent — GitHub answers 204 whether you just followed or already
 // followed). Requires GH_TOKEN with the user:follow scope.
+//
+// CSRF guard: write actions accept ONLY application/json. The dashboard's
+// fetch always sends that header (triggers a CORS preflight from any other
+// origin — and this server sends no CORS headers, so cross-site JSON is
+// blocked by the browser), while HTML forms (urlencoded/text-plain) and
+// simple text/plain fetches are rejected here before the body is parsed.
+// Headerless local calls (curl with -d) still work: empty body -> 400.
 post "/api/follow", (req) => {
+  let ct = str(get(req, "content_type", ""));
+  let ct_ok = ct == "" or len(replace(ct, "application/json", "")) < len(ct);
+  if (!ct_ok) {
+    return { ok: false, status: 403, err: "write actions require Content-Type: application/json" };
+  }
   let b = str(get(req, "body", ""));
+  if (b == "") {
+    return { ok: false, status: 400, err: "missing login" };
+  }
   let d = json(b);
   if (d == null or str(get(d, "login", "")) == "") {
     return { ok: false, status: 400, err: "missing login" };
@@ -51,8 +66,17 @@ post "/api/follow", (req) => {
 // ------------------------------------------------ /api/unfollow
 // Unfollow a water-account from the people toolbar. DELETE /user/following/
 // <login> with the PAT (204 whether you just unfollowed or never followed).
+// Same Content-Type CSRF guard as /api/follow (see above).
 delete "/api/unfollow", (req) => {
+  let ct = str(get(req, "content_type", ""));
+  let ct_ok = ct == "" or len(replace(ct, "application/json", "")) < len(ct);
+  if (!ct_ok) {
+    return { ok: false, status: 403, err: "write actions require Content-Type: application/json" };
+  }
   let b = str(get(req, "body", ""));
+  if (b == "") {
+    return { ok: false, status: 400, err: "missing login" };
+  }
   let d = json(b);
   if (d == null or str(get(d, "login", "")) == "") {
     return { ok: false, status: 400, err: "missing login" };

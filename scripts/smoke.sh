@@ -99,6 +99,16 @@ assert_reject() {
 }
 assert_reject "POST /api/follow"   POST   "/api/follow"
 assert_reject "DELETE /api/unfollow" DELETE "/api/unfollow"
+# CSRF guard: a write action with a non-JSON Content-Type (HTML form /
+# text-plain fetch carrier) must be rejected with status 403 before the
+# body is touched — never executed.
+csrf_code=$(curl -s -o /dev/null -w '%{http_code}' -m 30 -X POST -H "Content-Type: application/x-www-form-urlencoded" -d 'login=attacker' "http://127.0.0.1:$PORT/api/follow")
+csrf_body=$(curl -s -m 30 -X POST -H "Content-Type: application/x-www-form-urlencoded" -d 'login=attacker' "http://127.0.0.1:$PORT/api/follow")
+if [ "$csrf_code" = "200" ] && printf '%s' "$csrf_body" | grep -q '"status":403'; then
+  ok "CSRF guard (non-JSON write -> 403)"
+else
+  bad "CSRF guard (code=$csrf_code body=$csrf_body)"
+fi
 
 echo "-- payload shape --"
 assert_contains "overview has repo count" "/api/overview?owner=$OWNER" '"count"'
