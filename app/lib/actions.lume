@@ -3,12 +3,24 @@
 // account via the PAT.
 
 // ------------------------------------------------ /discovery
+// Boot-time capability catalog. The framework builtins discovery_endpoints /
+// skills / tools / mcps do NOT exist in the full build we run on — and Lume
+// has no way to test for an undefined variable (even `== undefined` aborts),
+// so *referencing* them here would turn this endpoint into a 500. This route
+// therefore serves the app's OWN registration summary, which is what
+// tooling/debugging actually needs; if a future build gains the agent-catalog
+// builtins, call them here (guarded) and merge the results into `out`.
 get "/discovery", (req) => {
   return {
-    endpoints: discovery_endpoints(),
-    skills: skills(),
-    tools: tools(),
-    mcps: mcps(),
+    app: {
+      routes: ["/api/owners", "/api/overview", "/api/repos", "/api/top", "/api/langs",
+               "/api/recency", "/api/year", "/api/people", "/api/search", "/api/radar",
+               "/api/people_diff", "/api/refresh", "/api/live/github", "/api/github_auth",
+               "/discovery", "/overview", "/repos", "/api"],
+      tools: ["repo_insights", "repo_search", "repo_language", "repo_recency", "repo_year",
+              "repo_stats", "github_story", "github_owners", "github_radar", "github_people"],
+      note: "framework agent-catalog builtins (discovery_endpoints/skills/tools/mcps) are absent from this build; app catalog attached instead",
+    },
   };
 };
 

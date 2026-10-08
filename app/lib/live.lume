@@ -92,6 +92,16 @@ func slim_body(p, body) {
   });
 }
 
+// TTL cache store for /api/live/github (see the handler below).
+let _live_cache = {};
+func live_cache_ttl() {
+  let v = env("LIVE_CACHE_TTL_SEC");
+  if (v == null) { return 300; }
+  let n = int(v, 300);
+  if (n < 0) { return 0; }
+  return n;
+}
+
 // auth probe for the frontend: whether GitHub calls are authenticated
 // (5000 req/h) or anonymous (~60 req/h). Never leaks the token itself — the
 // UI uses this to pick throttle params and copy only. GH_ANALYZER_PAT is the
@@ -108,6 +118,19 @@ get "/api/live/github", (req) => {
   if (not live_safe_path(p)) {
     return { ok: false, status: 400, data: "", err: "blocked GitHub path" };
   }
+  // TTL cache keyed by path: repeated views of the same profile (dashboard
+  // polling, agent calls) would otherwise burn the GitHub rate limit
+  // (60 req/h anonymous) and add ~1s latency per hit. Only successful
+  // responses are cached, so transient errors never get pinned. TTL is
+  // LIVE_CACHE_TTL_SEC (default 300s; 0 disables). GitHub profiles are
+  // public data, so a short-lived stale response is acceptable.
+  let ttl = live_cache_ttl();
+  if (ttl > 0) {
+    let hit = get(_live_cache, p, null);
+    if (hit != null and (int(now(), 0) - int(get(hit, "at", 0), 0)) < ttl) {
+      return { ok: true, status: int(get(hit, "status", 0), 0), data: str(get(hit, "body", "")), err: "", cached: true };
+    }
+  }
   let headers = { "Accept": "application/vnd.github+json", "User-Agent": "lume-talentlens" };
   // GH_ANALYZER_PAT is the Makefile alias of GH_TOKEN (env() masks names
   // containing TOKEN/API_KEY/SECRET/PASSWORD to keep untrusted scripts from
@@ -122,5 +145,8 @@ get "/api/live/github", (req) => {
   let ok = (up >= 200 and up < 300) and (herr == "");
   // project big payloads down before returning (see slim_body)
   if (ok and body != "") { body = slim_body(p, body); }
+  if (ok and ttl > 0) {
+    put(_live_cache, p, { at: int(now(), 0), status: up, body: body });
+  }
   return { ok: ok, status: up, data: body, err: herr };
 };

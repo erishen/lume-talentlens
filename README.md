@@ -100,6 +100,7 @@ cp .env.example .env   # then edit OWNER=your-github-login
 | `LLM_TIMEOUT` | Optional; seconds to wait on the upstream LLM stream (default 60). |
 | `LLM_SYSTEM_EXTRA` | Optional raw text **appended to the agent's system prompt** — scenario guidance the agent must always follow (which data to answer from, how to cite evidence, output language). Single line only (the `.env` loader reads line by line). |
 | `AGENTHTTPD_CSP_IMG_SRC` | Optional space-separated origins **appended to the server's `Content-Security-Policy` `img-src`** (default policy: `'self' data:`). Needed when the UI loads third-party images — this app uses it to allow GitHub avatar CDNs: `AGENTHTTPD_CSP_IMG_SRC=https://avatars.githubusercontent.com`. |
+| `LIVE_CACHE_TTL_SEC` | Optional TTL in seconds for the `/api/live/github` in-memory response cache (default 300; `0` disables). Repeated views of the same profile are served from the cache to save GitHub rate limit and latency. |
 
 Every key above is **exported to the app/server processes by the Makefile**
 (`export …` next to `-include .env`) at `make dev` startup — the server also

@@ -32,7 +32,15 @@ PORT    ?= 8091
 OWNER ?=
 PORT ?= 8091
 
-.PHONY: dev check fetch ui clean people-scan suspects unfollow score follow-worthy radar
+.PHONY: dev check fetch ui clean people-scan suspects unfollow score follow-worthy radar smoke
+
+# Boot the app on an isolated port and assert every public contract the
+# frontend/agent relies on (tears its own server down; never touches :8091).
+#   make smoke            # includes the real live GitHub call
+#   SKIP_LIVE=1 make smoke  # skip the network-dependent live check
+smoke:
+	@echo "== smoke: boot isolated server + assert contracts =="
+	bash scripts/smoke.sh
 
 dev:
 	@echo "== dev loop: kill :$(PORT) + rebuild + watch + run =="
