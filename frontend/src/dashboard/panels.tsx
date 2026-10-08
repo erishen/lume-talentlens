@@ -1,15 +1,17 @@
 import React from "react";
-import type { Overview, TalentSignals } from "../types";
+import type { Overview, TalentSignals, PersonView } from "../types";
 import { useLang, useT } from "../i18n";
 import {
   deriveTalent, cadence, pct, healthScore, toHrNote, downloadHrNote,
   DEFAULT_HEALTH_WEIGHTS, type HealthWeights,
 } from "../talent";
 import { SignalBar } from "./bars";
+import { RADAR_SCORE } from "./lists";
 
 // Recruiter-facing summary panels: the profile card ("who are they"), the
 // talent-signal panel with re-weightable health score, the side-by-side
-// comparison, and the last-12-months push trend.
+// comparison, the last-12-months push trend, plus the network-change diff
+// cells and mutual / worth-following relation panels.
 
 // GitHub homepage / profile card — everything the `/users/{login}` endpoint
 // exposes: avatar, name, bio, open-to-work, location/company, social links,
@@ -352,4 +354,63 @@ function PushTrend({ data }: { data: Record<string, number> }) {
   );
 }
 
-export { ProfileCard, TalentPanel, WeightTuner, ComparePanel, PushTrend };
+// one diff cell: "新关注我: @a, @b, @c +2 更多" (items are GitHub logins)
+function DiffLine({ label, items, t }: { label: string; items: string[]; t: (k: string, p?: Record<string, string | number>) => string }) {
+  if (!items || items.length === 0) {
+    return (
+      <div className="diff-cell">
+        <span className="diff-label">{label}</span>
+        <span className="muted">—</span>
+      </div>
+    );
+  }
+  const shown = items.slice(0, 5).map((s) => "@" + s).join("  ");
+  const more = items.length > 5 ? "  " + t("people.diff_more", { n: items.length - 5 }) : "";
+  return (
+    <div className="diff-cell">
+      <span className="diff-label">{label}</span>
+      <span className="diff-items">{shown}{more}</span>
+    </div>
+  );
+}
+
+// Mutual / worth-following — a chip list whose entries link OUT to the
+// GitHub profile (unlike PersonList, where clicking analyzes in-app).
+function RelationPanel({ title, people, emptyNote, t, action }: {
+  title: string; people: PersonView[]; emptyNote: string;
+  t: (k: string, p?: Record<string, string | number>) => string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="panel" style={{ gridColumn: "1 / -1" }}>
+      <h2>
+        {title} <span className="muted">{people.length}</span>
+        {action}
+      </h2>
+      {people.length === 0 ? (
+        <p className="muted">{emptyNote}</p>
+      ) : (
+        <div className="person-list">
+          {people.map((p, i) => (
+            <a
+              key={i}
+              className="person-chip person-link"
+              href={p.url}
+              target="_blank"
+              rel="noreferrer"
+              title={p.url}
+            >
+              {p.avatar ? (
+                <img className="person-avatar" src={p.avatar} alt="" referrerPolicy="no-referrer" />
+              ) : null}
+              <span className="person-login">@{p.login}</span>
+              {(p.score ?? 0) >= RADAR_SCORE ? <span className="chip radar">{t("people.radar")}</span> : null}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export { ProfileCard, TalentPanel, WeightTuner, ComparePanel, PushTrend, DiffLine, RelationPanel };
