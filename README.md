@@ -12,9 +12,9 @@ output cadence, focus, community — built on the
 
 ## Requirements
 
-- **A full Lume build** — the app defaults to `LUME ?= ../research/lume/bin/lume`
+- **A full Lume build** — the app defaults to `LUME ?= ../lume/lume/bin/lume`
   (the full build checked out beside this repo; build it with `make` in
-  `../research/lume`). Override with `LUME=/path/to/lume`. A *release* binary
+  `../lume/lume`). Override with `LUME=/path/to/lume`. A *release* binary
   will be rejected at startup with a clear message — see the outbound-HTTP
   note below.
 - **Node 18+ / pnpm** for the frontend (`(cd frontend && pnpm install)`).

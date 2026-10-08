@@ -55,7 +55,7 @@
 // Lume's outbound-HTTP builtins (http_get / http_put / http_delete). This app
 // is meant to run on a full Lume build; the public release binary (agent-httpd
 // 1.0) ships WITHOUT those builtins and will fail at runtime — run this app
-// with a full build (e.g. the one built in work/research/lume via `make`).
+// with a full build (e.g. the one built in work/lume/lume via `make`).
 // ============================================================================
 
 import "lib/shared.lume" as sh;
