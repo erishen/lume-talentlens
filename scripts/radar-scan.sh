@@ -122,7 +122,7 @@ try:
 except Exception:
     pass
 
-# --- monetization signals (TODO P0-1) -------------------------------
+# --- monetization signals (site / homepage / sponsorship) --------------
 # site: a real personal/project URL in the profile (blog field; empty when
 #       the user never set one)
 site = bool(blog)

@@ -115,7 +115,7 @@ export function renderMarkdown(src: string): { __html: string } {
 
     // fenced code block
     if (t.startsWith("```")) {
-      const lang = t.slice(3).trim();
+      const lang = esc(t.slice(3).trim()); // escape: it lands in a class attr
       const buf: string[] = [];
       i++;
       while (i < lines.length && !lines[i].trim().startsWith("```")) {
