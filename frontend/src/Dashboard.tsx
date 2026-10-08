@@ -626,29 +626,38 @@ export function Dashboard() {
                 )}
                 {peopleView === "insight" && (
                   <div className="people-grid">
-                    {radar ? (
-                      <RadarPanel radar={radar} t={t} onOpen={openOwner} />
+                    {owner === defaultOwner ? (
+                      <>
+                        {radar ? (
+                          <RadarPanel radar={radar} t={t} onOpen={openOwner} />
+                        ) : (
+                          <div className="panel">
+                            <h2>{t("people.radar_title")}</h2>
+                            <p className="muted">{t("people.radar_empty")}</p>
+                          </div>
+                        )}
+                        {stargazers ? (
+                          <StargazersPanel entries={Object.values(stargazers)} owner={owner} t={t} onOpen={openOwner} />
+                        ) : (
+                          <div className="panel">
+                            <h2>{t("people.sg_title")}</h2>
+                            <p className="muted">{t("people.sg_empty")}</p>
+                          </div>
+                        )}
+                      </>
                     ) : (
-                      <div className="panel">
-                        <h2>{t("people.radar_title")}</h2>
-                        <p className="muted">
-                          {owner === defaultOwner
-                            ? t("people.radar_empty")
-                            : t("people.radar_owner_only", { owner: defaultOwner || "OWNER" })}
-                        </p>
-                      </div>
-                    )}
-                    {stargazers ? (
-                      <StargazersPanel entries={Object.values(stargazers)} owner={owner} t={t} onOpen={openOwner} />
-                    ) : (
-                      <div className="panel">
-                        <h2>{t("people.sg_title")}</h2>
-                        <p className="muted">
-                          {owner === defaultOwner
-                            ? t("people.sg_empty")
-                            : t("people.radar_owner_only", { owner: defaultOwner || "OWNER" })}
-                        </p>
-                      </div>
+                      // radar + stargazer profiles are generated for the
+                      // default owner only — show the same hint for both.
+                      <>
+                        <div className="panel">
+                          <h2>{t("people.radar_title")}</h2>
+                          <p className="muted">{t("people.radar_owner_only", { owner: defaultOwner || "OWNER" })}</p>
+                        </div>
+                        <div className="panel">
+                          <h2>{t("people.sg_title")}</h2>
+                          <p className="muted">{t("people.sg_owner_only", { owner: defaultOwner || "OWNER" })}</p>
+                        </div>
+                      </>
                     )}
                   </div>
                 )}

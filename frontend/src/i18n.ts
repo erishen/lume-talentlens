@@ -176,6 +176,7 @@ const zh: Record<string, string> = {
   "people.sg_flag_expert": "高手",
   "people.sg_flag_water": "水号",
   "people.sg_empty": "无点赞者数据 · 运行 make stargazers 生成",
+  "people.sg_owner_only": "点赞者画像仅针对默认账号 {owner} 生成，切换到 {owner} 查看。",
   "people.radar_mode_hunting": "开放求职",
   "people.radar_mode_other": "其他",  // search
   "people.radar_sig_site": "站点",
@@ -418,6 +419,7 @@ const en: Record<string, string> = {
   "people.sg_flag_expert": "expert",
   "people.sg_flag_water": "water",
   "people.sg_empty": "No stargazer data · run make stargazers",
+  "people.sg_owner_only": "Stargazer profile is generated for the default owner {owner} only — switch to {owner} to view it.",
   "people.radar_sig_site": "site",
   "people.radar_sig_product": "product",
   "people.radar_sig_sponsor": "Sponsor",
