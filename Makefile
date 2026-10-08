@@ -1,7 +1,7 @@
 # lume-talentlens — Lume recruiting dashboard for GitHub footprints
 #
-# Defaults to the FULL Lume build checked out at ../research/lume/bin/lume
-# (built with `make` in work/research/lume). This app needs a full build: its
+# Defaults to the FULL Lume build checked out at ../lume/lume/bin/lume
+# (built with `make` in work/lume/lume). This app needs a full build: its
 # live fetch / people refresh / follow / unfollow endpoints use the
 # outbound-HTTP builtins http_get/http_put/http_delete, which the public
 # release binary (agent-httpd 1.0) ships WITHOUT. Override with
@@ -19,7 +19,7 @@
 # foreground (Ctrl-C stops server + watcher). `make dev` also kills whatever
 # already holds the port, so it is safe to re-run at any time.
 
-LUME    ?= ../research/lume/bin/lume
+LUME    ?= ../lume/lume/bin/lume
 APP     := app/github.lume
 PORT    ?= 8091
 

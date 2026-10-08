@@ -21,16 +21,16 @@ cd "$ROOT"
 . "$ROOT/scripts/env.sh"
 export GH_ANALYZER_PAT="${GH_ANALYZER_PAT:-${GH_TOKEN:-}}"
 
-# Default to the full Lume build checked out under work/research/lume (built
+# Default to the full Lume build checked out under work/lume/lume (built
 # via `make` there); the public release binary on PATH ships WITHOUT the
 # outbound-HTTP builtins (http_get/http_put/http_delete) that this app's
 # live / refresh / follow endpoints need, so a release binary is rejected by
 # the capability probe below. LUME=/path/to/lume overrides; a missing binary
 # or an incapable one fails fast with a clear message.
-DEFAULT_LUME="$(cd "$ROOT/.." && pwd)/research/lume/bin/lume"
+DEFAULT_LUME="$(cd "$ROOT/.." && pwd)/lume/lume/bin/lume"
 LUME="${LUME:-$DEFAULT_LUME}"
 if [ -z "$LUME" ] || [ ! -x "$LUME" ]; then
-  echo "dev: no Lume binary found at $LUME — build it (make in work/research/lume) or set LUME=/path/to/lume" >&2
+  echo "dev: no Lume binary found at $LUME — build it (make in work/lume/lume) or set LUME=/path/to/lume" >&2
   exit 1
 fi
 
