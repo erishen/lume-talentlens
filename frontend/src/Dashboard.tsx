@@ -1,11 +1,11 @@
 import React from "react";
 import { useDashboardData } from "./dashboard/useDashboard";
 import { OwnerPicker } from "./dashboard/pickers";
-import { ProfileCard, TalentPanel, ComparePanel, PushTrend, DiffLine, RelationPanel } from "./dashboard/panels";
+import { ProfileCard, TalentPanel, ComparePanel, PushTrend } from "./dashboard/panels";
 import { Bars, Kpi } from "./dashboard/bars";
-import { PersonList, RepoRow, BrowsePage, RadarPanel, StargazersPanel, RADAR_SCORE } from "./dashboard/lists";
-import { exportPeopleCsv } from "./exportCsv";
-import type { PersonView, Radar } from "./types";
+import { RepoRow, BrowsePage } from "./dashboard/lists";
+import { PeopleSection } from "./dashboard/people-section";
+import { useFollowActions } from "./dashboard/useFollowActions";
 import { deriveTalent } from "./talent";
 import { useLang, useT } from "./i18n";
 import { detectGhAuth } from "./live";
@@ -43,8 +43,6 @@ export function Dashboard() {
     openOwner, onOwnerPick, onSearch, defaultOwner,
   } = d;
 
-  // Follow-all for the "worth following" panel — one PUT per login via the
-  // server's /api/follow proxy (needs GH_TOKEN with user:follow scope).
   // Last live-fetch provenance, shown next to the fetch buttons: cache hits
   // are instant, fresh pulls carry wall-clock time.
   const liveNote = liveInfo ? (
@@ -52,138 +50,12 @@ export function Dashboard() {
       ? <span className="chip live-info">{t("live.last_cached")}</span>
       : <span className="chip live-info">{t("live.last_fresh", { ms: liveInfo.ms })}</span>
   ) : null;
-  const [followState, setFollowState] = React.useState<{
-    busy: boolean; done: number; failed: number; err: string;
-  }>({ busy: false, done: 0, failed: 0, err: "" });
-  // GitHub's API endpoint is flaky on this network (the first handshake often
-  // times out and a retry succeeds immediately) — retry once per action so a
-  // one-click follow/unfollow doesn't surface a misleading "network error".
-  const netErr = t("people.network_err");
-  async function postAction(url: string, login: string, onRetry?: () => void): Promise<{ ok: boolean; err: string }> {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const r = await fetch(url, {
-          method: url.endsWith("/follow") ? "POST" : "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ login }),
-        });
-        const j = await r.json().catch(() => null);
-        if (j && j.ok) return { ok: true, err: "" };
-        return { ok: false, err: (j && j.err) || `HTTP ${r.status}` };
-      } catch {
-        // first failure is usually a flaky handshake — show "retrying" so the
-        // user isn't staring at a silent spinner, then try once more
-        if (attempt === 0 && onRetry) onRetry();
-        if (attempt === 1) return { ok: false, err: netErr };
-      }
-    }
-    return { ok: false, err: netErr };
-  }
-  async function followAll(targets: PersonView[]) {
-    if (followState.busy || targets.length === 0) return;
-    setFollowState({ busy: true, done: 0, failed: 0, err: "" });
-    let done = 0;
-    let failed = 0;
-    let firstErr = "";
-    const doneLogins: string[] = [];
-    for (const p of targets) {
-      const r = await postAction("/api/follow", p.login,
-        () => setFollowState((s) => ({ ...s, err: t("people.retrying") })));
-      if (r.ok) {
-        done = done + 1;
-        doneLogins.push(p.login);
-      }
-      else {
-        failed = failed + 1;
-        if (firstErr === "") firstErr = r.err;
-      }
-      setFollowState({ busy: true, done: done, failed: failed, err: firstErr });
-    }
-    setFollowState({ busy: false, done: done, failed: failed, err: firstErr });
-    // Optimistic: append the successfully-followed logins to the local
-    // following set so the worth list updates instantly — the server snapshot
-    // is stale until a refresh actually re-fetches GitHub.
-    if (doneLogins.length > 0) {
-      setPeople((prev) => {
-        if (!prev) return prev;
-        const have = new Set(prev.following.map((g) => g.login));
-        return {
-          ...prev,
-          following: [
-            ...prev.following,
-            ...targets.filter((p) => doneLogins.includes(p.login) && !have.has(p.login)),
-          ],
-        };
-      });
-    }
-    // Best-effort server refresh so the snapshot catches up (rate-limited to
-    // one run per owner per 60s — on 429 we keep the optimistic state and the
-    // next manual refresh finishes the job).
-    try {
-      const res = await fetch("/api/refresh?owner=" + encodeURIComponent(owner));
-      const j = await res.json().catch(() => null);
-      if (j && j.ok) loadPeople(owner, !!live);
-    } catch { /* keep optimistic */ }
-  }
 
-  // Unfollow-all for high-confidence water accounts in the following list —
-  // one DELETE per login via /api/unfollow. Confirm first: unfollowing is
-  // hard to reverse by hand at scale.
-  const [unfollowState, setUnfollowState] = React.useState<{
-    busy: boolean; done: number; failed: number; err: string;
-  }>({ busy: false, done: 0, failed: 0, err: "" });
-  const waterFollowing = people && people.following
-    ? people.following.filter((p) => p.suspect === "high")
-    : [];
-  async function unfollowWater() {
-    if (unfollowState.busy || waterFollowing.length === 0) return;
-    if (!window.confirm(t("people.unfollow_confirm", { n: waterFollowing.length }))) return;
-    setUnfollowState({ busy: true, done: 0, failed: 0, err: "" });
-    let done = 0;
-    let failed = 0;
-    let firstErr = "";
-    const doneLogins: string[] = [];
-    for (const p of waterFollowing) {
-      const r = await postAction("/api/unfollow", p.login,
-        () => setUnfollowState((s) => ({ ...s, err: t("people.retrying") })));
-      if (r.ok) {
-        done = done + 1;
-        doneLogins.push(p.login);
-      }
-      else {
-        failed = failed + 1;
-        if (firstErr === "") firstErr = r.err;
-      }
-      setUnfollowState({ busy: true, done: done, failed: failed, err: firstErr });
-    }
-    setUnfollowState({ busy: false, done: done, failed: failed, err: firstErr });
-    // Optimistic: drop the unfollowed logins from the local following set so
-    // the list updates instantly (server snapshot is stale until refreshed).
-    if (doneLogins.length > 0) {
-      setPeople((prev) => {
-        if (!prev) return prev;
-        return { ...prev, following: prev.following.filter((g) => !doneLogins.includes(g.login)) };
-      });
-    }
-    // Best-effort server refresh; on 429 the optimistic state stands.
-    try {
-      const res = await fetch("/api/refresh?owner=" + encodeURIComponent(owner));
-      const j = await res.json().catch(() => null);
-      if (j && j.ok) loadPeople(owner, !!live);
-    } catch { /* keep optimistic */ }
-  }
-
-  // relation insights over the people snapshot:
-  // - mutual = followers who are also followed back (双向关注)
-  // - worth = high-influence followers not yet followed back (值得关注)
-  const mutualPeople = people
-    ? people.followers.filter((f) => people.following.some((g) => g.login === f.login))
-    : [];
-  const worthPeople = people
-    ? people.followers.filter(
-        (f) => (f.score ?? 0) >= RADAR_SCORE && !people.following.some((g) => g.login === f.login)
-      )
-    : [];
+  // Follow/unfollow actions — progress state, one-retry-per-action network
+  // policy and optimistic following-set updates live in useFollowActions.ts.
+  const {
+    followState, unfollowState, waterFollowing, followAll, unfollowWater,
+  } = useFollowActions({ people, setPeople, owner, viaLive: !!live, loadPeople, t });
 
   // One screen at a time — the dashboard used to stack the account analysis,
   // the full repo browser and the whole people/radar area on one long page.
@@ -529,168 +401,33 @@ export function Dashboard() {
           )}
 
           {tab === "people" && (
-          <div className="grid two">
-            {peopleLoading && (
-              <div className="panel">
-                <h2>{t("people.title")}</h2>
-                <p className="muted">{t("people.loading")}</p>
-              </div>
-            )}
-            {!peopleLoading && peopleError && (
-              <div className="panel error" style={{ gridColumn: "1 / -1" }}>
-                <h2>{t("people.error_title")}</h2>
-                <p>{peopleError}</p>
-                <button className="btn" onClick={() => loadPeople(owner, !!live)}>{t("people.retry")}</button>
-              </div>
-            )}
-            {!peopleLoading && !peopleError && people && (
-              <>
-                {/* tools bar — always visible across the people sub-views */}
-                <div className="panel tools" style={{ gridColumn: "1 / -1" }}>
-                  <span className="muted">{t("people.snapshot_note")}</span>
-                  <span className="muted">{refreshMsg}</span>
-                  <button className="btn" onClick={onRefresh} disabled={refreshing}>
-                    {refreshing ? t("people.refreshing") : t("people.refresh")}
-                  </button>
-                  <button className="btn" onClick={() => exportPeopleCsv(people, mutualPeople, worthPeople, radar)}>
-                    {t("people.export_csv")}
-                  </button>
-                  {waterFollowing.length > 0 && (
-                    <button
-                      className="btn danger"
-                      onClick={unfollowWater}
-                      disabled={unfollowState.busy}
-                    >
-                      {unfollowState.busy
-                        ? t("people.unfollowing", { done: unfollowState.done, total: waterFollowing.length })
-                        : t("people.unfollow_water", { n: waterFollowing.length })}
-                    </button>
-                  )}
-                </div>
-                {unfollowState.err && (
-                  <p className="muted" style={{ gridColumn: "1 / -1" }}>
-                    {t("people.follow_err")}: {unfollowState.err}
-                  </p>
-                )}
-                {/* sub-views: relations (mutual + worth), insights (radar +
-                    stargazers), lists (diff + followers + following) */}
-                <div className="people-subtabs" style={{ gridColumn: "1 / -1" }}>
-                  <button
-                    className={effectiveView === "relation" ? "chip subtab active" : "chip subtab"}
-                    onClick={() => setPeopleView("relation")}
-                  >
-                    {t("people.view_relation")}
-                  </button>
-                  {owner === defaultOwner && (
-                    <button
-                      className={effectiveView === "insight" ? "chip subtab active" : "chip subtab"}
-                      onClick={() => setPeopleView("insight")}
-                    >
-                      {t("people.view_insight")}
-                    </button>
-                  )}
-                  <button
-                    className={effectiveView === "list" ? "chip subtab active" : "chip subtab"}
-                    onClick={() => setPeopleView("list")}
-                  >
-                    {t("people.view_list")}
-                  </button>
-                </div>
-                {followState.err && (
-                  <p className="muted" style={{ gridColumn: "1 / -1" }}>
-                    {t("people.follow_err")}: {followState.err}
-                  </p>
-                )}
-                {effectiveView === "relation" && (
-                  <div className="people-grid">
-                    <RelationPanel
-                      title={t("people.mutual")}
-                      people={mutualPeople}
-                      emptyNote={t("people.mutual_none")}
-                      t={t}
-                      onOpen={openOwner}
-                    />
-                    <RelationPanel
-                      title={t("people.worth")}
-                      people={worthPeople}
-                      emptyNote={t("people.worth_none")}
-                      t={t}
-                      onOpen={openOwner}
-                      action={
-                        worthPeople.length > 0 && (
-                          <button
-                            className="btn chip"
-                            style={{ marginLeft: 8 }}
-                            onClick={() => followAll(worthPeople)}
-                            disabled={followState.busy}
-                          >
-                            {followState.busy
-                              ? t("people.follow_all_busy", { done: followState.done, total: worthPeople.length })
-                              : t("people.follow_all")}
-                          </button>
-                        )
-                      }
-                    />
-                  </div>
-                )}
-                {effectiveView === "insight" && owner === defaultOwner && (
-                  <div className="people-grid">
-                    {radar ? (
-                      <RadarPanel radar={radar} t={t} onOpen={openOwner} />
-                    ) : (
-                      <div className="panel">
-                        <h2>{t("people.radar_title")}</h2>
-                        <p className="muted">{t("people.radar_empty")}</p>
-                      </div>
-                    )}
-                    {stargazers ? (
-                      <StargazersPanel entries={Object.values(stargazers)} owner={owner} t={t} onOpen={openOwner} />
-                    ) : (
-                      <div className="panel">
-                        <h2>{t("people.sg_title")}</h2>
-                        <p className="muted">{t("people.sg_empty")}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {effectiveView === "list" && (
-                  <>
-                    {peopleDiff && peopleDiff.has_history && (
-                      <div className="panel people-diff" style={{ gridColumn: "1 / -1" }}>
-                        <h2>{t("people.diff_title")}</h2>
-                        <div className="diff-grid">
-                          <DiffLine label={t("people.diff_new_followers")} items={peopleDiff.added.followers} t={t} />
-                          <DiffLine label={t("people.diff_gone_followers")} items={peopleDiff.gone.followers} t={t} />
-                          <DiffLine label={t("people.diff_new_following")} items={peopleDiff.added.following} t={t} />
-                          <DiffLine label={t("people.diff_gone_following")} items={peopleDiff.gone.following} t={t} />
-                        </div>
-                      </div>
-                    )}
-                    <PersonList
-                      title={t("people.followers")}
-                      people={people.followers}
-                      totals={people.totals.followers}
-                      note={people.note}
-                      onOpen={openOwner}
-                    />
-                    <PersonList
-                      title={t("people.following")}
-                      people={people.following}
-                      totals={people.totals.following}
-                      note={people.note}
-                      onOpen={openOwner}
-                    />
-                  </>
-                )}
-              </>
-            )}
-          </div>
+          <PeopleSection
+            people={people}
+            peopleLoading={peopleLoading}
+            peopleError={peopleError}
+            peopleView={peopleView}
+            setPeopleView={setPeopleView}
+            owner={owner}
+            defaultOwner={defaultOwner}
+            peopleDiff={peopleDiff}
+            radar={radar}
+            stargazers={stargazers}
+            refreshMsg={refreshMsg}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            loadPeople={loadPeople}
+            viaLive={!!live}
+            openOwner={openOwner}
+            followState={followState}
+            unfollowState={unfollowState}
+            waterFollowing={waterFollowing}
+            followAll={followAll}
+            unfollowWater={unfollowWater}
+            t={t}
+          />
           )}
         </>
       )}
     </div>
   );
 }
-
-// (RadarPanel moved to dashboard/lists.tsx — see RadarPanel there.)
-// (DiffLine + RelationPanel moved to dashboard/panels.tsx)
