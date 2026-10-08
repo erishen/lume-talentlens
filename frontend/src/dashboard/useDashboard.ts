@@ -440,7 +440,7 @@ export function useDashboardData(t: T, lang: Lang) {
     weights, setWeights,
     ov, live, liveInfo, noSnap, loading, liveLoading, liveErr, liveProgress, repoErr,
     err, q, setQ, hits, hitsTotal, searched, searching, limit, setLimit,
-    people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, radar, stargazers,
+    people, setPeople, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, radar, stargazers,
     cmp, setCmp,
     poolInput, setPoolInput, poolLoading, poolProgress, pool, setPool,
     rankedPool, poolFrac,
