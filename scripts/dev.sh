@@ -21,27 +21,29 @@ cd "$ROOT"
 . "$ROOT/scripts/env.sh"
 export GH_ANALYZER_PAT="${GH_ANALYZER_PAT:-${GH_TOKEN:-}}"
 
-# Default to the full Lume build checked out under work/lume/lume (built
-# via `make` there); the public release binary on PATH ships WITHOUT the
-# outbound-HTTP builtins (http_get/http_put/http_delete) that this app's
-# live / refresh / follow endpoints need, so a release binary is rejected by
-# the capability probe below. LUME=/path/to/lume overrides; a missing binary
-# or an incapable one fails fast with a clear message.
-DEFAULT_LUME="$(cd "$ROOT/.." && pwd)/lume/bin/lume"
+# Default to the RELEASE Lume binary installed at ~/.local/bin/lume (the
+# build this app ships with). The release build includes the outbound-HTTP
+# builtins (http_get/http_put/http_delete) that live / refresh / follow
+# endpoints need; a binary WITHOUT them is rejected by the capability probe
+# below. LUME=/path/to/lume overrides; a missing binary or an incapable one
+# fails fast with a clear message. NOTE: the proxy-fallback tweak (retry
+# direct after a dead proxy) currently lives in the fork's full build — the
+# stock release binary retries via the proxy only.
+DEFAULT_LUME="$HOME/.local/bin/lume"
 LUME="${LUME:-$DEFAULT_LUME}"
 if [ -z "$LUME" ] || [ ! -x "$LUME" ]; then
-  echo "dev: no Lume binary found at $LUME — build it (make in work/lume/lume) or set LUME=/path/to/lume" >&2
+  echo "dev: no Lume binary found at $LUME — install the release build or set LUME=/path/to/lume" >&2
   exit 1
 fi
 
-# capability probe: a release build (agent-httpd 1.0) has no http_get and the
-# app would crash at server boot with "undefined variable 'http_get'". Detect
-# it up front so make dev fails with a usable message instead.
+# capability probe: a Lume build without the HTTP builtins crashes at server
+# boot with "undefined variable 'http_get'". Detect it up front so make dev
+# fails with a usable message instead.
 PROBE="$(mktemp -t lume-probe.XXXXXX.lume)"
 printf 'print(http_get);\n' > "$PROBE"
 if ! "$LUME" "$PROBE" >/dev/null 2>&1; then
   rm -f "$PROBE"
-  echo "dev: $LUME lacks the outbound-HTTP builtins — this app needs a FULL lume build (release builds ship without http_get/http_put/http_delete). Default full build: $DEFAULT_LUME; override with LUME=/path/to/lume" >&2
+  echo "dev: $LUME lacks the outbound-HTTP builtins — this app needs a Lume build with http_get/http_put/http_delete. Default: $DEFAULT_LUME; override with LUME=/path/to/lume" >&2
   exit 1
 fi
 rm -f "$PROBE"

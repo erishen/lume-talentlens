@@ -1,11 +1,11 @@
 # lume-talentlens — Lume recruiting dashboard for GitHub footprints
 #
-# Defaults to the FULL Lume build checked out at ../lume/bin/lume
-# (built with `make` in work/lume/lume). This app needs a full build: its
-# live fetch / people refresh / follow / unfollow endpoints use the
-# outbound-HTTP builtins http_get/http_put/http_delete, which the public
-# release binary (agent-httpd 1.0) ships WITHOUT. Override with
-# LUME=/path/to/lume make dev for a different full build.
+# Defaults to the RELEASE Lume binary at ~/.local/bin/lume (absolute path,
+# no repo-relative lookup). This app needs a build that ships the
+# outbound-HTTP builtins http_get/http_put/http_delete for its live fetch /
+# people refresh / follow / unfollow endpoints; a binary without them fails
+# fast at `make dev` (capability probe). Override with
+# LUME=/path/to/lume make dev for a different build.
 #
 # Common targets:
 #   make dev      THE dev loop: kill any server on the port, rebuild UI,
@@ -19,7 +19,7 @@
 # foreground (Ctrl-C stops server + watcher). `make dev` also kills whatever
 # already holds the port, so it is safe to re-run at any time.
 
-LUME    ?= ../lume/bin/lume
+LUME    ?= $(HOME)/.local/bin/lume
 APP     := app/github.lume
 PORT    ?= 8091
 

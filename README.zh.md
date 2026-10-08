@@ -1,16 +1,16 @@
 # lume-talentlens
 
-一个招聘视角的 GitHub 人才信号仪表盘：读取一个人的 GitHub 足迹，呈现**人才信号** —— 档案（求职中、社交链接）、工程严谨度、产出节奏、技术焦点、社区参与。基于 **Lume** 单二进制 C 框架（必须是 **full build**，见[环境要求](#环境要求)）与 **React + TypeScript** 前端。
+一个招聘视角的 GitHub 人才信号仪表盘：读取一个人的 GitHub 足迹，呈现**人才信号** —— 档案（求职中、社交链接）、工程严谨度、产出节奏、技术焦点、社区参与。基于 **Lume** 单二进制 C 框架（需带出站 HTTP 内建的构建，见[环境要求](#环境要求)）与 **React + TypeScript** 前端。
 
 > Lume 提供 `.lume` DSL 来写路由 / SSR / 智能体工具，外加一个原生 HTTP 服务器（仅回环地址）与内置 LLM 聊天智能体。本项目把它接到 `github.com` 仓库的本地快照上，因此整个系统可以离线运行。
 
 ## 环境要求
 
-- **完整版 Lume build** —— 应用默认使用 `LUME ?= ../lume/bin/lume`（与本仓库平级的完整构建；在 `../lume/lume` 里 `make` 即可）。可用 `LUME=/path/to/lume` 覆盖。**release 版二进制会在启动时被拒并给出明确提示** —— 见下面的出站 HTTP 说明。
+- **带出站 HTTP 内建的 Lume build** —— 应用默认使用 release 二进制 `~/.local/bin/lume`（绝对路径；可用 `LUME=/path/to/lume` 覆盖）。它需要 `http_get` / `http_put` / `http_delete` 内建函数来支撑实时拉取代理（`/api/live/github`）、人脉刷新（`/api/refresh`）与关注/取关接口 —— `make dev` 会探测二进制能力，能力不足时拒绝启动。见下面的 **Lume 版本** 说明。
 - **Node 18+ / pnpm** 用于前端（`(cd frontend && pnpm install)`）。
 - 可选：`.env` 中的 `OWNER` / `GH_TOKEN` / `LLM_*`（见[配置（.env）](#配置env)）。
 
-> **出站 HTTP 说明：** Lume 的 *release* 二进制（agent-httpd 1.0）**不带** `http_get` / `http_put` / `http_delete` 内建函数，因此实时拉取代理（`/api/live/github`）、人脉刷新（`/api/refresh`）与关注/取关接口都无法在它上面工作。本项目因此**必须使用完整 build**；`make dev` 会探测二进制能力，能力不足时拒绝启动。
+> **Lume 版本获取：** Lume 没有 `--version` 参数。release 二进制是对 `../lume`（与本仓库平级的 Lume fork）某次构建的产物。要确认当前版本：列出 fork 的 git tag（`git -C ../lume tag`，如 `v0.6.1`），或解析其当前 HEAD（`git -C ../lume describe --tags --always`）。升级 Lume 后重新跑 `make check` + `make dev` —— 能力探测会校验二进制仍带 HTTP 内建。
 
 ## 项目结构
 

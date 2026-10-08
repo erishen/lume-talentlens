@@ -3,8 +3,9 @@
 A recruiting dashboard that reads a person's GitHub footprint and surfaces
 **talent signals** — profile (open-to-work, socials), engineering rigor,
 output cadence, focus, community — built on the
-**Lume** single-binary C framework (a **full build**; see
-[Requirements](#requirements)) with a **React + TypeScript** client.
+**Lume** single-binary C framework (a build with the outbound-HTTP
+builtins; see [Requirements](#requirements)) with a **React + TypeScript**
+client.
 
 > Lume gives you a `.lume` DSL for routes/SSR/agent-tools plus a native HTTP
 > server (loopback-only) and a built-in LLM chat agent. This project wires it
@@ -12,21 +13,24 @@ output cadence, focus, community — built on the
 
 ## Requirements
 
-- **A full Lume build** — the app defaults to `LUME ?= ../lume/bin/lume`
-  (the full build checked out beside this repo; build it with `make` in
-  `../lume/lume`). Override with `LUME=/path/to/lume`. A *release* binary
-  will be rejected at startup with a clear message — see the outbound-HTTP
-  note below.
+- **A Lume build with the outbound-HTTP builtins** — the app defaults to the
+  release binary at `~/.local/bin/lume` (absolute path; override with
+  `LUME=/path/to/lume`). It needs `http_get` / `http_put` / `http_delete`
+  for the live-fetch proxy (`/api/live/github`), the people refresh
+  (`/api/refresh`) and the follow/unfollow endpoints — `make dev` probes the
+  binary and refuses to start with an incapable one. See the
+  [Lume version](#lume-version) note below.
 - **Node 18+ / pnpm** for the frontend (`(cd frontend && pnpm install)`).
 - Optional: `.env` with `OWNER` / `GH_TOKEN` / `LLM_*` (see
   [Configuration](#configuration-env)).
 
-> **Outbound HTTP note:** the Lume *release* binary (agent-httpd 1.0) ships
-> without the `http_get` / `http_put` / `http_delete` builtins, so the
-> live-fetch proxy (`/api/live/github`), the people refresh (`/api/refresh`)
-> and the follow/unfollow endpoints cannot work on it. This app therefore
-> requires a **full build**; `make dev` probes the binary and refuses to start
-> with an incapable one.
+> **Lume version:** there is no `lume --version`. The release binary is a
+> build of the Lume fork checked out at `../lume` (sibling of this repo). To
+> see which version it corresponds to, list the fork's tags
+> (`git -C ../lume tag`, e.g. `v0.6.1`) or resolve its current HEAD
+> (`git -C ../lume describe --tags --always`). After upgrading Lume, re-run
+> `make check` and `make dev` — the capability probe validates that the
+> binary still ships the HTTP builtins.
 
 ## Layout
 

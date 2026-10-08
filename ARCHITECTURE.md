@@ -38,7 +38,7 @@ data/github/<owner>/   api.github.com      OpenAI 兼容端点
 
 | 层 | 选型 | 说明 |
 |---|---|---|
-| 服务端 | **Lume**（C 单二进制） | `.lume` DSL 提供路由/SSR/智能体工具 + 原生 HTTP 服务器 + LLM 聊天桥。**必须 full build**（release 版无出站 HTTP 内建，启动探针会拒绝） |
+| 服务端 | **Lume**（C 单二进制） | `.lume` DSL 提供路由/SSR/智能体工具 + 原生 HTTP 服务器 + LLM 聊天桥。默认用 **release 二进制**（`~/.local/bin/lume`，绝对路径，可 `LUME=` 覆盖）；启动探针校验出站 HTTP 内建（`http_get/put/delete`），缺失即拒绝 |
 | 前端 | **React 18 + TypeScript** | esbuild 打包（无 webpack/vite），pnpm 管理依赖 |
 | 打包 | esbuild（`scripts/build-ui.sh`） | `frontend/src/main.tsx → www/github/app.js` |
 | 数据管道 | **bash + Python3 + curl** | 无第三方 Python 依赖 |
@@ -199,7 +199,7 @@ GET /api/overview?owner=x
 
 ### 7.3 响应体上限的三道应对
 
-Lume 框架对单响应体有硬上限（release 版实测 64KB 塌陷；full build 高得多但仍有上限）。全项目统一三种策略：
+Lume 框架对单响应体有硬上限（历史：release 版实测 64KB 塌陷；框架已随版本提升到 1MB，但对大响应仍有上限）。全项目统一三种策略：
 
 1. **聚合**：`/api/overview` 只返回统计值，不返回仓库列表；
 2. **分页**：`/api/repos?offset=&limit=`，单页上限 50（50/页 ≈ 30KB，留足余量）；
@@ -264,11 +264,11 @@ make dev（唯一开发循环，前台）
   ├─ scripts/cleanup.sh   杀占用 :8091 的旧服务 + esbuild watch
   ├─ scripts/build-ui.sh  pnpm 装依赖（如缺）→ esbuild 打包前端
   ├─ scripts/dev.sh       启动能力探针：printf 'print(http_get);' | $LUME -
-  │                       （release 版报 undefined → 拒绝启动，提示需 full build）
+  │                       （无出站 HTTP 内建的构建报 undefined → 拒绝启动）
   └─ $LUME app/github.lume  前台运行（Ctrl-C 停服务+watcher）
 ```
 
-- `LUME ?= ../lume/bin/lume`（Makefile 与 dev.sh 同默认），可用 `LUME=` 覆盖、`PORT=9000`/`LUME_GITHUB_PORT` 改端口；
+- `LUME ?= $(HOME)/.local/bin/lume`（release 二进制绝对路径；dev.sh 同默认），可用 `LUME=` 覆盖、`PORT=9000`/`LUME_GITHUB_PORT` 改端口；
 - server 配置：`workers=4`（prefork）、`bind=127.0.0.1`、`docroot=./www`、`views=github`。
 
 ---
@@ -291,7 +291,7 @@ make dev（唯一开发循环，前台）
 
 ## 11. 演进方向与已知限制
 
-- **`/discovery` 500**：`discovery_endpoints/skills/tools/mcps` 内建在当前 full build 未定义（框架能力差异，非应用回归）；前端未引用。若要启用需确认这些内建在哪种构建配置下存在。
+- **`/discovery` 500**：`discovery_endpoints/skills/tools/mcps` 内建在当前使用的构建中未定义（框架能力差异，非应用回归）；前端未引用。若要启用需确认这些内建在哪种构建配置下存在。
 - **refresh 限流**：`/api/refresh` 每 owner 60 秒一次（防匿名配额耗尽）；匿名 live 全局限 ~60 req/h，配置 GH_TOKEN 后 5000 req/h。
 - **people 仅首页**：`people.json` 只存粉丝/关注首页（各 ≤100）；全量列表由 `make fetch`/`people-scan.sh` 离线补齐。
 - **LLM 可替换**：`LLM_API_URL` 指向任意 OpenAI 兼容端点即可换模型；未配置时离线兜底。
