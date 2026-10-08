@@ -30,6 +30,9 @@ output cadence, focus, community — built on the
 
 ## Layout
 
+See [ARCHITECTURE.md](ARCHITECTURE.md) (Chinese) for a deep dive on layers,
+data model, data flows and key mechanisms.
+
 ```
 app/
   github.lume        # entry: imports the lib modules, server{}, run()

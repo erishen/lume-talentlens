@@ -14,6 +14,8 @@
 
 ## 项目结构
 
+深入的分层、数据模型、数据流与关键机制见 [ARCHITECTURE.md](ARCHITECTURE.md)（中文架构文档）。
+
 ```
 app/
   github.lume        # 入口：import 各 lib 模块、server{}、run()
