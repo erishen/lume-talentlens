@@ -12,7 +12,7 @@
 set -u
 cd "$(dirname "$0")/.."
 
-LUME_BIN="${LUME:-../research/lume/bin/lume}"
+LUME_BIN="${LUME:-../lume/lume/bin/lume}"
 PORT="${SMOKE_PORT:-8092}"
 LOG="/tmp/lume-smoke-$$.log"
 OWNER="${OWNER:-$(cat data/github/last_owner 2>/dev/null | tr -d '[:space:]')}"
