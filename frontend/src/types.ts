@@ -179,6 +179,14 @@ export interface RadarPerson {
   blog?: string;
   company?: string;
   top_repos?: { name: string; stars: number; desc: string }[];
+  /** monetization signals: "site" (real profile URL), "product" (a repo
+   *  with a homepage — SaaS/paid-product tell), "sponsor" (GitHub Sponsors
+   *  listing via GraphQL). Absent/empty = no public signal detected. */
+  signals?: string[];
+  site?: boolean;
+  product?: boolean;
+  /** null = probe failed / no token (unknown, not "no") */
+  sponsor?: boolean | null;
 }
 export interface Radar {
   owner: string;

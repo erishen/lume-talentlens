@@ -270,9 +270,15 @@ make follow-worthy                  # follow them
 `scripts/radar-scan.sh` (make radar) scans your **mutual high scorers**
 (score ≥ 120) and classifies each by money pattern — startup / crypto /
 company / content / tools / hunting / other — from live profile + top repos
-(2 API calls per person) into `data/github/<owner>/radar.json`. The
-dashboard's **高手洞察 · 盈利模式** panel groups them, and each person chip
-analyzes in-app on click:
+into `data/github/<owner>/radar.json`. The dashboard's **高手洞察 · 盈利模式**
+panel groups them, and each person chip analyzes in-app on click.
+
+Each person also carries **monetization-signal badges**:
+`site` (a real profile/product URL in the bio blog field), `product` (a top
+repo with a homepage — the classic SaaS/paid-product tell), and `sponsor`
+(GitHub Sponsors listing, probed via GraphQL when a token is set; a failed
+probe is `null`/"unknown", never a false negative). People with no public
+signal show a quiet "no public monetization signal" note.
 
 ```bash
 make radar                 # re-scan (fresh profiles)

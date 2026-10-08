@@ -169,7 +169,9 @@ DRY_RUN=1 make follow-worthy        # 只列清单
 make follow-worthy                  # 执行关注
 ```
 
-`scripts/radar-scan.sh`（make radar）扫描你的**互相关注高分者**（评分 ≥ 120），从实时档案 + Top 仓库（每人 2 次 API 调用）把每个人按盈利模式分类 —— startup / crypto / company / content / tools / hunting / other，写入 `data/github/<owner>/radar.json`。仪表盘的**高手洞察 · 盈利模式**面板按模式分组展示，点击任意人像卡片可在应用内分析：
+`scripts/radar-scan.sh`（make radar）扫描你的**互相关注高分者**（评分 ≥ 120），从实时档案 + Top 仓库把每个人按盈利模式分类 —— startup / crypto / company / content / tools / hunting / other，写入 `data/github/<owner>/radar.json`。仪表盘的**高手洞察 · 盈利模式**面板按模式分组展示，点击任意人像卡片可在应用内分析：
+
+每个人还带**变现信号徽标**：`site`（档案 blog 字段是真实个人/产品站点）、`product`（Top 仓库带落地页 —— 典型的 SaaS/付费产品特征）、`sponsor`（GitHub Sponsors 列表，配置 token 时经 GraphQL 探测；探测失败记为 null/"unknown"，绝不误报为否）。无公开信号的人显示"无公开变现信号"小字。
 
 ```bash
 make radar                 # 重新扫描（拉最新档案）

@@ -4,6 +4,16 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { PersonList, RADAR_SCORE } from "../dashboard/lists";
 import { LangContext } from "../i18n";
 import type { PersonView } from "../types";
+import { dicts } from "../i18n";
+
+
+// minimal zh translator backed by the real dictionary (assertions rely on
+// the actual zh strings)
+const zhT = (k: string, p?: Record<string, string | number>) => {
+  let s = dicts.zh[k] ?? k;
+  if (p) for (const [kk, vv] of Object.entries(p)) s = s.replace("{" + kk + "}", String(vv));
+  return s;
+};
 
 const wrap = (ui: React.ReactElement) => (
   <LangContext.Provider value={{ lang: "zh", setLang: vi.fn() }}>{ui}</LangContext.Provider>
@@ -80,5 +90,53 @@ describe("PersonList", () => {
 describe("RADAR_SCORE", () => {
   it("is the documented influence threshold (120)", () => {
     expect(RADAR_SCORE).toBe(120);
+  });
+});
+
+// ------------------------------------------------ RadarPanel
+import { RadarPanel, RADAR_MODES } from "../dashboard/lists";
+import type { Radar } from "../types";
+
+const RADAR = (people: Radar["people"]): Radar => ({
+  owner: "erishen",
+  scanned_at: "2026-10-08T00:00:00",
+  min_score: 120,
+  people,
+});
+
+describe("RadarPanel", () => {
+  it("renders nothing when there are no people", () => {
+    const { container } = render(wrap(<RadarPanel radar={RADAR([])} t={zhT} onOpen={vi.fn()} />));
+    expect(container.firstChild).toBeNull();
+  });
+  it("badges site/product/sponsor signals with working links", () => {
+    const people: Radar["people"] = [
+      { login: "maker1", mode: "startup", note: "创业信号", score: 150, followers: 100,
+        blog: "https://maker1.dev", signals: ["site", "product", "sponsor"], site: true, product: true, sponsor: true },
+      { login: "plain", mode: "company", note: "公司", score: 130, followers: 10, signals: [] },
+    ];
+    render(wrap(<RadarPanel radar={RADAR(people)} t={zhT} onOpen={vi.fn()} />));
+    // group headers by mode
+    expect(screen.getByText("创业/创始人")).toBeInTheDocument();
+    expect(screen.getByText("公司任职")).toBeInTheDocument();
+    // signal badges
+    expect(screen.getByText("站点")).toHaveAttribute("href", "https://maker1.dev");
+    expect(screen.getByText("产品")).toBeInTheDocument();
+    expect(screen.getByText("Sponsor")).toHaveAttribute("href", "https://github.com/sponsors/maker1");
+    // no-signal person gets the quiet note
+    expect(screen.getByText("无公开变现信号")).toBeInTheDocument();
+    // clicking a person opens them in-app
+    fireEvent.click(screen.getByText("@maker1"));
+  });
+  it("normalizes a protocol-less blog for the site link", () => {
+    const people: Radar["people"] = [
+      { login: "x", mode: "other", note: "", score: 125, followers: 1,
+        blog: "maker2.dev", signals: ["site"], site: true },
+    ];
+    render(wrap(<RadarPanel radar={RADAR(people)} t={zhT} onOpen={vi.fn()} />));
+    expect(screen.getByText("站点")).toHaveAttribute("href", "https://maker2.dev");
+  });
+  it("exposes the documented group order", () => {
+    expect(RADAR_MODES).toEqual(["startup", "crypto", "company", "content", "tools", "hunting", "other"]);
   });
 });

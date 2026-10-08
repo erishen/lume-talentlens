@@ -3,7 +3,7 @@ import { useDashboardData } from "./dashboard/useDashboard";
 import { OwnerPicker } from "./dashboard/pickers";
 import { ProfileCard, TalentPanel, ComparePanel, PushTrend } from "./dashboard/panels";
 import { Bars, Kpi } from "./dashboard/bars";
-import { PersonList, RepoRow, BrowsePage, RADAR_SCORE } from "./dashboard/lists";
+import { PersonList, RepoRow, BrowsePage, RadarPanel, RADAR_SCORE } from "./dashboard/lists";
 import { exportPeopleCsv } from "./exportCsv";
 import type { PersonView, Radar } from "./types";
 import { deriveTalent } from "./talent";
@@ -632,55 +632,4 @@ function RelationPanel({ title, people, emptyNote, t, action }: {
   );
 }
 
-// Talent-radar profit patterns (make radar) — mutual high scorers grouped by
-// money pattern. Each person chip analyzes in-app (onOpen) and carries the
-// one-line evidence note. Group order is fixed so the panel reads as a
-// "who makes money how" map, not a score list.
-const RADAR_MODES = ["startup", "crypto", "company", "content", "tools", "hunting", "other"];
-
-function RadarPanel({ radar, t, onOpen }: {
-  radar: Radar; t: (k: string, p?: Record<string, string | number>) => string;
-  onOpen: (login: string) => void;
-}) {
-  const groups = RADAR_MODES
-    .map((m) => ({ mode: m, people: radar.people.filter((p) => p.mode === m) }))
-    .filter((g) => g.people.length > 0);
-  if (groups.length === 0) return null;
-  // freshness: profiles/classifications go stale — nudge a rescan when the
-  // scan is more than a week old
-  const scanMs = new Date(radar.scanned_at).getTime();
-  const stale = Number.isFinite(scanMs) && Date.now() - scanMs > 7 * 86400000;
-  return (
-    <div className="panel radar-panel" style={{ gridColumn: "1 / -1" }}>
-      <h2>
-        {t("people.radar_title")}{" "}
-        <span className="muted">{t("people.radar_meta", { n: radar.people.length, at: radar.scanned_at.slice(0, 10) })}</span>
-        {stale && <span className="chip radar">{t("people.radar_stale")}</span>}
-      </h2>
-      <div className="radar-groups">
-        {groups.map((g) => (
-          <div key={g.mode} className="radar-group" data-mode={g.mode}>
-            <div className="radar-mode">{t("people.radar_mode_" + g.mode)} <span className="muted">{g.people.length}</span></div>
-            {g.people.map((p) => (
-              <div key={p.login} className="radar-row">
-                <button className="radar-person" onClick={() => onOpen(p.login)}>
-                  <span className="radar-login">@{p.login} <span className="chip radar">{p.score}☆</span></span>
-                  <span className="radar-note">{p.note}</span>
-                </button>
-                <a
-                  className="radar-ext"
-                  href={"https://github.com/" + p.login}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={"github.com/" + p.login}
-                >
-                  ↗
-                </a>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// (RadarPanel moved to dashboard/lists.tsx — see RadarPanel there.)

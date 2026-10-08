@@ -61,15 +61,25 @@ AUTH=()
 for login in "${LOGINS[@]}"; do
   UP="$(curl -sS -m 20 "${AUTH[@]+"${AUTH[@]}"}" -H "Accept: application/vnd.github+json" -H "User-Agent: lume-talentlens" "https://api.github.com/users/$login" || true)"
   RE="$(curl -sS -m 20 "${AUTH[@]+"${AUTH[@]}"}" -H "Accept: application/vnd.github+json" -H "User-Agent: lume-talentlens" "https://api.github.com/users/$login/repos?sort=stars&per_page=3" || true)"
-  python3 - "$login" "$UP" "$RE" >> /tmp/radar-scan.raw.ndjson << 'EOF'
+  # Sponsors probe via GraphQL (only with a token; login is [a-z0-9-] so
+  # string interpolation into the JSON query is safe). A failed probe is
+  # reported as sponsor=null ("unknown"), never as a false negative.
+  SP=""
+  if [ -n "$TOK" ]; then
+    SP="$(curl -sS -m 15 "${AUTH[@]+"${AUTH[@]}"}" -H "Content-Type: application/json" -H "Accept: application/json" \
+      -d "{\"query\":\"query { user(login: \\\"${login}\\\") { hasSponsorsListing } }\"}" \
+      https://api.github.com/graphql || true)"
+  fi
+  python3 - "$login" "$UP" "$RE" "$SP" >> /tmp/radar-scan.raw.ndjson << 'EOF'
 import json, sys, re, time
-login, up, re_ = sys.argv[1], sys.argv[2], sys.argv[3]
+login, up, re_, sp = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 def J(s):
     try: return json.loads(s)
     except Exception: return {}
 u = J(up); repos = J(re_)
 if not u or "login" not in u:
-    print(json.dumps({"login": login, "error": "fetch_failed", "mode": "other", "note": "profile fetch failed"})); sys.exit(0)
+    print(json.dumps({"login": login, "error": "fetch_failed", "mode": "other", "note": "profile fetch failed",
+                      "signals": []})); sys.exit(0)
 bio = (u.get("bio") or "").strip()[:200]
 company = (u.get("company") or "").strip()[:80]
 blog = (u.get("blog") or "").strip()[:80]
@@ -80,8 +90,29 @@ repos_top = []
 if isinstance(repos, list):
     for r in repos[:3]:
         repos_top.append({"name": (r.get("name") or ""), "stars": int(r.get("stargazers_count", 0) or 0),
-                          "desc": ((r.get("description") or "") or "")[:120]})
+                          "desc": ((r.get("description") or "") or "")[:120],
+                          "homepage": ((r.get("homepage") or "") or "")[:80]})
 text = " ".join([bio, company, blog] + [r["name"] + " " + r["desc"] for r in repos_top]).lower()
+
+# --- monetization signals (TODO P0-1) -------------------------------
+# site: a real personal/project URL in the profile (blog field; empty when
+#       the user never set one)
+site = bool(blog)
+# product: at least one top repo has a homepage set (a landing page beyond
+#          the repo itself is the classic SaaS/paid-product tell)
+product = bool([r for r in repos_top if r.get("homepage")])
+# sponsor: GitHub Sponsors listing via GraphQL (needs GH_TOKEN; null when
+#          the probe failed / no token — "unknown", not "no")
+sponsor = None
+g = J(sp)
+if isinstance(g, dict) and isinstance(g.get("data"), dict):
+    uu = g["data"].get("user")
+    if isinstance(uu, dict) and "hasSponsorsListing" in uu:
+        sponsor = bool(uu.get("hasSponsorsListing"))
+signals = []
+if site: signals.append("site")
+if product: signals.append("product")
+if sponsor: signals.append("sponsor")
 
 def has(*pats):
     return any(re.search(p, text) for p in pats)
@@ -104,7 +135,8 @@ else:
 
 print(json.dumps({"login": login, "mode": mode, "note": note[:140],
                   "score": 0, "followers": followers, "hireable": hireable,
-                  "loc": loc, "blog": blog, "company": company, "top_repos": repos_top[:2]}))
+                  "loc": loc, "blog": blog, "company": company, "top_repos": repos_top[:2],
+                  "site": site, "product": product, "sponsor": sponsor, "signals": signals}))
 EOF
   sleep "$GAP"
 done

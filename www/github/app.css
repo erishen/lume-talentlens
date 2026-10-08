@@ -868,3 +868,25 @@ footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 24
   margin-top: 2px;
   line-height: 1.5;
 }
+.radar-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+.radar-signals .chip.sig {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-color: #38bdf8;
+  color: #0284c7;
+  background: rgba(56, 189, 248, 0.08);
+}
+.radar-signals .chip.sig.sig-sponsor {
+  border-color: #db61a2;
+  color: #be3183;
+  background: rgba(219, 97, 162, 0.08);
+}
+.radar-sig-none {
+  font-size: 0.7rem;
+  font-style: italic;
+}

@@ -162,7 +162,7 @@ lume-talentlens/
 fetch-github.sh ──► snapshot.json        （分页 /users/<owner>/repos，预计算派生字段）
 people-suspects.py ─► suspects.json      （本地启发式水号筛查，零 API 成本）
 people-score.sh ───► scores.json         （影响力评分，全部粉丝/关注）
-radar-scan.sh ─────► radar.json          （互相关注高分者的盈利模式分类，live 档案+Top 仓库）
+radar-scan.sh ─────► radar.json          （互相关注高分者的盈利模式分类，live 档案+Top 仓库；含变现信号：site=档案站点 / product=仓库落地页 / sponsor=GraphQL 探针，失败记 null 不误报）
 follow-worthy.sh ──► （写操作）回关未关注的高分粉丝（幂等，需 PAT）
 unfollow.sh ───────► （写操作）批量取关水号（数据驱动读 suspects.json，--dry-run 可预览）
 ```
@@ -239,8 +239,8 @@ main.tsx（路由：/ 仪表盘  |  /chat 智能体）
 ├── Dashboard.tsx（组装）
 │   ├── dashboard/useDashboard.ts     # 数据 hook：拉取 + 派生（互相关注/值得关注/高分）
 │   ├── dashboard/pickers.tsx         # owner 选择器 + live fetch
-│   ├── dashboard/panels.tsx          # 概览/信号/雷达（高手洞察·盈利模式）面板
-│   ├── dashboard/lists.tsx           # 粉丝/关注/水号/值得关注列表（人像卡片 + tooltip 证据）
+│   ├── dashboard/panels.tsx          # 概览/人才信号/对比面板（HR 视角）
+│   ├── dashboard/lists.tsx           # 粉丝/关注/水号/值得关注列表 + 雷达面板（人像卡片 + tooltip 证据 + 变现信号徽标）
 │   ├── dashboard/bars.tsx            # 语言/活跃/年份柱状图
 │   ├── LangSwitch.tsx + i18n.ts      # 中英切换（所有文案走字典）
 │   ├── exportCsv.ts                  # 列表导出 CSV
