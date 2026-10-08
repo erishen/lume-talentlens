@@ -24,11 +24,10 @@ export GH_ANALYZER_PAT="${GH_ANALYZER_PAT:-${GH_TOKEN:-}}"
 # Default to the RELEASE Lume binary installed at ~/.local/bin/lume (the
 # build this app ships with). The release build includes the outbound-HTTP
 # builtins (http_get/http_put/http_delete) that live / refresh / follow
-# endpoints need; a binary WITHOUT them is rejected by the capability probe
-# below. LUME=/path/to/lume overrides; a missing binary or an incapable one
-# fails fast with a clear message. NOTE: the proxy-fallback tweak (retry
-# direct after a dead proxy) currently lives in the fork's full build — the
-# stock release binary retries via the proxy only.
+# endpoints need, plus the proxy-fallback tweak (retry direct after a dead
+# proxy); a binary WITHOUT the HTTP builtins is rejected by the capability
+# probe below. LUME=/path/to/lume overrides; a missing binary or an
+# incapable one fails fast with a clear message.
 DEFAULT_LUME="$HOME/.local/bin/lume"
 LUME="${LUME:-$DEFAULT_LUME}"
 if [ -z "$LUME" ] || [ ! -x "$LUME" ]; then

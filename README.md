@@ -28,7 +28,10 @@ client.
 > build of the Lume fork checked out at `../lume` (sibling of this repo). To
 > see which version it corresponds to, list the fork's tags
 > (`git -C ../lume tag`, e.g. `v0.6.1`) or resolve its current HEAD
-> (`git -C ../lume describe --tags --always`). After upgrading Lume, re-run
+> (`git -C ../lume describe --tags --always`). The installed
+> `~/.local/bin/lume` ships the fork's proxy-fallback tweak (retry direct
+> after a dead proxy) as of 2026-10-08; the previous binary is kept at
+> `~/.local/bin/lume.bak-20261008`. After upgrading Lume, re-run
 > `make check` and `make dev` — the capability probe validates that the
 > binary still ships the HTTP builtins.
 

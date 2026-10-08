@@ -10,7 +10,7 @@
 - **Node 18+ / pnpm** 用于前端（`(cd frontend && pnpm install)`）。
 - 可选：`.env` 中的 `OWNER` / `GH_TOKEN` / `LLM_*`（见[配置（.env）](#配置env)）。
 
-> **Lume 版本获取：** Lume 没有 `--version` 参数。release 二进制是对 `../lume`（与本仓库平级的 Lume fork）某次构建的产物。要确认当前版本：列出 fork 的 git tag（`git -C ../lume tag`，如 `v0.6.1`），或解析其当前 HEAD（`git -C ../lume describe --tags --always`）。升级 Lume 后重新跑 `make check` + `make dev` —— 能力探测会校验二进制仍带 HTTP 内建。
+> **Lume 版本获取：** Lume 没有 `--version` 参数。release 二进制是对 `../lume`（与本仓库平级的 Lume fork）某次构建的产物。要确认当前版本：列出 fork 的 git tag（`git -C ../lume tag`，如 `v0.6.1`），或解析其当前 HEAD（`git -C ../lume describe --tags --always`）。当前安装的 `~/.local/bin/lume` 已含 fork 的代理失效直连回退（2026-10-08 替换；旧二进制保留在 `~/.local/bin/lume.bak-20261008`）。升级 Lume 后重新跑 `make check` + `make dev` —— 能力探测会校验二进制仍带 HTTP 内建。
 
 ## 项目结构
 
