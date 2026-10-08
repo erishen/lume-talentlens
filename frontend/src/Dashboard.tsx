@@ -85,10 +85,14 @@ export function Dashboard() {
     let done = 0;
     let failed = 0;
     let firstErr = "";
+    const doneLogins: string[] = [];
     for (const p of targets) {
       const r = await postAction("/api/follow", p.login,
         () => setFollowState((s) => ({ ...s, err: t("people.retrying") })));
-      if (r.ok) done = done + 1;
+      if (r.ok) {
+        done = done + 1;
+        doneLogins.push(p.login);
+      }
       else {
         failed = failed + 1;
         if (firstErr === "") firstErr = r.err;
@@ -96,8 +100,30 @@ export function Dashboard() {
       setFollowState({ busy: true, done: done, failed: failed, err: firstErr });
     }
     setFollowState({ busy: false, done: done, failed: failed, err: firstErr });
-    // refresh the people view so the followed logins leave the worth list
-    loadPeople(owner, !!live);
+    // Optimistic: append the successfully-followed logins to the local
+    // following set so the worth list updates instantly — the server snapshot
+    // is stale until a refresh actually re-fetches GitHub.
+    if (doneLogins.length > 0) {
+      setPeople((prev) => {
+        if (!prev) return prev;
+        const have = new Set(prev.following.map((g) => g.login));
+        return {
+          ...prev,
+          following: [
+            ...prev.following,
+            ...targets.filter((p) => doneLogins.includes(p.login) && !have.has(p.login)),
+          ],
+        };
+      });
+    }
+    // Best-effort server refresh so the snapshot catches up (rate-limited to
+    // one run per owner per 60s — on 429 we keep the optimistic state and the
+    // next manual refresh finishes the job).
+    try {
+      const res = await fetch("/api/refresh?owner=" + encodeURIComponent(owner));
+      const j = await res.json().catch(() => null);
+      if (j && j.ok) loadPeople(owner, !!live);
+    } catch { /* keep optimistic */ }
   }
 
   // Unfollow-all for high-confidence water accounts in the following list —
@@ -116,10 +142,14 @@ export function Dashboard() {
     let done = 0;
     let failed = 0;
     let firstErr = "";
+    const doneLogins: string[] = [];
     for (const p of waterFollowing) {
       const r = await postAction("/api/unfollow", p.login,
         () => setUnfollowState((s) => ({ ...s, err: t("people.retrying") })));
-      if (r.ok) done = done + 1;
+      if (r.ok) {
+        done = done + 1;
+        doneLogins.push(p.login);
+      }
       else {
         failed = failed + 1;
         if (firstErr === "") firstErr = r.err;
@@ -127,7 +157,20 @@ export function Dashboard() {
       setUnfollowState({ busy: true, done: done, failed: failed, err: firstErr });
     }
     setUnfollowState({ busy: false, done: done, failed: failed, err: firstErr });
-    loadPeople(owner, !!live);
+    // Optimistic: drop the unfollowed logins from the local following set so
+    // the list updates instantly (server snapshot is stale until refreshed).
+    if (doneLogins.length > 0) {
+      setPeople((prev) => {
+        if (!prev) return prev;
+        return { ...prev, following: prev.following.filter((g) => !doneLogins.includes(g.login)) };
+      });
+    }
+    // Best-effort server refresh; on 429 the optimistic state stands.
+    try {
+      const res = await fetch("/api/refresh?owner=" + encodeURIComponent(owner));
+      const j = await res.json().catch(() => null);
+      if (j && j.ok) loadPeople(owner, !!live);
+    } catch { /* keep optimistic */ }
   }
 
   // relation insights over the people snapshot:
