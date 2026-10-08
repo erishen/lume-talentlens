@@ -21,6 +21,11 @@ export const LIVE_CACHE_TTL_MS = 10 * 60 * 1000;
 export interface LiveResult {
   overview: Overview;
   all: RepoView[]; // sorted by updated desc — for client-side browsing
+  // provenance for the UI: true = served from the browser cache, false =
+  // fresh from GitHub; elapsedMs is wall-clock time of the fetch (0 for a
+  // cache hit). Optional so older cached entries still typecheck.
+  cached?: boolean;
+  elapsedMs?: number;
 }
 
 interface LiveCacheEntry {
@@ -59,7 +64,9 @@ export function readLiveCache(
     const e = map[owner];
     if (!e) return null;
     if (now - e.fetchedAt > LIVE_CACHE_TTL_MS) return null;
-    return e.result;
+    // anything served from the cache is a cache hit by definition, whatever
+    // provenance the stored result carried
+    return { ...e.result, cached: true, elapsedMs: 0 };
   } catch {
     return null;
   }

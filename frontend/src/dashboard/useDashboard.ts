@@ -40,6 +40,9 @@ export function useDashboardData(t: T, lang: Lang) {
   }, [weights]);
   const [ov, setOv] = React.useState<Overview | null>(null);
   const [live, setLive] = React.useState<LiveResult | null>(null);
+  // provenance of the last live fetch for the "从 GitHub 实时获取" button:
+  // { cached, ms } — cache hits are instant, fresh fetches carry wall time.
+  const [liveInfo, setLiveInfo] = React.useState<{ cached: boolean; ms: number } | null>(null);
   const [noSnap, setNoSnap] = React.useState<NoSnapshot | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [liveLoading, setLiveLoading] = React.useState(false);
@@ -63,7 +66,7 @@ export function useDashboardData(t: T, lang: Lang) {
   const [refreshMsg, setRefreshMsg] = React.useState("");
 
   // side-by-side compare with a second candidate (B)
-  const [cmp, setCmp] = React.useState<{ target: string; ov: Overview | null; loading: boolean; err: string }>({
+  const [cmp, setCmp] = React.useState<{ target: string; ov: Overview | null; loading: boolean; err: string; cached?: boolean; ms?: number }>({
     target: "",
     ov: null,
     loading: false,
@@ -211,11 +214,13 @@ export function useDashboardData(t: T, lang: Lang) {
     const target = o.trim();
     if (!target) return;
     const seq = ++reqSeq.current;
+    const t0 = performance.now();
     setLiveLoading(true);
     setLiveErr("");
     setRepoErr("");
     setNoSnap(null);
     setLiveProgress(null);
+    setLiveInfo(null);
     // clear the previous owner's profile immediately — phase 1 takes a few
     // seconds, and showing the old card under the new owner is misleading
     setOv(null);
@@ -240,6 +245,7 @@ export function useDashboardData(t: T, lang: Lang) {
         const liveRes = { overview: ov, all: ovRepos(reposRaw) };
         setOv(ov);
         setLive(liveRes);
+        setLiveInfo({ cached: false, ms: Math.round(performance.now() - t0) });
         writeLiveCacheResult(target, liveRes);
         setLiveProgress(null);
       } catch (e2) {
@@ -281,7 +287,7 @@ export function useDashboardData(t: T, lang: Lang) {
       try {
         const res = await fetchLive(target);
         if (seq !== cmpSeq.current) return;
-        setCmp({ target, ov: res.overview, loading: false, err: "" });
+        setCmp({ target, ov: res.overview, loading: false, err: "", cached: res.cached, ms: res.elapsedMs });
       } catch (e) {
         if (seq !== cmpSeq.current) return;
         setCmp({ target, ov: null, loading: false, err: String((e as Error)?.message || e) });
@@ -432,7 +438,7 @@ export function useDashboardData(t: T, lang: Lang) {
   return {
     owner, setOwner, cached, defaultOwner,
     weights, setWeights,
-    ov, live, noSnap, loading, liveLoading, liveErr, liveProgress, repoErr,
+    ov, live, liveInfo, noSnap, loading, liveLoading, liveErr, liveProgress, repoErr,
     err, q, setQ, hits, hitsTotal, searched, searching, limit, setLimit,
     people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, radar, stargazers,
     cmp, setCmp,

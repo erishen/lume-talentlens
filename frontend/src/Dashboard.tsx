@@ -33,7 +33,7 @@ export function Dashboard() {
 
   const {
     owner, cached, weights, setWeights,
-    ov, live, noSnap, loading, liveLoading, liveErr, liveProgress, repoErr,
+    ov, live, liveInfo, noSnap, loading, liveLoading, liveErr, liveProgress, repoErr,
     err, q, setQ, hits, hitsTotal, searched, searching, limit, setLimit,
     people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, radar, stargazers,
     cmp, setCmp,
@@ -45,6 +45,13 @@ export function Dashboard() {
 
   // Follow-all for the "worth following" panel — one PUT per login via the
   // server's /api/follow proxy (needs GH_TOKEN with user:follow scope).
+  // Last live-fetch provenance, shown next to the fetch buttons: cache hits
+  // are instant, fresh pulls carry wall-clock time.
+  const liveNote = liveInfo ? (
+    liveInfo.cached
+      ? <span className="chip live-info">{t("live.last_cached")}</span>
+      : <span className="chip live-info">{t("live.last_fresh", { ms: liveInfo.ms })}</span>
+  ) : null;
   const [followState, setFollowState] = React.useState<{
     busy: boolean; done: number; failed: number; err: string;
   }>({ busy: false, done: 0, failed: 0, err: "" });
@@ -262,6 +269,11 @@ export function Dashboard() {
             {t("cmp.clear")}
           </button>
         )}
+        {cmp.ov && cmp.cached ? (
+          <span className="chip live-info">{t("cmp.cached")}</span>
+        ) : cmp.ov && cmp.ms != null ? (
+          <span className="chip live-info">{t("cmp.fresh_ms", { ms: cmp.ms })}</span>
+        ) : null}
       </div>
       {cmp.err && <div className="panel error">{t("cmp.failed")}: {cmp.err}</div>}
       {ov && cmp.ov && ov.owner !== cmp.target ? (
@@ -335,6 +347,7 @@ export function Dashboard() {
           <div className="live-actions">
             <button className="btn" onClick={() => loadLive(owner)}>{t("live.fetch_live")}</button>
             <button className="btn" onClick={() => loadLive(owner, true)} title={t("live.refresh_title")}>{t("live.refresh_live")}</button>
+            {liveNote}
           </div>
           {tab === "overview" && (
             <>

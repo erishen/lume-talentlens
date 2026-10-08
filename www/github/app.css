@@ -318,6 +318,13 @@ main, .agent-wrap, #gh-root {
   padding: 6px 12px;
   font-size: .82rem;
 }
+/* last live-fetch provenance: cache hit vs fresh pull with wall time */
+.chip.live-info {
+  color: #22c55e;
+  border-color: #22c55e;
+  font-size: .75rem;
+  font-weight: 500;
+}
 /* ---- people (followers / following name lists) ---- */
 .grid.two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
 .person-list {

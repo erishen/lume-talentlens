@@ -250,14 +250,20 @@ export async function fetchLive(
   // this (and the server's tiers) to force a real GitHub round-trip.
   if (!refresh) {
     const cached = readLiveCache(owner);
-    if (cached) return cached;
+    if (cached) return cached; // readLiveCache stamps cached:true / 0ms
   }
 
+  const t0 = performance.now();
   const { user: u, lastPush, estTotal } = await fetchLiveProfile(owner, signal, refresh);
   const reposRaw = await fetchLiveRepos(owner, estTotal, signal, onProgress, refresh);
   const overview = buildOverview(owner, u, lastPush, reposRaw, false);
 
-  const result: LiveResult = { overview, all: ovRepos(reposRaw) };
+  const result: LiveResult = {
+    overview,
+    all: ovRepos(reposRaw),
+    cached: false,
+    elapsedMs: Math.round(performance.now() - t0),
+  };
   writeLiveCache(owner, result);
   return result;
 }
