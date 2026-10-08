@@ -59,7 +59,7 @@ export function Dashboard() {
   // times out and a retry succeeds immediately) — retry once per action so a
   // one-click follow/unfollow doesn't surface a misleading "network error".
   const netErr = t("people.network_err");
-  async function postAction(url: string, login: string): Promise<{ ok: boolean; err: string }> {
+  async function postAction(url: string, login: string, onRetry?: () => void): Promise<{ ok: boolean; err: string }> {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const r = await fetch(url, {
@@ -71,6 +71,9 @@ export function Dashboard() {
         if (j && j.ok) return { ok: true, err: "" };
         return { ok: false, err: (j && j.err) || `HTTP ${r.status}` };
       } catch {
+        // first failure is usually a flaky handshake — show "retrying" so the
+        // user isn't staring at a silent spinner, then try once more
+        if (attempt === 0 && onRetry) onRetry();
         if (attempt === 1) return { ok: false, err: netErr };
       }
     }
@@ -83,7 +86,8 @@ export function Dashboard() {
     let failed = 0;
     let firstErr = "";
     for (const p of targets) {
-      const r = await postAction("/api/follow", p.login);
+      const r = await postAction("/api/follow", p.login,
+        () => setFollowState((s) => ({ ...s, err: t("people.retrying") })));
       if (r.ok) done = done + 1;
       else {
         failed = failed + 1;
@@ -113,7 +117,8 @@ export function Dashboard() {
     let failed = 0;
     let firstErr = "";
     for (const p of waterFollowing) {
-      const r = await postAction("/api/unfollow", p.login);
+      const r = await postAction("/api/unfollow", p.login,
+        () => setUnfollowState((s) => ({ ...s, err: t("people.retrying") })));
       if (r.ok) done = done + 1;
       else {
         failed = failed + 1;
