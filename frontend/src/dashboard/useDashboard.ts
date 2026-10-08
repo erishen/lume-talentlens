@@ -147,11 +147,11 @@ export function useDashboardData(t: T, lang: Lang) {
   // browser-side people fetch (live owners + fallback when server lacks route).
   // GitHub may be rate-limited / unreachable (e.g. from mainland China); in
   // that case we surface an explicit error state instead of silent emptiness.
-  function loadLivePeople(o: string, seq?: number) {
+  function loadLivePeople(o: string, seq?: number, refresh?: boolean) {
     const target = o.trim();
     if (!target) return;
     const s = seq ?? ++peopleSeq.current;
-    fetchLivePeople(target).then((p) => {
+    fetchLivePeople(target, undefined, undefined, refresh).then((p) => {
       if (s !== peopleSeq.current) return;
       if (p.followers.length === 0 && p.following.length === 0) {
         setPeople(p);
@@ -199,7 +199,7 @@ export function useDashboardData(t: T, lang: Lang) {
     });
   }
 
-  async function loadLive(o: string) {
+  async function loadLive(o: string, refresh?: boolean) {
     const target = o.trim();
     if (!target) return;
     const seq = ++reqSeq.current;
@@ -216,7 +216,7 @@ export function useDashboardData(t: T, lang: Lang) {
       // Phase 1 — profile + latest push (~2 requests): render the ProfileCard
       // immediately instead of holding it hostage to full repo pagination
       // (owners with thousands of repos used to take tens of seconds).
-      const { user, lastPush, estTotal } = await fetchLiveProfile(target);
+      const { user, lastPush, estTotal } = await fetchLiveProfile(target, undefined, refresh);
       if (seq !== reqSeq.current) return;
       setOv(buildOverviewPartial(target, user, lastPush));
       setLiveLoading(false);
@@ -226,7 +226,7 @@ export function useDashboardData(t: T, lang: Lang) {
       try {
         const reposRaw = await fetchLiveRepos(target, estTotal, undefined, (p) => {
           if (seq === reqSeq.current) setLiveProgress(p);
-        });
+        }, refresh);
         if (seq !== reqSeq.current) return;
         const ov = buildOverviewFull(target, user, lastPush, reposRaw);
         const liveRes = { overview: ov, all: ovRepos(reposRaw) };

@@ -306,6 +306,18 @@ main, .agent-wrap, #gh-root {
   flex-wrap: wrap;
   margin: 10px 0;
 }
+/* owner-level live / force-refresh action bar above the profile card */
+.live-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 4px 0 12px;
+}
+.live-actions .btn {
+  padding: 6px 12px;
+  font-size: .82rem;
+}
 /* ---- people (followers / following name lists) ---- */
 .grid.two { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
 .person-list {

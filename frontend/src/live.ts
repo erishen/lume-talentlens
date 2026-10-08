@@ -76,20 +76,20 @@ async function acquireGithubSlot(): Promise<void> {
 // Ask the Lume server to fetch a user-scoped GitHub path server-side. The
 // route returns a uniform envelope { ok, status, data, err }; data is the raw
 // upstream JSON body. Each call is throttled (above).
-async function getGithub(path: string, owner: string, signal?: AbortSignal): Promise<any> {
+async function getGithub(path: string, owner: string, signal?: AbortSignal, refresh?: boolean): Promise<any> {
   await acquireGithubSlot();
   try {
-    return await fetchGithubOnce(path, owner, signal);
+    return await fetchGithubOnce(path, owner, signal, refresh);
   } finally {
     ghBusy--;
   }
 }
 
-async function fetchGithubOnce(path: string, owner: string, signal?: AbortSignal): Promise<any> {
+async function fetchGithubOnce(path: string, owner: string, signal?: AbortSignal, refresh?: boolean): Promise<any> {
   let r: Response;
   try {
     r = await fetch(
-      LIVE_GITHUB + "?path=" + encodeURIComponent(path),
+      LIVE_GITHUB + "?path=" + encodeURIComponent(path) + (refresh ? "&refresh=1" : ""),
       { signal, headers: { Accept: "application/json" } }
     );
   } catch (e) {
@@ -233,9 +233,10 @@ export interface LiveProfilePhase {
 // cross-check.
 export async function fetchLiveProfile(
   owner: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  refresh?: boolean
 ): Promise<LiveProfilePhase> {
-  const user = await getGithub("/users/" + encodeURIComponent(owner), owner, signal);
+  const user = await getGithub("/users/" + encodeURIComponent(owner), owner, signal, refresh);
   // the proxy returns null on an empty 200 body; guard so a malformed
   // upstream response degrades to an empty profile instead of crashing
   const u = user ?? {};
@@ -248,7 +249,8 @@ export async function fetchLiveProfile(
       "/users/" + encodeURIComponent(owner) +
       "/repos?type=owner&sort=pushed&direction=desc&per_page=1",
       owner,
-      signal
+      signal,
+      refresh
     );
     const first = Array.isArray(recent) ? recent[0] : null;
     lastPush = first?.pushed_at ?? "";
@@ -268,7 +270,8 @@ export async function fetchLiveRepos(
   owner: string,
   estTotal: number,
   signal?: AbortSignal,
-  onProgress?: LiveProgressFn
+  onProgress?: LiveProgressFn,
+  refresh?: boolean
 ): Promise<any[]> {
   const reposRaw: any[] = [];
   let page = 1;
@@ -277,7 +280,8 @@ export async function fetchLiveRepos(
       "/users/" + encodeURIComponent(owner) +
       "/repos?type=owner&sort=updated&per_page=100&page=" + page,
       owner,
-      signal
+      signal,
+      refresh
     );
     if (!Array.isArray(batch) || batch.length === 0) break;
     reposRaw.push(...batch);
@@ -389,17 +393,21 @@ export function writeLiveCacheResult(owner: string, result: LiveResult): void {
 export async function fetchLive(
   owner: string,
   signal?: AbortSignal,
-  onProgress?: LiveProgressFn
+  onProgress?: LiveProgressFn,
+  refresh?: boolean
 ): Promise<LiveResult> {
   // Cache hit: re-analyzing the same owner within the TTL skips GitHub
   // entirely — the unauthenticated 60 req/h shared limit makes a live fetch
   // the slowest path in the app, and revisiting a just-fetched owner is the
-  // common case after a page refresh or an owner switch.
-  const cached = readLiveCache(owner);
-  if (cached) return cached;
+  // common case after a page refresh or an owner switch. refresh=1 bypasses
+  // this (and the server's tiers) to force a real GitHub round-trip.
+  if (!refresh) {
+    const cached = readLiveCache(owner);
+    if (cached) return cached;
+  }
 
-  const { user: u, lastPush, estTotal } = await fetchLiveProfile(owner, signal);
-  const reposRaw = await fetchLiveRepos(owner, estTotal, signal, onProgress);
+  const { user: u, lastPush, estTotal } = await fetchLiveProfile(owner, signal, refresh);
+  const reposRaw = await fetchLiveRepos(owner, estTotal, signal, onProgress, refresh);
   const overview = buildOverview(owner, u, lastPush, reposRaw, false);
 
   const result: LiveResult = { overview, all: ovRepos(reposRaw) };
@@ -485,14 +493,16 @@ function toPerson(u: any): PersonView {
 export async function fetchLivePeople(
   owner: string,
   totals?: { followers: number; following: number },
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  refresh?: boolean
 ): Promise<People> {
   async function page(kind: "followers" | "following"): Promise<PersonView[]> {
     try {
       const data: any[] = await getGithub(
         "/users/" + encodeURIComponent(owner) + "/" + kind + "?per_page=100",
         owner,
-        signal
+        signal,
+        refresh
       );
       return Array.isArray(data) ? data.map(toPerson) : [];
     } catch {

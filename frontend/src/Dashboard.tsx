@@ -320,6 +320,7 @@ export function Dashboard() {
           <p>{t("live.two_ways", { owner: noSnap.owner })}</p>
           <div className="no-snap-actions">
             <button className="btn" onClick={() => loadLive(noSnap.owner)}>{t("live.fetch_live")}</button>
+            <button className="btn" onClick={() => loadLive(noSnap.owner, true)} title={t("live.refresh_title")}>{t("live.refresh_live")}</button>
             <span className="muted">{t("live.or_offline")}</span>
             <code className="hint-cmd">{`OWNER=${noSnap.owner} make fetch`}</code>
           </div>
@@ -331,6 +332,10 @@ export function Dashboard() {
 
       {ov && !loading && !noSnap && !liveLoading && (
         <>
+          <div className="live-actions">
+            <button className="btn" onClick={() => loadLive(owner)}>{t("live.fetch_live")}</button>
+            <button className="btn" onClick={() => loadLive(owner, true)} title={t("live.refresh_title")}>{t("live.refresh_live")}</button>
+          </div>
           {tab === "overview" && (
             <>
           <ProfileCard ov={ov} />

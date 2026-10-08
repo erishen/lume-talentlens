@@ -155,6 +155,9 @@ get "/api/live/github", (req) => {
   if (not live_safe_path(p)) {
     return { ok: false, status: 400, data: "", err: "blocked GitHub path" };
   }
+  // refresh=1 bypasses both cache tiers and hits GitHub directly (the UI's
+  // "force refresh" button); a successful response still overwrites both.
+  let force = (str(get(qp, "refresh", "")) == "1" or str(get(qp, "refresh", "")) == "true");
   // TTL cache keyed by path: repeated views of the same profile (dashboard
   // polling, agent calls) would otherwise burn the GitHub rate limit
   // (60 req/h anonymous) and add ~1s latency per hit. Only successful
@@ -162,7 +165,7 @@ get "/api/live/github", (req) => {
   // LIVE_CACHE_TTL_SEC (default 300s; 0 disables). GitHub profiles are
   // public data, so a short-lived stale response is acceptable.
   let ttl = live_cache_ttl();
-  if (ttl > 0) {
+  if (not force and ttl > 0) {
     let hit = get(_live_cache, p, null);
     if (hit != null and (int(now(), 0) - int(get(hit, "at", 0), 0)) < ttl) {
       return { ok: true, status: int(get(hit, "status", 0), 0), data: str(get(hit, "body", "")), err: "", cached: true };
@@ -170,7 +173,7 @@ get "/api/live/github", (req) => {
   }
   // disk tier: survives restarts, shared by agent tools and every browser
   let disk_ttl = live_disk_ttl();
-  if (disk_ttl > 0) {
+  if (not force and disk_ttl > 0) {
     let d = live_disk_read(p);
     if (d != null and (int(now(), 0) - int(get(d, "at", 0), 0)) < disk_ttl) {
       let dbody = str(get(d, "body", ""));
