@@ -57,11 +57,13 @@ post "/api/follow", (req) => {
   let headers = { "Accept": "application/vnd.github+json", "User-Agent": "lume-talentlens",
                   "Authorization": "Bearer " + str(tok) };
   let url = "https://api.github.com/user/following/" + str(get(d, "login", ""));
-  // GitHub's edge is flaky over the proxy tunnel (TLS handshake / HTTP2
-  // hiccups); a single retry succeeds on the next attempt in practice.
-  let r = http_put(url, { headers: headers, timeout: 30, max_bytes: 1024 });
-  if (int(get(r, "status", 0), 0) != 204) {
-    r = http_put(url, { headers: headers, timeout: 30, max_bytes: 1024 });
+  // GitHub's edge is flaky (TLS handshake / HTTP2 hiccups) and a failed PUT
+  // can drop the connection entirely, so retry a few times with a shorter
+  // per-attempt window — first success wins, worst case ~45s then a clear err.
+  let r = http_put(url, { headers: headers, timeout: 15, max_bytes: 1024 });
+  for (let i = 1; i < 3; i = i + 1) {
+    if (int(get(r, "status", 0), 0) == 204) { break; }
+    r = http_put(url, { headers: headers, timeout: 15, max_bytes: 1024 });
   }
   let up = int(get(r, "status", 0), 0);
   if (up == 204) { return { ok: true, status: 204, err: "" }; }
@@ -93,10 +95,11 @@ delete "/api/unfollow", (req) => {
   let headers = { "Accept": "application/vnd.github+json", "User-Agent": "lume-talentlens",
                   "Authorization": "Bearer " + str(tok) };
   let url = "https://api.github.com/user/following/" + str(get(d, "login", ""));
-  // same flaky-edge retry as /api/follow
-  let r = http_delete(url, { headers: headers, timeout: 30, max_bytes: 1024 });
-  if (int(get(r, "status", 0), 0) != 204) {
-    r = http_delete(url, { headers: headers, timeout: 30, max_bytes: 1024 });
+  // same flaky-edge retry as /api/follow (short per-attempt window, 3 tries)
+  let r = http_delete(url, { headers: headers, timeout: 15, max_bytes: 1024 });
+  for (let i = 1; i < 3; i = i + 1) {
+    if (int(get(r, "status", 0), 0) == 204) { break; }
+    r = http_delete(url, { headers: headers, timeout: 15, max_bytes: 1024 });
   }
   let up = int(get(r, "status", 0), 0);
   if (up == 204) { return { ok: true, status: 204, err: "" }; }

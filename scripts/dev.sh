@@ -47,6 +47,12 @@ fi
 rm -f "$PROBE"
 WANT_PORT="${PORT:-${LUME_GITHUB_PORT:-8091}}"
 
+# Outbound HTTP goes direct (no proxy): api.github.com responds fast on this
+# machine, and the flaky proxy TLS tunnel used to stall follow/live for 30s.
+# The LLM endpoint is localhost so it is unaffected. Set LUME_HTTP_PROXY in
+# .env to force a proxy (lume's http_put reads it as an override).
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY 2>/dev/null || true
+
 # shared kill/port-release helpers (kill_matching, wait_port_free, port_busy)
 source "$ROOT/scripts/cleanup.sh"
 
