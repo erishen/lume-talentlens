@@ -195,8 +195,9 @@ export function Dashboard() {
   // insights (radar + stargazers), lists (diff + followers + following)
   const [peopleView, setPeopleView] = React.useState<"relation" | "insight" | "list">("relation");
   // Insights (radar + stargazer profiles) only exist for the default owner;
-  // switching accounts falls back to the relations view.
-  const effectiveView = owner === defaultOwner ? peopleView : "relation";
+  // lists and relations work for every account. A stale "insight" view on a
+  // non-default owner falls back to relations.
+  const effectiveView = owner === defaultOwner || peopleView !== "insight" ? peopleView : "relation";
   React.useEffect(() => {
     setPeopleView("relation");
   }, [owner]);
