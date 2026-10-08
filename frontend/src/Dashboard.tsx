@@ -194,6 +194,12 @@ export function Dashboard() {
   // people tab is split into three sub-views — relations (mutual + worth),
   // insights (radar + stargazers), lists (diff + followers + following)
   const [peopleView, setPeopleView] = React.useState<"relation" | "insight" | "list">("relation");
+  // Insights (radar + stargazer profiles) only exist for the default owner;
+  // switching accounts falls back to the relations view.
+  const effectiveView = owner === defaultOwner ? peopleView : "relation";
+  React.useEffect(() => {
+    setPeopleView("relation");
+  }, [owner]);
 
   return (
     <div>
@@ -569,19 +575,21 @@ export function Dashboard() {
                     stargazers), lists (diff + followers + following) */}
                 <div className="people-subtabs" style={{ gridColumn: "1 / -1" }}>
                   <button
-                    className={peopleView === "relation" ? "chip subtab active" : "chip subtab"}
+                    className={effectiveView === "relation" ? "chip subtab active" : "chip subtab"}
                     onClick={() => setPeopleView("relation")}
                   >
                     {t("people.view_relation")}
                   </button>
+                  {owner === defaultOwner && (
+                    <button
+                      className={effectiveView === "insight" ? "chip subtab active" : "chip subtab"}
+                      onClick={() => setPeopleView("insight")}
+                    >
+                      {t("people.view_insight")}
+                    </button>
+                  )}
                   <button
-                    className={peopleView === "insight" ? "chip subtab active" : "chip subtab"}
-                    onClick={() => setPeopleView("insight")}
-                  >
-                    {t("people.view_insight")}
-                  </button>
-                  <button
-                    className={peopleView === "list" ? "chip subtab active" : "chip subtab"}
+                    className={effectiveView === "list" ? "chip subtab active" : "chip subtab"}
                     onClick={() => setPeopleView("list")}
                   >
                     {t("people.view_list")}
@@ -592,7 +600,7 @@ export function Dashboard() {
                     {t("people.follow_err")}: {followState.err}
                   </p>
                 )}
-                {peopleView === "relation" && (
+                {effectiveView === "relation" && (
                   <div className="people-grid">
                     <RelationPanel
                       title={t("people.mutual")}
@@ -624,44 +632,27 @@ export function Dashboard() {
                     />
                   </div>
                 )}
-                {peopleView === "insight" && (
+                {effectiveView === "insight" && owner === defaultOwner && (
                   <div className="people-grid">
-                    {owner === defaultOwner ? (
-                      <>
-                        {radar ? (
-                          <RadarPanel radar={radar} t={t} onOpen={openOwner} />
-                        ) : (
-                          <div className="panel">
-                            <h2>{t("people.radar_title")}</h2>
-                            <p className="muted">{t("people.radar_empty")}</p>
-                          </div>
-                        )}
-                        {stargazers ? (
-                          <StargazersPanel entries={Object.values(stargazers)} owner={owner} t={t} onOpen={openOwner} />
-                        ) : (
-                          <div className="panel">
-                            <h2>{t("people.sg_title")}</h2>
-                            <p className="muted">{t("people.sg_empty")}</p>
-                          </div>
-                        )}
-                      </>
+                    {radar ? (
+                      <RadarPanel radar={radar} t={t} onOpen={openOwner} />
                     ) : (
-                      // radar + stargazer profiles are generated for the
-                      // default owner only — show the same hint for both.
-                      <>
-                        <div className="panel">
-                          <h2>{t("people.radar_title")}</h2>
-                          <p className="muted">{t("people.radar_owner_only", { owner: defaultOwner || "OWNER" })}</p>
-                        </div>
-                        <div className="panel">
-                          <h2>{t("people.sg_title")}</h2>
-                          <p className="muted">{t("people.sg_owner_only", { owner: defaultOwner || "OWNER" })}</p>
-                        </div>
-                      </>
+                      <div className="panel">
+                        <h2>{t("people.radar_title")}</h2>
+                        <p className="muted">{t("people.radar_empty")}</p>
+                      </div>
+                    )}
+                    {stargazers ? (
+                      <StargazersPanel entries={Object.values(stargazers)} owner={owner} t={t} onOpen={openOwner} />
+                    ) : (
+                      <div className="panel">
+                        <h2>{t("people.sg_title")}</h2>
+                        <p className="muted">{t("people.sg_empty")}</p>
+                      </div>
                     )}
                   </div>
                 )}
-                {peopleView === "list" && (
+                {effectiveView === "list" && (
                   <>
                     {peopleDiff && peopleDiff.has_history && (
                       <div className="panel people-diff" style={{ gridColumn: "1 / -1" }}>
