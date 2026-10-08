@@ -79,8 +79,21 @@ function PersonList({ title, people, totals, note, onOpen }: {
                   src={p.avatar}
                   alt=""
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    // broken avatar (deleted account / rate-limited CDN): hide
+                    // the img and show a letter chip instead
+                    (e.target as HTMLImageElement).style.display = "none";
+                    const next = (e.target as HTMLImageElement).nextElementSibling as HTMLElement | null;
+                    if (next) next.style.display = "inline-flex";
+                  }}
                 />
               ) : null}
+              <span
+                className="person-avatar-letter"
+                style={p.avatar ? { display: "none" } : undefined}
+              >
+                {(p.login || "?").slice(0, 1).toUpperCase()}
+              </span>
               <span className="person-login">@{p.login}</span>
               {p.type === "Bot" ? <span className="chip bot">{t("people.bot")}</span> : null}
               {p.recruiter ? <span className="chip recruiter">{t("people.recruiter")}</span> : null}
