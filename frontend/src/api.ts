@@ -8,6 +8,7 @@ import type {
   PersonView,
   NoSnapshot,
   Radar,
+  Stargazers,
 } from "./types";
 
 // Every route accepts an optional `owner` (defaults server-side to the last
@@ -51,4 +52,6 @@ export const api = {
     j<PeopleDiff>("/api/people_diff" + (owner ? "?" + ownerQS(owner) : "")),
   radar: (owner?: string) =>
     j<Radar | NoSnapshot>("/api/radar" + (owner ? "?" + ownerQS(owner) : "")),
+  stargazers: (owner?: string) =>
+    j<Stargazers | NoSnapshot>("/api/stargazers" + (owner ? "?" + ownerQS(owner) : "")),
 };

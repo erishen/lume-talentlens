@@ -2,7 +2,7 @@ import React from "react";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { isNoSnapshot } from "../types";
-import type { NoSnapshot, RepoView, PersonView, Radar } from "../types";
+import type { NoSnapshot, RepoView, PersonView, Radar, StargazerEntry } from "../types";
 
 // Person lists (followers / following), repo rows, the paged repo
 // browser, and the talent-radar panel (mutual high scorers grouped by
@@ -276,6 +276,56 @@ export function RadarPanel({ radar, t, onOpen }: {
             ))}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// Stargazer profile: everyone who starred this owner's repos, scored with
+// the same influence formula as /api/people (scripts/stargazers-scan.sh).
+// Sorted by score; SELF / EXPERT (>= RADAR_SCORE) / water flagged.
+export function StargazersPanel({ entries, owner, t, onOpen }: {
+  entries: StargazerEntry[]; owner: string;
+  t: (k: string, p?: Record<string, string | number>) => string;
+  onOpen: (login: string) => void;
+}) {
+  if (entries.length === 0) return null;
+  const rows = [...entries].sort((a, b) => b.score - a.score);
+  return (
+    <div className="panel sg-panel" style={{ gridColumn: "1 / -1" }}>
+      <h2>
+        {t("people.sg_title")}{" "}
+        <span className="muted">{t("people.sg_meta", { n: entries.length })}</span>
+      </h2>
+      <div className="sg-table">
+        <div className="sg-row sg-head">
+          <span>{t("people.sg_login")}</span>
+          <span>{t("people.sg_score")}</span>
+          <span>{t("people.sg_repos")}</span>
+          <span>{t("people.sg_followers")}</span>
+          <span>{t("people.sg_starred")}</span>
+          <span>{t("people.sg_flag")}</span>
+        </div>
+        {rows.map((e) => {
+          const isSelf = e.login === owner;
+          const expert = !isSelf && e.score >= RADAR_SCORE;
+          const water = !isSelf && !expert && !!e.sus_penalty;
+          return (
+            <div key={e.login} className="sg-row">
+              <button className="sg-login" onClick={() => onOpen(e.login)}>@{e.login}</button>
+              <span className={expert ? "sg-score hot" : "sg-score"}>{e.score}</span>
+              <span>{e.repos}</span>
+              <span>{e.followers}</span>
+              <span>{e.starred_repos}</span>
+              <span>
+                {isSelf ? <span className="chip sg-self">{t("people.sg_flag_self")}</span>
+                  : expert ? <span className="chip radar">{t("people.sg_flag_expert")}</span>
+                  : water ? <span className="chip suspect">{t("people.sg_flag_water")}</span>
+                  : <span className="muted">—</span>}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

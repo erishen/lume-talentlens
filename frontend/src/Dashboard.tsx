@@ -3,7 +3,7 @@ import { useDashboardData } from "./dashboard/useDashboard";
 import { OwnerPicker } from "./dashboard/pickers";
 import { ProfileCard, TalentPanel, ComparePanel, PushTrend } from "./dashboard/panels";
 import { Bars, Kpi } from "./dashboard/bars";
-import { PersonList, RepoRow, BrowsePage, RadarPanel, RADAR_SCORE } from "./dashboard/lists";
+import { PersonList, RepoRow, BrowsePage, RadarPanel, StargazersPanel, RADAR_SCORE } from "./dashboard/lists";
 import { exportPeopleCsv } from "./exportCsv";
 import type { PersonView, Radar } from "./types";
 import { deriveTalent } from "./talent";
@@ -35,7 +35,7 @@ export function Dashboard() {
     owner, cached, weights, setWeights,
     ov, live, noSnap, loading, liveLoading, liveErr, liveProgress, repoErr,
     err, q, setQ, hits, hitsTotal, searched, searching, limit, setLimit,
-    people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, radar,
+    people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, radar, stargazers,
     cmp, setCmp,
     poolInput, setPoolInput, poolLoading, poolProgress, pool, setPool,
     rankedPool, poolFrac,
@@ -550,6 +550,18 @@ export function Dashboard() {
                     <p className="muted">
                       {owner === defaultOwner
                         ? t("people.radar_empty")
+                        : t("people.radar_owner_only", { owner: defaultOwner || "OWNER" })}
+                    </p>
+                  </div>
+                )}
+                {stargazers ? (
+                  <StargazersPanel entries={Object.values(stargazers)} owner={owner} t={t} onOpen={openOwner} />
+                ) : (
+                  <div className="panel" style={{ gridColumn: "1 / -1" }}>
+                    <h2>{t("people.sg_title")}</h2>
+                    <p className="muted">
+                      {owner === defaultOwner
+                        ? t("people.sg_empty")
                         : t("people.radar_owner_only", { owner: defaultOwner || "OWNER" })}
                     </p>
                   </div>

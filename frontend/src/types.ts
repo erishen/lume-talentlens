@@ -197,3 +197,20 @@ export interface Radar {
   self?: { login: string; score: number; star_total?: number; active?: number };
   people: RadarPerson[];
 }
+
+// stargazer profile (make stargazers -> data/github/<owner>/stargazers.json)
+export interface StargazerEntry {
+  login: string;
+  score: number;
+  repos: number;
+  followers: number;
+  following: number;
+  age_years: number;
+  hireable?: boolean;
+  bio?: string;
+  /** how many of the owner's repos this person starred */
+  starred_repos: number;
+  /** water-account penalty already applied (10 medium / 20 high) */
+  sus_penalty?: number;
+}
+export type Stargazers = Record<string, StargazerEntry>;

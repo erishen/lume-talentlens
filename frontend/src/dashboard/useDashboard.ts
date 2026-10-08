@@ -4,7 +4,7 @@
 // ranking. Dashboard.tsx now only renders JSX against this hook.
 import React from "react";
 import { api } from "../api";
-import type { Overview, RepoView, NoSnapshot, People, PeopleDiff, Radar } from "../types";
+import type { Overview, RepoView, NoSnapshot, People, PeopleDiff, Radar, Stargazers } from "../types";
 import { isNoSnapshot } from "../types";
 import { fetchLive, fetchLiveProfile, fetchLiveRepos, buildOverviewPartial, buildOverviewFull, ovRepos, writeLiveCacheResult, fetchLivePeople, searchLocal, type LiveResult, type LiveProgress } from "../live";
 import { deriveTalent, healthScore, loadHealthWeights, saveHealthWeights, type HealthWeights } from "../talent";
@@ -58,6 +58,7 @@ export function useDashboardData(t: T, lang: Lang) {
   const [peopleError, setPeopleError] = React.useState("");
   const [peopleDiff, setPeopleDiff] = React.useState<PeopleDiff | null>(null);
   const [radar, setRadar] = React.useState<Radar | null>(null);
+  const [stargazers, setStargazers] = React.useState<Stargazers | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
   const [refreshMsg, setRefreshMsg] = React.useState("");
 
@@ -135,6 +136,13 @@ export function useDashboardData(t: T, lang: Lang) {
         if (seq === peopleSeq.current && rr && !isNoSnapshot(rr) &&
             "people" in rr && Array.isArray((rr as Radar).people)) {
           setRadar(rr as Radar);
+        }
+      }).catch(() => {});
+      // stargazer profile — same best-effort pattern (404 = no make stargazers).
+      api.stargazers(target).then((sg) => {
+        if (seq === peopleSeq.current && sg && !isNoSnapshot(sg) &&
+            typeof sg === "object" && !Array.isArray(sg)) {
+          setStargazers(sg as Stargazers);
         }
       }).catch(() => {});
     }).catch(() => {
@@ -426,7 +434,7 @@ export function useDashboardData(t: T, lang: Lang) {
     weights, setWeights,
     ov, live, noSnap, loading, liveLoading, liveErr, liveProgress, repoErr,
     err, q, setQ, hits, hitsTotal, searched, searching, limit, setLimit,
-    people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, radar,
+    people, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, radar, stargazers,
     cmp, setCmp,
     poolInput, setPoolInput, poolLoading, poolProgress, pool, setPool,
     rankedPool, poolFrac,
