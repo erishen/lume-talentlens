@@ -268,7 +268,7 @@ make dev（唯一开发循环，前台）
   └─ $LUME app/github.lume  前台运行（Ctrl-C 停服务+watcher）
 ```
 
-- `LUME ?= ../lume/lume/bin/lume`（Makefile 与 dev.sh 同默认），可用 `LUME=` 覆盖、`PORT=9000`/`LUME_GITHUB_PORT` 改端口；
+- `LUME ?= ../lume/bin/lume`（Makefile 与 dev.sh 同默认），可用 `LUME=` 覆盖、`PORT=9000`/`LUME_GITHUB_PORT` 改端口；
 - server 配置：`workers=4`（prefork）、`bind=127.0.0.1`、`docroot=./www`、`views=github`。
 
 ---

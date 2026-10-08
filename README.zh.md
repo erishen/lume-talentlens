@@ -6,7 +6,7 @@
 
 ## 环境要求
 
-- **完整版 Lume build** —— 应用默认使用 `LUME ?= ../lume/lume/bin/lume`（与本仓库平级的完整构建；在 `../lume/lume` 里 `make` 即可）。可用 `LUME=/path/to/lume` 覆盖。**release 版二进制会在启动时被拒并给出明确提示** —— 见下面的出站 HTTP 说明。
+- **完整版 Lume build** —— 应用默认使用 `LUME ?= ../lume/bin/lume`（与本仓库平级的完整构建；在 `../lume/lume` 里 `make` 即可）。可用 `LUME=/path/to/lume` 覆盖。**release 版二进制会在启动时被拒并给出明确提示** —— 见下面的出站 HTTP 说明。
 - **Node 18+ / pnpm** 用于前端（`(cd frontend && pnpm install)`）。
 - 可选：`.env` 中的 `OWNER` / `GH_TOKEN` / `LLM_*`（见[配置（.env）](#配置env)）。
 

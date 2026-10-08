@@ -27,7 +27,7 @@ export GH_ANALYZER_PAT="${GH_ANALYZER_PAT:-${GH_TOKEN:-}}"
 # live / refresh / follow endpoints need, so a release binary is rejected by
 # the capability probe below. LUME=/path/to/lume overrides; a missing binary
 # or an incapable one fails fast with a clear message.
-DEFAULT_LUME="$(cd "$ROOT/.." && pwd)/lume/lume/bin/lume"
+DEFAULT_LUME="$(cd "$ROOT/.." && pwd)/lume/bin/lume"
 LUME="${LUME:-$DEFAULT_LUME}"
 if [ -z "$LUME" ] || [ ! -x "$LUME" ]; then
   echo "dev: no Lume binary found at $LUME — build it (make in work/lume/lume) or set LUME=/path/to/lume" >&2
