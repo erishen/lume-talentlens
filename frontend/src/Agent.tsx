@@ -1,5 +1,5 @@
 import React from "react";
-import { useT } from "./i18n";
+import { useT, useLang } from "./i18n";
 import { renderMarkdown } from "./markdown";
 
 interface Msg {
@@ -17,6 +17,7 @@ interface Msg {
 // lines, and stop on done/error.
 export function Agent() {
   const t = useT();
+  const { lang } = useLang();
   const [msgs, setMsgs] = React.useState<Msg[]>([
     { role: "note", text: t("agent.note") },
   ]);
@@ -35,6 +36,18 @@ export function Agent() {
   React.useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
+
+  // language switch: refresh the welcome note in the new language, but only
+  // while the conversation is still pristine — never rewrite existing turns.
+  React.useEffect(() => {
+    setMsgs((m) => {
+      if (m.length === 1 && m[0].role === "note") {
+        return [{ role: "note", text: t("agent.note") }];
+      }
+      return m;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang]);
 
   React.useEffect(() => {
     const el = scroller.current;
