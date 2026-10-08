@@ -14,7 +14,9 @@ import type { Overview, TalentSignals } from "../types";
 
 // Minimal Overview; fields deriveTalent reads are optional-ish (guarded with
 // ?. / ??), so an empty profile/languages/totals object is a valid input.
-const MIN_OV = (over: Partial<Overview> = {}): Overview =>
+// over is a loose bag (Record) — Partial<Overview> does not recurse, and
+// passing a subset like totals:{archived} would fail the full type check.
+const MIN_OV = (over: Record<string, unknown> = {}): Overview =>
   ({
     owner: "demo",
     fetched_at: "2026-01-01T00:00:00Z",
@@ -25,7 +27,7 @@ const MIN_OV = (over: Partial<Overview> = {}): Overview =>
     non_fork_count: 0,
     top_by_stars: [],
     ...over,
-  }) as Overview;
+  }) as unknown as Overview;
 
 describe("pct", () => {
   it("formats 0..1 as integer percent", () => {
