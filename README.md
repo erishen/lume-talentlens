@@ -144,6 +144,26 @@ normal env var (e.g. `OWNER=acme make fetch`), which always wins.
 > (`.data/sessions`, newest 30 kept) and rotates `logs/access.log` before
 > starting.
 
+## Security & privacy
+
+- **Loopback-only.** The server binds `127.0.0.1` only — nothing listens on
+  the network. Don't tunnel or port-forward it to the public internet:
+  `/api/follow` / `/api/unfollow` act on **your** GitHub account with your
+  token, and the dashboards show your personal network graph.
+- **Write actions are CSRF-guarded.** Follow/unfollow accept only
+  `Content-Type: application/json` (HTML forms and text/plain fetches are
+  rejected with 403) and the server sends no CORS headers, so cross-site
+  JSON is blocked by the browser.
+- **Secrets never leave `.env`.** `GH_TOKEN` / `LLM_API_KEY` are read via
+  `env()`, which masks any name containing TOKEN/API_KEY/SECRET/PASSWORD, and
+  are never logged. `.env` and `data/github/` (snapshots, scores, suspects)
+  are gitignored — a public clone carries no credentials and no personal
+  snapshot data.
+- **LLM agent data.** When you configure `LLM_*` and chat with the agent, the
+  relevant snapshot data (repo list, profile, radar/people summaries) is sent
+  to the LLM provider you configured. Leave `LLM_*` unset to use the offline
+  canned engine, which never makes outbound calls.
+
 ## Routes
 
 | Method | Path | Notes |

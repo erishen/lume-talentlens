@@ -89,6 +89,13 @@ cp .env.example .env   # 然后编辑 OWNER=你的 GitHub 登录名
 >
 > `make dev` 是唯一的开发循环（Ctrl-C 同时停服务与 watcher）；启动前会杀掉端口上的旧服务、清理过期智能体会话记录（`.data/sessions`，保留最新 30 份）、轮转 `logs/access.log`。
 
+## 安全与隐私
+
+- **仅本机回环。** 服务器只绑定 `127.0.0.1`，不监听任何网络接口。**不要把它隧道/端口转发到公网**：`/api/follow`、`/api/unfollow` 会用你的 token 操作**你的 GitHub 账号**，仪表盘展示的是你的个人网络画像。
+- **写操作有 CSRF 防护。** 关注/取关只接受 `Content-Type: application/json`（HTML 表单与 text/plain 请求一律 403），且服务器不发 CORS 头——跨站 JSON 请求会被浏览器 preflight 阻断。
+- **密钥永不离开 `.env`。** `GH_TOKEN` / `LLM_API_KEY` 通过 `env()` 读取（任何含 TOKEN/API_KEY/SECRET/PASSWORD 的变量名都会被掩码），从不写日志；`.env` 与 `data/github/`（快照、评分、水号嫌疑）均已 gitignore——公开克隆不带任何凭据或个人快照数据。
+- **LLM 智能体数据。** 配置 `LLM_*` 后与智能体对话时，相关快照数据（仓库列表、画像、雷达/人脉摘要）会发送给你配置的 LLM 提供商。不配置 `LLM_*` 则使用离线兜底引擎，不会发起任何出站调用。
+
 ## 路由
 
 | 方法 | 路径 | 说明 |
