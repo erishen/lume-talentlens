@@ -1,6 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { pct, cadence, deriveTalent } from "../talent";
-import type { Overview } from "../types";
+import {
+  pct,
+  cadence,
+  deriveTalent,
+  pillarScores,
+  healthScore,
+  loadHealthWeights,
+  toHrNote,
+  hrNoteMarkdown,
+  DEFAULT_HEALTH_WEIGHTS,
+} from "../talent";
+import type { Overview, TalentSignals } from "../types";
 
 // Minimal Overview; fields deriveTalent reads are optional-ish (guarded with
 // ?. / ??), so an empty profile/languages/totals object is a valid input.
@@ -99,5 +109,106 @@ describe("deriveTalent", () => {
     expect(t.labels).toContain("活跃维护者");
     expect(t.labels).toContain("专注型作品集");
     expect(t.labels).toContain("社区关注度高");
+  });
+});
+
+// Direct construction for the health-score layer (it consumes TalentSignals,
+// not Overview).
+const SIG = (over: Partial<TalentSignals> = {}): TalentSignals =>
+  ({
+    member_since_year: null,
+    tenure_years: null,
+    output_ratio: 0,
+    avg_days_since_push: -1,
+    desc_ratio: 0,
+    license_ratio: 0,
+    topics_ratio: 0,
+    top_lang: "—",
+    top_lang_ratio: 0,
+    top2_ratio: 0,
+    recent_active_ratio: 0,
+    secondary_langs: [],
+    followers: 0,
+    top_star_repo: null,
+    labels: [],
+    ...over,
+  }) as TalentSignals;
+
+describe("pillarScores", () => {
+  it("maxes all four pillars on a perfect profile", () => {
+    const p = pillarScores(
+      SIG({
+        recent_active_ratio: 1,
+        avg_days_since_push: 0,
+        desc_ratio: 1,
+        license_ratio: 1,
+        topics_ratio: 1,
+        top2_ratio: 1,
+        followers: 100000,
+        top_star_repo: { name: "x", stars: 500 },
+      })
+    );
+    expect(p.activity).toBe(1);
+    expect(p.rigor).toBe(1);
+    expect(p.focus).toBe(1);
+    expect(p.influence).toBe(1);
+  });
+  it("floors the recency factor at 0.5 for very stale profiles (never zeroes)", () => {
+    const p = pillarScores(SIG({ recent_active_ratio: 0, avg_days_since_push: 3650 }));
+    // 0.8*0 + 0.2*0.5
+    expect(p.activity).toBeCloseTo(0.1, 5);
+  });
+  it("scales influence on a personal-developer curve (100 followers ≈ strong)", () => {
+    const p = pillarScores(SIG({ followers: 100, top_star_repo: null }));
+    // log10(101)/2 ≈ 1.002 -> clamped to 1; 0.6*1 + 0.4*0
+    expect(p.influence).toBeCloseTo(0.6, 5);
+  });
+});
+
+describe("healthScore", () => {
+  it("returns 100 for a perfect profile with default weights", () => {
+    const h = healthScore(
+      SIG({ recent_active_ratio: 1, avg_days_since_push: 0, desc_ratio: 1, license_ratio: 1, topics_ratio: 1, top2_ratio: 1, followers: 100000, top_star_repo: { name: "x", stars: 500 } })
+    );
+    expect(h.total).toBe(100);
+  });
+  it("weights activity strongest (default 0.4)", () => {
+    // everything 0 except activity 1 -> total = 40
+    const h = healthScore(SIG({ recent_active_ratio: 1, avg_days_since_push: 0 }));
+    expect(h.total).toBe(40);
+  });
+  it("normalizes non-default weight sums (all-zero weights -> defaults)", () => {
+    const h = healthScore(SIG({}), { activity: 0, rigor: 0, focus: 0, influence: 0 });
+    expect(h.total).toBeGreaterThanOrEqual(0);
+    expect(h.total).toBeLessThanOrEqual(100);
+  });
+});
+
+describe("loadHealthWeights", () => {
+  it("returns defaults when storage is unavailable (node has no localStorage)", () => {
+    expect(loadHealthWeights()).toEqual(DEFAULT_HEALTH_WEIGHTS);
+  });
+});
+
+describe("toHrNote / hrNoteMarkdown", () => {
+  it("renders a bilingual copy-ready note from an overview", () => {
+    const ov = MIN_OV({ count: 10, non_fork_count: 8, languages: { TypeScript: 8, Python: 2 }, recency: { active: 5 } });
+    const t = deriveTalent(ov, "zh");
+    const zh = toHrNote(ov, t, DEFAULT_HEALTH_WEIGHTS, "zh");
+    expect(zh).toContain("@demo");
+    expect(zh).toContain("开源人才画像");
+    expect(zh).toContain("10 个公开仓库");
+    expect(zh).toContain("开源健康度");
+    const en = toHrNote(ov, t, DEFAULT_HEALTH_WEIGHTS, "en");
+    expect(en).toContain("@demo");
+    expect(en).toContain("open-source talent read");
+    expect(en).toContain("public repos");
+  });
+  it("wraps the note in a Markdown document with weights footnote", () => {
+    const ov = MIN_OV({ count: 5 });
+    const t = deriveTalent(ov);
+    const md = hrNoteMarkdown(ov, t, DEFAULT_HEALTH_WEIGHTS, "zh");
+    expect(md.startsWith("# 开源人才画像 — @demo")).toBe(true);
+    expect(md).toContain("权重 — 活跃 40% · 严谨 30% · 专注 20% · 影响 10%");
   });
 });

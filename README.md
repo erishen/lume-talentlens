@@ -71,6 +71,7 @@ make dev          # kill any server on the port + build UI + esbuild watch +
 make fetch        # snapshot your repos -> data/github/
 make ui           # esbuild React bundle -> www/github/app.js
 make check        # type-check the .lume files + runtime sanity (sanity.lume)
+make test         # frontend unit tests (vitest — talent derivation, i18n parity, CSV escaping)
 make dev PORT=9000
 ```
 

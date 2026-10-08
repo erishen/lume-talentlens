@@ -54,6 +54,7 @@ make dev          # 杀掉占用端口的老服务 + 构建 UI + esbuild watch +
 make fetch        # 快照你的仓库 -> data/github/
 make ui           # esbuild React 打包 -> www/github/app.js
 make check        # 类型检查 .lume 文件 + 运行时 sanity（sanity.lume）
+make test         # 前端单测（vitest —— 人才推导、i18n 键一致性、CSV 转义）
 make dev PORT=9000
 ```
 

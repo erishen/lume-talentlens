@@ -6,9 +6,18 @@ import type { People, PersonView, Radar } from "./types";
 
 const HEADERS = ["relation", "login", "score", "radar_mode", "radar_note", "hireable", "url"] as const;
 
-function esc(v: string | number | boolean | null | undefined): string {
+// CSV cell escape: quote cells containing , " or newlines (standard RFC 4180).
+// Additionally neutralize cells that START with a spreadsheet formula
+// character (= + - @) by prefixing a single quote — the standard OWASP
+// CSV-injection mitigation. GitHub logins can't contain those characters,
+// but radar notes / bios are external text that may begin with e.g. "=".
+export function esc(v: string | number | boolean | null | undefined): string {
   const s = v == null ? "" : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  if (s === "") return "";
+  const needsQuote = /[",\n]/.test(s);
+  const body = s.replace(/"/g, '""');
+  if (/^[=+\-@]/.test(s)) return "'" + (needsQuote ? `"${body}"` : body);
+  return needsQuote ? `"${body}"` : body;
 }
 
 function row(p: PersonView, relation: string, radarByLogin: Map<string, Radar["people"][number]>): string {
