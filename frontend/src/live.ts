@@ -2,11 +2,39 @@
 // fetches GitHub server-side via the built-in http_get() (outbound TLS). The
 // user can type ANY owner and analyze it without a pre-fetched local snapshot.
 //
-// Mirrors the shapes the server emits (types.ts) so the dashboard renders the
-// same regardless of source. The shared server is limited to ~60 unauthenticated
-// req/h; a single owner needs at most 1 (profile) + ceil(repos/100) calls.
+// This module owns the fetch orchestration: GitHub-aware throttling, the
+// rate-limit circuit breaker, the two-phase pagination and the live people
+// fetch. Pure derivation (toView/buildOverview/…) and the browser cache live
+// in live-core.ts (unit-tested); everything here is re-exported from there so
+// callers keep the same import surface.
+//
+// The shared server is limited to ~60 unauthenticated req/h; a single owner
+// needs at most 1 (profile) + ceil(repos/100) calls.
 
-import type { Overview, RepoView, People, PersonView } from "./types";
+import type { People, PersonView } from "./types";
+import {
+  buildOverview,
+  ovRepos,
+  readLiveCache,
+  writeLiveCache,
+  toPerson,
+  type LiveResult,
+} from "./live-core";
+
+// Re-export the pure/core surface unchanged so existing imports keep working.
+export {
+  pushTrend,
+  buildOverviewPartial,
+  buildOverviewFull,
+  writeLiveCacheResult,
+  ovRepos,
+  searchLocal,
+  toView,
+  toPerson,
+  recencyBucket,
+  LIVE_CACHE_TTL_MS,
+} from "./live-core";
+export type { LiveResult, LiveCacheStore } from "./live-core";
 
 // Same-origin GitHub proxy route on the Lume server (app/github.lume). The
 // browser can always reach its own host even without egress to GitHub.
@@ -122,99 +150,6 @@ async function fetchGithubOnce(path: string, owner: string, signal?: AbortSignal
   }
 }
 
-function daysAgo(iso?: string | null): number {
-  if (!iso) return -1;
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return -1;
-  return Math.max(0, Math.floor((Date.now() - t) / 86400000));
-}
-
-function recencyBucket(d: number): RepoView["recency"] {
-  if (d < 0) return "unknown";
-  if (d <= 90) return "active";
-  if (d <= 365) return "recent";
-  if (d <= 730) return "dormant";
-  return "stale";
-}
-
-// map one raw GitHub repo object to our RepoView (same rules as the server).
-function toView(r: any): RepoView {
-  let lang = r.language;
-  if (lang === "null" || lang === undefined || lang === null) lang = "";
-  let lic = "None";
-  const l = r.license;
-  if (l) {
-    const id = String(l.spdx_id ?? "");
-    lic = id === "NOASSERTION" || id === "null" || id === "" ? "Custom" : id;
-  }
-  const dUpdated = daysAgo(r.updated_at);
-  const dPush = daysAgo(r.pushed_at);
-  const createdYear = r.created_at ? new Date(r.created_at).getFullYear() : 0;
-  return {
-    name: r.name,
-    full_name: r.full_name ?? r.name,
-    lang,
-    stars: r.stargazers_count ?? 0,
-    forks: r.forks_count ?? 0,
-    issues: r.open_issues_count ?? 0,
-    is_fork: !!r.fork,
-    archived: !!r.archived,
-    license: lic,
-    desc: (r.description || "").slice(0, 140),
-    url: r.html_url ?? "",
-    topics: Array.isArray(r.topics) ? r.topics.slice(0, 8) : [],
-    created: r.created_at ?? "",
-    updated: r.updated_at ?? "",
-    pushed: r.pushed_at ?? "",
-    created_year: createdYear,
-    days_since_push: dPush,
-    days_since_updated: dUpdated,
-    recency: recencyBucket(dPush), // "active" = pushed within 90d (server parity)
-    size: r.size ?? 0,
-    push_month: r.pushed_at ? r.pushed_at.slice(0, 7) : "",
-  };
-}
-
-// "YYYY-MM" -> count of repos last pushed that month. Matches the
-// server-side push_month_histogram so live and cached paths agree.
-export function pushTrend(repos: RepoView[]): Record<string, number> {
-  const acc: Record<string, number> = {};
-  for (const r of repos) {
-    const m = r.push_month || (r.pushed ? r.pushed.slice(0, 7) : "");
-    if (!m) continue;
-    acc[m] = (acc[m] || 0) + 1;
-  }
-  return acc;
-}
-
-function histogram(repos: RepoView[], key: (r: RepoView) => string) {
-  const acc: Record<string, number> = {};
-  for (const r of repos) {
-    const k = key(r) || "None";
-    acc[k] = (acc[k] || 0) + 1;
-  }
-  return acc;
-}
-
-function topN<T>(list: T[], n: number): T[] {
-  return list.slice(0, n);
-}
-
-export interface LiveResult {
-  overview: Overview;
-  all: RepoView[]; // sorted by updated desc — for client-side browsing
-}
-
-// Per-page progress for a live fetch. `total` is an estimate from the
-// profile's public_repos count (0 when unknown); `repos` is how many have
-// been pulled so far.
-export interface LiveProgress {
-  page: number;
-  total: number;
-  repos: number;
-}
-export type LiveProgressFn = (p: LiveProgress) => void;
-
 // ---- two-phase live fetch ----------------------------------------------
 // Owners with thousands of repos (e.g. 4k+ for @idimetrix) take tens of
 // seconds to paginate; holding the whole ProfileCard hostage to that made
@@ -227,6 +162,16 @@ export interface LiveProfilePhase {
   lastPush: string;
   estTotal: number; // estimated repo pages (0 when unknown)
 }
+
+// Per-page progress for a live fetch. `total` is an estimate from the
+// profile's public_repos count (0 when unknown); `repos` is how many have
+// been pulled so far.
+export interface LiveProgress {
+  page: number;
+  total: number;
+  repos: number;
+}
+export type LiveProgressFn = (p: LiveProgress) => void;
 
 // Phase 1 — profile + the single most recently pushed repo (sort=pushed
 // desc). Two requests, always fast; enough for ProfileCard + the hireable
@@ -292,104 +237,6 @@ export async function fetchLiveRepos(
   return reposRaw;
 }
 
-// Shared Overview builder. `partial` marks the phase-1 view (profile only,
-// no repo stats yet). Cached/server views are never partial.
-function buildOverview(
-  owner: string,
-  u: any,
-  lastPush: string,
-  reposRaw: any[],
-  partial: boolean
-): Overview {
-  // archived and forked repos are excluded from every public view (server
-  // parity: the cached path filters via active_repos() too)
-  const all = reposRaw.map(toView).filter((r) => !r.archived && !r.is_fork).sort((a, b) => (a.updated < b.updated ? 1 : -1));
-  const originals = all.filter((r) => !r.is_fork);
-  return {
-    owner,
-    fetched_at: new Date().toISOString().replace("T", " ").slice(0, 19),
-    partial,
-    profile: {
-      name: u.name,
-      avatar_url: u.avatar_url,
-      bio: u.bio,
-      company: u.company,
-      location: u.location,
-      blog: u.blog,
-      twitter_username: u.twitter_username,
-      hireable: u.hireable,
-      followers: u.followers,
-      following: u.following,
-      public_repos: u.public_repos,
-      public_gists: u.public_gists,
-      last_push: lastPush,
-      created_at: u.created_at,
-      html_url: u.html_url,
-    },
-    count: all.length,
-    non_fork_count: originals.length,
-    totals: {
-      stars: all.reduce((s, r) => s + r.stars, 0),
-      forks: all.reduce((s, r) => s + r.forks, 0),
-      issues: all.reduce((s, r) => s + r.issues, 0),
-      archived: all.filter((r) => r.archived).length,
-      forked: all.filter((r) => r.is_fork).length,
-    },
-    languages: histogram(all, (r) => r.lang),
-    recency: histogram(all, (r) => r.recency),
-    years: histogramYear(all),
-    top_by_stars: topN(
-      [...all].sort((a, b) => b.stars - a.stars),
-      10
-    ),
-    top_by_activity: topN(
-      [...all].sort((a, b) => b.created_year - a.created_year),
-      10
-    ),
-    push_trend: pushTrend(all),
-  };
-}
-
-// Phase-1 Overview — profile only; the dashboard renders the ProfileCard and
-// shows a "pulling repos" note until phase 2 fills the rest in.
-export function buildOverviewPartial(
-  owner: string,
-  u: any,
-  lastPush: string
-): Overview {
-  return buildOverview(owner, u, lastPush, [], true);
-}
-
-// Phase-2 Overview — full aggregates, replaces the partial one.
-export function buildOverviewFull(
-  owner: string,
-  u: any,
-  lastPush: string,
-  reposRaw: any[]
-): Overview {
-  return buildOverview(owner, u, lastPush, reposRaw, false);
-}
-
-// RepoView[] for the dashboard's browse list (same derivation as the
-// overview's internal all()).
-export function ovRepos(reposRaw: any[]): RepoView[] {
-  return reposRaw
-    .map(toView)
-    .filter((r) => !r.archived && !r.is_fork)
-    .sort((a, b) => (a.updated < b.updated ? 1 : -1));
-}
-
-// Persist a finished LiveResult into the 10-min browser cache (phase-2
-// completion path writes it; fetchLive keeps doing it inline for the
-// compare panel).
-export function writeLiveCacheResult(owner: string, result: LiveResult): void {
-  try {
-    writeLiveCache(owner, result);
-  } catch {
-    // storage quota/unavailable — live still works, just uncached
-  }
-}
-
 export async function fetchLive(
   owner: string,
   signal?: AbortSignal,
@@ -413,76 +260,6 @@ export async function fetchLive(
   const result: LiveResult = { overview, all: ovRepos(reposRaw) };
   writeLiveCache(owner, result);
   return result;
-}
-
-// ---- live-fetch result cache (browser-side) ----------------------------
-// The unauthenticated GitHub limit (~60 req/h shared) makes a live fetch
-// slow; caching the finished LiveResult per owner for a short TTL turns
-// revisits into instant responses. localStorage survives a page refresh;
-// quota/unavailable storage degrades to "no cache" and live still works.
-
-const LIVE_CACHE_KEY = "lume-talentlens.live.v1";
-const LIVE_CACHE_TTL_MS = 10 * 60 * 1000;
-
-interface LiveCacheEntry {
-  fetchedAt: number;
-  result: LiveResult;
-}
-
-function readLiveCache(owner: string): LiveResult | null {
-  try {
-    const raw = localStorage.getItem(LIVE_CACHE_KEY);
-    if (!raw) return null;
-    const map = JSON.parse(raw) as Record<string, LiveCacheEntry>;
-    const e = map[owner];
-    if (!e) return null;
-    if (Date.now() - e.fetchedAt > LIVE_CACHE_TTL_MS) return null;
-    return e.result;
-  } catch {
-    return null;
-  }
-}
-
-function writeLiveCache(owner: string, result: LiveResult): void {
-  try {
-    const raw = localStorage.getItem(LIVE_CACHE_KEY);
-    const map: Record<string, LiveCacheEntry> = raw ? JSON.parse(raw) : {};
-    map[owner] = { fetchedAt: Date.now(), result };
-    localStorage.setItem(LIVE_CACHE_KEY, JSON.stringify(map));
-  } catch {
-    /* quota or storage unavailable — the live fetch still works uncached */
-  }
-}
-
-// year histogram drops zero/invalid years (matches server behavior).
-function histogramYear(repos: RepoView[]): Record<string, number> {
-  const acc: Record<string, number> = {};
-  for (const r of repos) {
-    if (!r.created_year) continue;
-    const k = String(r.created_year);
-    acc[k] = (acc[k] || 0) + 1;
-  }
-  return acc;
-}
-
-// client-side substring search across name/desc/lang/topics (lowercased).
-export function searchLocal(all: RepoView[], q: string): RepoView[] {
-  const needle = q.toLowerCase();
-  if (!needle) return all;
-  return all.filter((r) => {
-    const hay = [r.name, r.desc, r.lang, ...(r.topics || [])].join(" ").toLowerCase();
-    return hay.includes(needle);
-  });
-}
-
-function toPerson(u: any): PersonView {
-  return {
-    login: u.login ?? "",
-    name: u.name || u.login || "",
-    avatar: u.avatar_url ?? "",
-    url: u.html_url ?? "",
-    type: u.type ?? "User",
-  };
 }
 
 // live people: fetch followers + following (first page of 100 each) directly
