@@ -106,6 +106,14 @@ follow-worthy:
 radar:
 	@OWNER="$(OWNER)" bash scripts/radar-scan.sh
 
+# Stargazer scan: aggregate everyone who starred the owner's repos, score
+# each with the people-score influence formula, write data/github/<owner>/
+# stargazers.json and print a ranked table (★ EXPERT >= RADAR_SCORE, SELF /
+# water flagged). ~1 API call per starred repo + 1 per person.
+#   make stargazers                # default owner, all starred repos
+stargazers:
+	@OWNER="$(OWNER)" bash scripts/stargazers-scan.sh
+
 # Remove build artifacts + runtime logs (all regenerable). Never touches
 # data/github/ (your snapshots) or .env (your credentials).
 clean:
