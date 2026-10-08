@@ -233,7 +233,7 @@ Supporting plumbing:
 local data (avatar-uid account-age proxy + login-name patterns) — **no GitHub
 API cost**. It writes `data/github/<owner>/suspects.json`, and the server
 merges that pre-screen into `/api/people` by login, so the dashboard shows
-`水号 / maybe 水号 / 招聘方` chips on both lists:
+`water? / maybe-water / recruiter?` chips on both lists:
 
 ```bash
 make suspects                  # default owner, both lists (KIND=all)
@@ -262,7 +262,7 @@ water-accounts −20/−10 at merge) into `scores.json` (gitignored). Followers
 are deliberately demoted (inflated counts are the classic marketing-account
 tell) and replaced by the followers-vs-following ratio; water accounts lose
 score so they can't buy ranking. The dashboard sorts by score and badges
-`高分`; it also computes the **mutual-following** and **worth-following**
+`high-score`; it also computes the **mutual-following** and **worth-following**
 (high-score followers you don't follow yet) lists, and shows a
 network-change diff after each refresh:
 
@@ -285,7 +285,7 @@ activity (20 recent-90d / 10 within-1y) + demoted followers/age + hireable/bio
 − water penalty` (cap ≈123) — then classifies each by money pattern (startup /
 crypto / company / content / tools / hunting / other) from live profile +
 full repo list into `data/github/<owner>/radar.json`. The dashboard's
-**高手洞察 · 盈利模式** panel groups them, and each person chip analyzes
+**Talent radar · money patterns** panel groups them, and each person chip analyzes
 in-app on click.
 
 Each person also carries **monetization-signal badges**:
