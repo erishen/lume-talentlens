@@ -114,6 +114,7 @@ export function useDashboardData(t: T, lang: Lang) {
     setPeopleError("");
     setPeopleLoading(true);
     setRadar(null);
+    setStargazers(null);
     const target = o.trim();
     if (!target) return;
     if (viaLive) {
@@ -380,6 +381,10 @@ export function useDashboardData(t: T, lang: Lang) {
     setOwner(o);
     setQ(""); setHits([]); setSearched(false);
     setPeople(null);
+    // radar + stargazer profiles belong to the previous owner — clear them
+    // so a stale panel never flashes old data while the new one loads.
+    setRadar(null);
+    setStargazers(null);
   }
 
   // Clicking a follower/following name analyzes that person in-app:
