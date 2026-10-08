@@ -846,11 +846,44 @@ footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 24
   color: #d97706;
 }
 
-/* relation panels (mutual / worth-following) — chips link out to GitHub */
+/* relation panels (mutual / worth-following) — in-app analyze body plus a
+   small ↗ link out to the GitHub profile */
 .person-link {
   text-decoration: none;
   color: inherit;
 }
+.person-chip.person-link {
+  padding: 0;
+  overflow: hidden;
+}
+.person-open {
+  border: 0;
+  background: none;
+  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.person-open:hover { color: var(--accent); }
+.person-ext {
+  padding: 5px 10px;
+  font-size: .8rem;
+  color: var(--muted);
+  text-decoration: none;
+  border-left: 1px solid var(--line);
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+.person-ext:hover { color: var(--accent); background: #0f1a30; }
 .person-link:hover .person-login {
   text-decoration: underline;
 }

@@ -577,12 +577,14 @@ export function Dashboard() {
                   people={mutualPeople}
                   emptyNote={t("people.mutual_none")}
                   t={t}
+                  onOpen={openOwner}
                 />
                 <RelationPanel
                   title={t("people.worth")}
                   people={worthPeople}
                   emptyNote={t("people.worth_none")}
                   t={t}
+                  onOpen={openOwner}
                   action={
                     worthPeople.length > 0 && (
                       <button

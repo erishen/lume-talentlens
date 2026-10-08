@@ -88,10 +88,21 @@ export function PersonChip({ p, t, onOpen, href }: {
     </>
   );
   if (href) {
+    // relation-panel chip: the main body analyzes in-app (same click
+    // behaviour as the follower lists), the small ↗ link opens GitHub.
     return (
-      <a className="person-chip person-link" href={href} target="_blank" rel="noreferrer" title={href}>
-        {inner}
-      </a>
+      <span className="person-chip person-link">
+        <button
+          className="person-open"
+          onClick={() => onOpen?.(p.login)}
+          title={t("people.click_name", { login: p.login })}
+        >
+          {inner}
+        </button>
+        <a className="person-ext" href={href} target="_blank" rel="noreferrer" title={t("people.open_github")}>
+          ↗
+        </a>
+      </span>
     );
   }
   return (

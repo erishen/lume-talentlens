@@ -375,10 +375,13 @@ function DiffLine({ label, items, t }: { label: string; items: string[]; t: (k: 
 }
 
 // Mutual / worth-following — a chip list whose entries link OUT to the
-// GitHub profile (unlike PersonList, where clicking analyzes in-app).
-function RelationPanel({ title, people, emptyNote, t, action }: {
+// Mutually-followed / worth-following lists. Clicking a chip analyzes the
+// person in-app (same behaviour as the follower lists); the small ↗ link
+// opens their GitHub profile.
+function RelationPanel({ title, people, emptyNote, t, onOpen, action }: {
   title: string; people: PersonView[]; emptyNote: string;
   t: (k: string, p?: Record<string, string | number>) => string;
+  onOpen?: (login: string) => void;
   action?: React.ReactNode;
 }) {
   return (
@@ -392,7 +395,7 @@ function RelationPanel({ title, people, emptyNote, t, action }: {
       ) : (
         <div className="person-list">
           {people.map((p, i) => (
-            <PersonChip key={i} p={p} t={t} href={p.url} />
+            <PersonChip key={i} p={p} t={t} onOpen={onOpen} href={p.url} />
           ))}
         </div>
       )}
