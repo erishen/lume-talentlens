@@ -830,6 +830,39 @@ footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 24
   overflow-wrap: anywhere;
 }
 
+/* people sub-views: relations / insights / lists */
+.people-subtabs {
+  display: flex;
+  gap: 8px;
+  margin: 2px 0 14px;
+  flex-wrap: wrap;
+}
+.chip.subtab {
+  font-size: .78rem;
+  padding: 4px 14px;
+  cursor: pointer;
+  background: #0d1526;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.chip.subtab:hover { border-color: var(--accent); color: var(--accent); }
+.chip.subtab.active {
+  background: var(--accent, #3b82f6);
+  border-color: var(--accent, #3b82f6);
+  color: #fff;
+}
+.people-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  grid-column: 1 / -1;
+}
+.people-grid > .panel {
+  flex: 1 1 360px;
+  grid-column: auto !important;
+  min-width: 0;
+}
+
 /* talent-radar (make score) — by-influence sort + high-scorer badge */
 .chip.btn-sort {
   margin-left: 10px;
