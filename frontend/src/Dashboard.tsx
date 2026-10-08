@@ -48,6 +48,27 @@ export function Dashboard() {
   const [followState, setFollowState] = React.useState<{
     busy: boolean; done: number; failed: number; err: string;
   }>({ busy: false, done: 0, failed: 0, err: "" });
+  // GitHub's API endpoint is flaky on this network (the first handshake often
+  // times out and a retry succeeds immediately) — retry once per action so a
+  // one-click follow/unfollow doesn't surface a misleading "network error".
+  const netErr = t("people.network_err");
+  async function postAction(url: string, login: string): Promise<{ ok: boolean; err: string }> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await fetch(url, {
+          method: url.endsWith("/follow") ? "POST" : "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ login }),
+        });
+        const j = await r.json().catch(() => null);
+        if (j && j.ok) return { ok: true, err: "" };
+        return { ok: false, err: (j && j.err) || `HTTP ${r.status}` };
+      } catch {
+        if (attempt === 1) return { ok: false, err: netErr };
+      }
+    }
+    return { ok: false, err: netErr };
+  }
   async function followAll(targets: PersonView[]) {
     if (followState.busy || targets.length === 0) return;
     setFollowState({ busy: true, done: 0, failed: 0, err: "" });
@@ -55,21 +76,11 @@ export function Dashboard() {
     let failed = 0;
     let firstErr = "";
     for (const p of targets) {
-      try {
-        const r = await fetch("/api/follow", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ login: p.login }),
-        });
-        const j = await r.json().catch(() => null);
-        if (j && j.ok) done = done + 1;
-        else {
-          failed = failed + 1;
-          if (firstErr === "") firstErr = (j && j.err) || `HTTP ${r.status}`;
-        }
-      } catch {
+      const r = await postAction("/api/follow", p.login);
+      if (r.ok) done = done + 1;
+      else {
         failed = failed + 1;
-        if (firstErr === "") firstErr = "network error";
+        if (firstErr === "") firstErr = r.err;
       }
       setFollowState({ busy: true, done: done, failed: failed, err: firstErr });
     }
@@ -95,21 +106,11 @@ export function Dashboard() {
     let failed = 0;
     let firstErr = "";
     for (const p of waterFollowing) {
-      try {
-        const r = await fetch("/api/unfollow", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ login: p.login }),
-        });
-        const j = await r.json().catch(() => null);
-        if (j && j.ok) done = done + 1;
-        else {
-          failed = failed + 1;
-          if (firstErr === "") firstErr = (j && j.err) || `HTTP ${r.status}`;
-        }
-      } catch {
+      const r = await postAction("/api/unfollow", p.login);
+      if (r.ok) done = done + 1;
+      else {
         failed = failed + 1;
-        if (firstErr === "") firstErr = "network error";
+        if (firstErr === "") firstErr = r.err;
       }
       setUnfollowState({ busy: true, done: done, failed: failed, err: firstErr });
     }
