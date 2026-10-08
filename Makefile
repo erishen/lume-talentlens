@@ -32,7 +32,7 @@ PORT    ?= 8091
 OWNER ?=
 PORT ?= 8091
 
-.PHONY: dev check fetch ui clean people-scan suspects unfollow score follow-worthy radar smoke
+.PHONY: dev check fetch ui clean people-scan suspects unfollow score follow-worthy radar smoke test
 
 # Boot the app on an isolated port and assert every public contract the
 # frontend/agent relies on (tears its own server down; never touches :8091).
@@ -106,5 +106,13 @@ follow-worthy:
 radar:
 	@OWNER="$(OWNER)" bash scripts/radar-scan.sh
 
+# Remove build artifacts + runtime logs (all regenerable). Never touches
+# data/github/ (your snapshots) or .env (your credentials).
 clean:
-	rm -f ./.run ./.api-ov.json
+	rm -f www/github/app.js ./.run ./.api-ov.json .lume-*.log
+	rm -rf logs
+
+# Frontend unit tests (vitest — pure logic: talent derivation, i18n parity).
+test:
+	@echo "== frontend unit tests =="
+	cd frontend && pnpm test
