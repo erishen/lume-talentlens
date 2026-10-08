@@ -7,14 +7,6 @@
 
 ## P0 · 短期（价值最高，1-2 轮可落地）
 
-### 1. 高手盈利模式分析（核心诉求）
-- **动机**：你的主线是"从互相关注的高手池里学习他们怎么盈利"。当前 radar 面板只有影响力分数，没有"这个人靠什么赚钱"的信号。
-- **范围**：
-  - 服务端（analyze.lume / tools.lume）：给雷达池每人补 3 个可公开获取的信号——`/sponsors` 是否存在（Sponsors 按钮 = 直接变现）、个人主页链接（bio 里的 http(s) → 个人站/产品）、仓库里是否有 landing page 型仓库（repo desc 带产品语气 / 有 website 字段）。
-  - 前端（lists/panels）：radar chip 旁加"💎 赞助 / 🌐 有站 / 🛍 产品"小徽标；hover 显示来源证据。
-  - 数据落 `data/github/<owner>/radar.json`（增量扫描，gitignored）。
-- **验收**：雷达面板每个高手都能看到≥1 个变现信号或明确"无公开信号"；点徽标能看到证据（GitHub 字段原文）。
-
 ### 2. 关注/取关趋势时间线
 - **动机**：`people_diff` 已有"新增/流失"快照，但只显示当前差值，看不出节奏（谁什么时候开始关注你）。
 - **范围**：`make fetch` 时把 `people.json` 每日快照追加进 `people_history.jsonl`（每条带日期）；前端加"关注者变化"迷你时间线（按周聚合新增/流失）。
@@ -24,11 +16,6 @@
 - **动机**：`healthScore` 是单点快照，无法看出高手/自己账号的长期趋势（活跃度在涨还是跌）。
 - **范围**：radar/overview 每次生成时把分数写进历史（复用 people_history 的机制）；前端健康分卡片加 sparkline。
 - **验收**：任一账号二次扫描后能看到分数变化曲线；曲线数据来自真实历史记录。
-
-### 4. live 缓存可见性
-- **动机**：live 代理已返回 `cached: true`，前端只显示"已缓存"文案，没有冷热区分（首次拉取 vs 命中缓存）。
-- **范围**：live 请求响应里带 `cached` 标志，UI 在来源标签显示"缓存"或"实时"，并显示本次耗时。
-- **验收**：同一 owner 连续两次 live，第二次明确显示"缓存命中（xx ms）"。
 
 ---
 
@@ -78,3 +65,5 @@
 - 测试/CI（40 vitest + 25 smoke + typecheck）
 - CSV 公式注入、CSRF（写操作 Content-Type 白名单）
 - 中英切换、水号/雷达、follow/unfollow、live 缓存、头像放大、智能体 UI
+- 高手盈利模式分析（P0-1：radar 面板💎/🌐/🛍 变现信号徽标 + radar.json 证据 + 验收达成）
+- live 缓存可见性（P0-4：fetchLive 带 cached/elapsedMs，UI 显示耗时与冷热 chip，77 vitest 全绿）
