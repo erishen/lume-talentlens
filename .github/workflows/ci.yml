@@ -21,7 +21,9 @@ jobs:
 
       - name: Build full Lume binary
         run: |
-          git clone --depth 1 https://github.com/erishen/lume.git /tmp/lume
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev libsqlite3-dev
+          git clone --depth 1 --recurse-submodules https://github.com/erishen/lume.git /tmp/lume
           make -C /tmp/lume
 
       - name: Lume type-check + runtime sanity
