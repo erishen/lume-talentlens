@@ -100,7 +100,7 @@ import type { Radar } from "../types";
 const RADAR = (people: Radar["people"]): Radar => ({
   owner: "erishen",
   scanned_at: "2026-10-08T00:00:00",
-  min_score: 120,
+  min_score: 60,
   people,
 });
 
@@ -138,5 +138,16 @@ describe("RadarPanel", () => {
   });
   it("exposes the documented group order", () => {
     expect(RADAR_MODES).toEqual(["startup", "crypto", "company", "content", "tools", "hunting", "other"]);
+  });
+  it("shows the owner's own score vs the radar line", () => {
+    const people: Radar["people"] = [
+      { login: "maker1", mode: "startup", note: "", score: 90, followers: 10, blog: "https://m.dev", signals: ["site"] },
+    ];
+    const r = RADAR(people);
+    r.self = { login: "erishen", score: 46 };
+    render(wrap(<RadarPanel radar={r} t={zhT} onOpen={vi.fn()} />));
+    const self = screen.getByText((_, el) => el instanceof HTMLElement && el.classList.contains("radar-self"));
+    expect(self.textContent).toContain("我的影响力分 46");
+    expect(self.textContent).toContain("雷达入选线 60（erishen）");
   });
 });

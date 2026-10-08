@@ -192,5 +192,8 @@ export interface Radar {
   owner: string;
   scanned_at: string;
   min_score: number;
+  /** the owner's own radar-quality score, computed from the local snapshot
+   *  so the panel can show "my score vs the radar line" */
+  self?: { login: string; score: number; star_total?: number; active?: number };
   people: RadarPerson[];
 }

@@ -182,6 +182,7 @@ done
 # merge with scores + write radar.json
 python3 - "$ROOT/data/github/$OWNER" /tmp/radar-scan.raw.ndjson "$MIN_SCORE" << 'EOF'
 import json, os, sys, time
+from datetime import datetime, timezone
 owner_dir, raw, min_score = sys.argv[1], sys.argv[2], int(sys.argv[3])
 scores = {}
 try:
@@ -200,8 +201,33 @@ for line in open(raw):
     e["repos"] = int(sc.get("repos", 0) or 0)
     radar.append(e)
 radar.sort(key=lambda r: -r["score"])
+
+# --- the owner's own radar-quality score, from the local snapshot (zero
+# API cost) so the panel can show "my score vs the radar line"
+self_info = None
+try:
+    snap = json.load(open(os.path.join(owner_dir, "snapshot.json")))
+    sp = snap.get("profile", {}) or {}
+    sl = snap.get("repos", []) or []
+    star_total = sum(int(r.get("stargazers_count", 0) or 0) for r in sl if isinstance(r, dict))
+    star_per = star_total / max(1, len(sl))
+    now = datetime.now(timezone.utc).timestamp()
+    def _pts(iso):
+        try: return datetime.fromisoformat((iso or "").replace("Z", "+00:00")).timestamp()
+        except Exception: return None
+    recent = [t for t in (_pts(r.get("pushed_at", "")) for r in sl if isinstance(r, dict)) if t]
+    active = 20 if any(now - t < 90 * 86400 for t in recent) else (10 if any(now - t < 365 * 86400 for t in recent) else 0)
+    age = max(0, datetime.now().year - int((sp.get("created_at") or "2026")[:4]))
+    self_score = min(40, star_total // 10) + min(25, int(star_per * 5)) + active \
+        + min(20, int(sp.get("followers", 0) or 0) // 50) + min(10, age) \
+        + (5 if sp.get("hireable") else 0) + (3 if sp.get("bio") else 0)
+    self_info = {"login": sp.get("login") or os.path.basename(owner_dir),
+                 "score": self_score, "star_total": star_total, "active": active}
+except Exception:
+    pass
+
 out = {"owner": os.path.basename(owner_dir), "scanned_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-       "min_score": min_score, "people": radar}
+       "min_score": min_score, "self": self_info, "people": radar}
 json.dump(out, open(os.path.join(owner_dir, "radar.json"), "w"), ensure_ascii=False, indent=1)
 print("radar-scan: %d people classified -> radar.json" % len(radar))
 EOF

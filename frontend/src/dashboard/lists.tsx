@@ -214,6 +214,11 @@ export function RadarPanel({ radar, t, onOpen }: {
         {t("people.radar_title")}{" "}
         <span className="muted">{t("people.radar_meta", { n: radar.people.length, at: radar.scanned_at.slice(0, 10) })}</span>
         {stale && <span className="chip radar">{t("people.radar_stale")}</span>}
+        {radar.self && typeof radar.self.score === "number" ? (
+          <span className="radar-self muted">
+            {t("people.radar_self", { me: radar.self.login, score: radar.self.score, line: radar.min_score })}
+          </span>
+        ) : null}
       </h2>
       <div className="radar-groups">
         {groups.map((g) => (
