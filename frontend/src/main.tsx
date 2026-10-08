@@ -21,6 +21,21 @@ function syncNav(lang: Lang) {
     const key = a.getAttribute("data-i18n");
     if (key && d[key]) a.textContent = d[key];
   });
+  // The SSR pages (/overview, /repos, /api) read the language from ?lang=,
+  // so every static nav link carries the current language — otherwise
+  // clicking a tab resets the language back to the server default. The
+  // inline shell script may have stamped ?lang= already; replace it rather
+  // than skipping, or a stale value would stick forever.
+  document.querySelectorAll(".gh-nav a").forEach((a) => {
+    const href = a.getAttribute("href");
+    if (!href) return;
+    const qi = href.indexOf("?");
+    const base = qi >= 0 ? href.slice(0, qi) : href;
+    const qs = qi >= 0 ? href.slice(qi + 1) : "";
+    const clean = qs.replace(/lang=[^&]*&?/, "");
+    const sep = clean ? "&" : "?";
+    a.setAttribute("href", base + (clean ? "?" + clean : "") + sep + "lang=" + lang);
+  });
 }
 
 function App() {

@@ -5,9 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
     <title>lume-talentlens · Dashboard</title>
-    <link rel="stylesheet" href="/app.css?v=1791436988" />
+    <link rel="stylesheet" href="/app.css?v=1791437331" />
   </head>
   <body data-page="dashboard">
+    <script>
+      // Persist the chosen language across the nav tabs (see chat.html for
+      // the why): the React shell stores the language in localStorage
+      // (tl-lang); the SSR pages read ?lang=, so static nav links carry it.
+      (function () {
+        try {
+          var lang = localStorage.getItem("tl-lang") || "zh";
+          document.querySelectorAll(".gh-nav a").forEach(function (a) {
+            var href = a.getAttribute("href");
+            if (!href || href.indexOf("lang=") !== -1) return;
+            a.setAttribute("href", href + (href.indexOf("?") >= 0 ? "&" : "?") + "lang=" + lang);
+          });
+        } catch (e) { /* localStorage unavailable — links stay language-less */ }
+      })();
+    </script>
     <nav class="gh-nav">
       <a href="/" class="brand">lume-talentlens</a>
       <a href="/" class="active" data-i18n="nav.dashboard">Dashboard</a>
@@ -20,6 +35,6 @@
     <div id="gh-root">
       <p class="gh-loading">Loading dashboard…</p>
     </div>
-    <script type="module" src="/app.js?v=1791436988"></script>
+    <script type="module" src="/app.js?v=1791437331"></script>
   </body>
 </html>

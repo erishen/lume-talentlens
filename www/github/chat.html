@@ -5,9 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
     <title>lume-talentlens · Agent</title>
-    <link rel="stylesheet" href="/app.css?v=1791436988" />
+    <link rel="stylesheet" href="/app.css?v=1791437331" />
   </head>
   <body data-page="chat">
+    <script>
+      // Persist the chosen language across the nav tabs: the React shells
+      // keep the language in localStorage (tl-lang) while the SSR pages
+      // (/overview, /repos, /api) read it from ?lang=, so each static nav
+      // link carries it — otherwise clicking a tab resets the language.
+      (function () {
+        try {
+          var lang = localStorage.getItem("tl-lang") || "zh";
+          document.querySelectorAll(".gh-nav a").forEach(function (a) {
+            var href = a.getAttribute("href");
+            if (!href || href.indexOf("lang=") !== -1) return;
+            a.setAttribute("href", href + (href.indexOf("?") >= 0 ? "&" : "?") + "lang=" + lang);
+          });
+        } catch (e) { /* localStorage unavailable — links stay language-less */ }
+      })();
+    </script>
     <nav class="gh-nav">
       <a href="/" class="brand">lume-talentlens</a>
       <a href="/" data-i18n="nav.dashboard">Dashboard</a>
@@ -20,6 +36,6 @@
     <div id="gh-root" class="agent-wrap">
       <p class="gh-loading">loading agent…</p>
     </div>
-    <script type="module" src="/app.js?v=1791436988"></script>
+    <script type="module" src="/app.js?v=1791437331"></script>
   </body>
 </html>
