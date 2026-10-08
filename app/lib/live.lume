@@ -102,6 +102,43 @@ func live_cache_ttl() {
   return n;
 }
 
+// Disk-cache tier: successful live responses are also persisted under
+// data/github/live/ so agent tool calls and any browser reuse them across
+// server restarts. TTL is LIVE_DISK_TTL_SEC (default 86400 = 24h; 0
+// disables). Only successful responses are written; read/write failures
+// degrade silently to the memory-TTL path. The dir is gitignored (data/).
+func live_disk_ttl() {
+  let v = env("LIVE_DISK_TTL_SEC");
+  if (v == null) { return 86400; }
+  let n = int(v, 86400);
+  if (n < 0) { return 0; }
+  return n;
+}
+
+// path is live_safe_path'd upstream (no ":", "//", "..", " "), so mapping
+// "/" to "__" yields a safe flat filename: /users/wwavelet -> __users__wwavelet.json
+func live_disk_file(p) {
+  let f = replace(p, "/", "__");
+  if (f == "" or f == "__") { return ""; }
+  return f + ".json";
+}
+
+func live_disk_read(p) {
+  let f = live_disk_file(p);
+  if (f == "") { return null; }
+  let raw = read_file("data/github/live/" + f);
+  if (raw == null or raw == "") { return null; }
+  return json(raw);
+}
+
+func live_disk_write(p, status, body) {
+  let f = live_disk_file(p);
+  if (f == "" or body == "") { return false; }
+  mkdir("data/github/live");
+  let payload = str({ at: int(now(), 0), status: status, body: body });
+  return write_file("data/github/live/" + f, payload);
+}
+
 // auth probe for the frontend: whether GitHub calls are authenticated
 // (5000 req/h) or anonymous (~60 req/h). Never leaks the token itself — the
 // UI uses this to pick throttle params and copy only. GH_ANALYZER_PAT is the
@@ -131,6 +168,18 @@ get "/api/live/github", (req) => {
       return { ok: true, status: int(get(hit, "status", 0), 0), data: str(get(hit, "body", "")), err: "", cached: true };
     }
   }
+  // disk tier: survives restarts, shared by agent tools and every browser
+  let disk_ttl = live_disk_ttl();
+  if (disk_ttl > 0) {
+    let d = live_disk_read(p);
+    if (d != null and (int(now(), 0) - int(get(d, "at", 0), 0)) < disk_ttl) {
+      let dbody = str(get(d, "body", ""));
+      if (dbody != "") {
+        put(_live_cache, p, { at: int(get(d, "at", 0), 0), status: int(get(d, "status", 0), 0), body: dbody });
+        return { ok: true, status: int(get(d, "status", 0), 0), data: dbody, err: "", cached: true };
+      }
+    }
+  }
   let headers = { "Accept": "application/vnd.github+json", "User-Agent": "lume-talentlens" };
   // GH_ANALYZER_PAT is the Makefile alias of GH_TOKEN (env() masks names
   // containing TOKEN/API_KEY/SECRET/PASSWORD to keep untrusted scripts from
@@ -147,6 +196,9 @@ get "/api/live/github", (req) => {
   if (ok and body != "") { body = slim_body(p, body); }
   if (ok and ttl > 0) {
     put(_live_cache, p, { at: int(now(), 0), status: up, body: body });
+  }
+  if (ok and disk_ttl > 0) {
+    live_disk_write(p, up, body);
   }
   return { ok: ok, status: up, data: body, err: herr };
 };

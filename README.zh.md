@@ -79,7 +79,7 @@ cp .env.example .env   # 然后编辑 OWNER=你的 GitHub 登录名
 | `LLM_TIMEOUT` | 可选；等待上游 LLM 流的秒数（默认 60）。 |
 | `LLM_SYSTEM_EXTRA` | 可选原始文本，**追加到智能体系统提示词末尾** —— 智能体必须始终遵守的场景指令（从哪些数据作答、如何引用证据、输出语言）。仅单行（.env 加载器逐行读取）。 |
 | `AGENTHTTPD_CSP_IMG_SRC` | 可选空格分隔的源，**追加到服务器 `Content-Security-Policy` 的 `img-src`**（默认策略 `'self' data:`）。UI 需要加载第三方图片时使用 —— 本项目用它放行 GitHub 头像 CDN：`AGENTHTTPD_CSP_IMG_SRC=https://avatars.githubusercontent.com`。 |
-| `LIVE_CACHE_TTL_SEC` | 可选 `/api/live/github` 内存响应缓存 TTL 秒数（默认 300；`0` 关闭）。重复浏览同一档案时从缓存返回，省 GitHub 配额与延迟。 |
+| `LIVE_CACHE_TTL_SEC` | 可选 `/api/live/github` 内存响应缓存 TTL 秒数（默认 300；`0` 关闭）。重复浏览同一档案时从缓存返回，省 GitHub 配额与延迟。成功响应还会持久化到 `data/github/live/`（磁盘层，`LIVE_DISK_TTL_SEC` 默认 24h），智能体工具与各浏览器在重启后仍可复用。 |
 
 以上每个键都会在 `make dev` 启动时由 **Makefile 导出给应用/服务进程**（`-include .env` 旁有 `export …`）—— 服务器自身也有一个懒加载的 .env 读取器，但显式导出才是可靠路径。shell/python 脚本同样会 source `.env`。其中任何一个也可以用普通环境变量传入（如 `OWNER=acme make fetch`），后者永远优先。
 

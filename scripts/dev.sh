@@ -73,6 +73,18 @@ if [ -d "$ROOT/.data/sessions" ]; then
   echo "dev: agent sessions pruned (keeping newest 30, $remain remain)"
 fi
 
+# 1b2) prune expired live disk-cache entries: /api/live/github persists every
+#      successful response under data/github/live/ (LIVE_DISK_TTL_SEC, default
+#      24h). Old entries are stale-but-harmless; drop files older than 3 days
+#      so the dir can't grow without bound.
+if [ -d "$ROOT/data/github/live" ]; then
+  n="$(find "$ROOT/data/github/live" -name '*.json' -mtime +3 2>/dev/null | wc -l | tr -d ' ')"
+  if [ "$n" -gt 0 ]; then
+    find "$ROOT/data/github/live" -name '*.json' -mtime +3 -delete 2>/dev/null
+    echo "dev: live disk-cache pruned ($n stale entries older than 3d)"
+  fi
+fi
+
 # 1c) rotate the access log: keep the previous run's log as access.log.1,
 #     then start fresh — the file grows one line per request and never
 #     rotates otherwise.
