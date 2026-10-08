@@ -124,16 +124,21 @@ function PersonList({ title, people, totals, note, onOpen }: {
   // Default to the influence (score) sort — that's what the lists are for;
   // the toggle flips back to GitHub's native order.
   const [byScore, setByScore] = React.useState(true);
+  // Long lists (hundreds of accounts) render the top chunk first; "show all"
+  // expands the rest. Re-sorting resets back to the top chunk.
+  const [showAll, setShowAll] = React.useState(false);
+  const PAGE = 100;
   const scored = people.some((p) => typeof p.score === "number" && p.score > 0);
   const sorted = byScore
     ? [...people].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
     : people;
+  const visible = showAll ? sorted : sorted.slice(0, PAGE);
   return (
     <div className="panel">
       <h2>
-        {title} <span className="muted">{t("people.shown_total", { shown: people.length, total: totals })}</span>
+        {title} <span className="muted">{t("people.shown_total", { shown: visible.length, total: totals })}</span>
         {scored && (
-          <button className="chip btn-sort" onClick={() => setByScore(!byScore)}>
+          <button className="chip btn-sort" onClick={() => { setByScore(!byScore); setShowAll(false); }}>
             {byScore ? t("people.sort_score") : t("people.sort_default")}
           </button>
         )}
@@ -141,10 +146,17 @@ function PersonList({ title, people, totals, note, onOpen }: {
       {people.length === 0 && <p className="muted">{note || t("people.no_data")}</p>}
       {people.length > 0 && (
         <div className="person-list">
-          {sorted.map((p, i) => (
+          {visible.map((p, i) => (
             <PersonChip key={i} p={p} t={t} onOpen={onOpen} />
           ))}
         </div>
+      )}
+      {people.length > PAGE && !showAll && (
+        <p className="muted">
+          <button className="chip btn-sort" onClick={() => setShowAll(true)}>
+            {t("people.show_all", { n: people.length })}
+          </button>
+        </p>
       )}
       {people.length > 0 && totals > people.length && (
         <p className="muted">{t("people.more", { n: totals - people.length })}</p>
