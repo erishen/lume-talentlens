@@ -248,12 +248,16 @@ age) needs the GitHub API — see `scripts/people-scan.sh --help`.
 
 ## Talent radar, scoring & follow-worthy
 
-`scripts/people-score.sh` ranks every follower/following by an influence
-score (`min(50, repos*2) + min(50, followers/20) + min(30, age_years*3) +
-5·hireable + 3·bio`) into `scores.json` (gitignored). The dashboard sorts by
-score and badges `高分`; it also computes the **mutual-following** and
-**worth-following** (high-score followers you don't follow yet) lists, and
-shows a network-change diff after each refresh:
+`scripts/people-score.sh` ranks every follower/following by a profile-only
+influence score (`min(40, repos/2) + min(20, followers/50) +
+min(15, followers/following·5) + min(10, age_years) + 5·hireable + 3·bio`,
+water-accounts −20/−10 at merge) into `scores.json` (gitignored). Followers
+are deliberately demoted (inflated counts are the classic marketing-account
+tell) and replaced by the followers-vs-following ratio; water accounts lose
+score so they can't buy ranking. The dashboard sorts by score and badges
+`高分`; it also computes the **mutual-following** and **worth-following**
+(high-score followers you don't follow yet) lists, and shows a
+network-change diff after each refresh:
 
 ```bash
 make score                 # re-rank everyone (default owner)
@@ -268,10 +272,14 @@ make follow-worthy                  # follow them
 ```
 
 `scripts/radar-scan.sh` (make radar) scans your **mutual high scorers**
-(score ≥ 120) and classifies each by money pattern — startup / crypto /
-company / content / tools / hunting / other — from live profile + top repos
-into `data/github/<owner>/radar.json`. The dashboard's **高手洞察 · 盈利模式**
-panel groups them, and each person chip analyzes in-app on click.
+(people-score ≥ 60) and re-ranks them with a quality score that stars
+actually dominate — `min(40, star_total/10) + min(25, star-per-repo·5) +
+activity (20 recent-90d / 10 within-1y) + demoted followers/age + hireable/bio
+− water penalty` (cap ≈123) — then classifies each by money pattern (startup /
+crypto / company / content / tools / hunting / other) from live profile +
+full repo list into `data/github/<owner>/radar.json`. The dashboard's
+**高手洞察 · 盈利模式** panel groups them, and each person chip analyzes
+in-app on click.
 
 Each person also carries **monetization-signal badges**:
 `site` (a real profile/product URL in the bio blog field), `product` (a top

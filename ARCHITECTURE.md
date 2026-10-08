@@ -144,8 +144,8 @@ lume-talentlens/
 | `people.json` | `make fetch` 或 `/api/refresh` | 粉丝/关注首页列表 + totals |
 | `people.prev.json` | `/api/refresh` 覆盖前自动归档 | `/api/people_diff` 的对比基准 |
 | `suspects.json` | `make suspects`（本地启发式，零 API 成本） | 水号/招聘方预筛查，按 login 合并进 `/api/people` |
-| `scores.json` | `make score` | 影响力评分（排序/高分徽标） |
-| `radar.json` | `make radar`（每人 2 次 API 调用） | 互相关注高分者（≥120）按盈利模式分类 |
+| `scores.json` | `make score` | 影响力评分（profile-only：仓库/触达降权 + 粉丝-关注比 + 水号扣分，cap 93） |
+| `radar.json` | `make radar`（每人 3 次 API 调用） | 互相关注高分者（≥60）按盈利模式分类，star 质量分重排（cap ≈123） |
 | `last_owner` | 每次 fetch 写入 | 默认 owner（低于 `OWNER` env） |
 
 > **owner 作用域**：`suspects.json` 预筛查只对配置的 `OWNER`（.env 的 OWNER，即用户本人账号）合并；分析任意他人只读快照，不做水号判定。
@@ -161,8 +161,8 @@ lume-talentlens/
 ```
 fetch-github.sh ──► snapshot.json        （分页 /users/<owner>/repos，预计算派生字段）
 people-suspects.py ─► suspects.json      （本地启发式水号筛查，零 API 成本）
-people-score.sh ───► scores.json         （影响力评分，全部粉丝/关注）
-radar-scan.sh ─────► radar.json          （互相关注高分者的盈利模式分类，live 档案+Top 仓库；含变现信号：site=档案站点 / product=仓库落地页 / sponsor=GraphQL 探针，失败记 null 不误报）
+people-score.sh ───► scores.json         （影响力评分，全部粉丝/关注：仓库/触达降权 + 粉丝-关注比 + 水号扣分）
+radar-scan.sh ─────► radar.json          （互相关注高分者≥60 按盈利模式分类；star 质量分重排；变现信号：site / product / sponsor=GraphQL 探针，失败记 null 不误报）
 follow-worthy.sh ──► （写操作）回关未关注的高分粉丝（幂等，需 PAT）
 unfollow.sh ───────► （写操作）批量取关水号（数据驱动读 suspects.json，--dry-run 可预览）
 ```

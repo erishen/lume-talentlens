@@ -88,8 +88,8 @@ describe("PersonList", () => {
 });
 
 describe("RADAR_SCORE", () => {
-  it("is the documented influence threshold (120)", () => {
-    expect(RADAR_SCORE).toBe(120);
+  it("is the documented influence threshold (60 after the 2026-10 score rework)", () => {
+    expect(RADAR_SCORE).toBe(60);
   });
 });
 

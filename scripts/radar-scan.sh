@@ -23,7 +23,7 @@ if [ -z "$OWNER" ]; then
   echo "radar-scan: no owner. Set OWNER or add OWNER= to .env" >&2
   exit 1
 fi
-MIN_SCORE="${MIN_SCORE:-120}"
+MIN_SCORE="${MIN_SCORE:-60}"
 TOK="${GH_TOKEN:-}"
 GAP="${GAP:-0.25}"
 
@@ -60,7 +60,7 @@ AUTH=()
 : > /tmp/radar-scan.raw.ndjson
 for login in "${LOGINS[@]}"; do
   UP="$(curl -sS -m 20 "${AUTH[@]+"${AUTH[@]}"}" -H "Accept: application/vnd.github+json" -H "User-Agent: lume-talentlens" "https://api.github.com/users/$login" || true)"
-  RE="$(curl -sS -m 20 "${AUTH[@]+"${AUTH[@]}"}" -H "Accept: application/vnd.github+json" -H "User-Agent: lume-talentlens" "https://api.github.com/users/$login/repos?sort=stars&per_page=3" || true)"
+  RE="$(curl -sS -m 25 "${AUTH[@]+"${AUTH[@]}"}" -H "Accept: application/vnd.github+json" -H "User-Agent: lume-talentlens" "https://api.github.com/users/$login/repos?sort=stars&per_page=100" || true)"
   # Sponsors probe via GraphQL (only with a token; login is [a-z0-9-] so
   # string interpolation into the JSON query is safe). A failed probe is
   # reported as sponsor=null ("unknown"), never as a false negative.
@@ -70,22 +70,24 @@ for login in "${LOGINS[@]}"; do
       -d "{\"query\":\"query { user(login: \\\"${login}\\\") { hasSponsorsListing } }\"}" \
       https://api.github.com/graphql || true)"
   fi
-  python3 - "$login" "$UP" "$RE" "$SP" >> /tmp/radar-scan.raw.ndjson << 'EOF'
+  python3 - "$login" "$UP" "$RE" "$SP" "$ROOT/data/github/$OWNER/suspects.json" >> /tmp/radar-scan.raw.ndjson << 'EOF'
 import json, sys, re, time
-login, up, re_, sp = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+from datetime import datetime, timezone
+login, up, re_, sp, susp_file = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
 def J(s):
     try: return json.loads(s)
     except Exception: return {}
 u = J(up); repos = J(re_)
 if not u or "login" not in u:
     print(json.dumps({"login": login, "error": "fetch_failed", "mode": "other", "note": "profile fetch failed",
-                      "signals": []})); sys.exit(0)
+                      "signals": [], "score": 0})); sys.exit(0)
 bio = (u.get("bio") or "").strip()[:200]
 company = (u.get("company") or "").strip()[:80]
 blog = (u.get("blog") or "").strip()[:80]
 loc = (u.get("location") or "").strip()[:40]
 hireable = bool(u.get("hireable"))
 followers = int(u.get("followers", 0) or 0)
+age_years = max(0, (datetime.now().year or 2026) - int((u.get("created_at") or "2026")[:4]))
 repos_top = []
 if isinstance(repos, list):
     for r in repos[:3]:
@@ -93,6 +95,32 @@ if isinstance(repos, list):
                           "desc": ((r.get("description") or "") or "")[:120],
                           "homepage": ((r.get("homepage") or "") or "")[:80]})
 text = " ".join([bio, company, blog] + [r["name"] + " " + r["desc"] for r in repos_top]).lower()
+
+# --- quality & activity from the full repo list (per_page=100) --------
+# star total = how much the output is actually used; star-per-repo = how
+# focused the output is (many repos with zero stars dilute it); activity =
+# any push in the last 90 days (genuinely building) vs 1 year (dormant).
+star_total = 0
+recent = []
+if isinstance(repos, list):
+    star_total = sum(int(r.get("stargazers_count", 0) or 0) for r in repos if isinstance(r, dict))
+    def _pts(iso):
+        try: return datetime.fromisoformat((iso or "").replace("Z", "+00:00")).timestamp()
+        except Exception: return None
+    now = datetime.now(timezone.utc).timestamp()
+    recent = [t for t in (_pts(r.get("pushed_at", "")) for r in repos if isinstance(r, dict)) if t]
+star_per_repo = (star_total / max(1, len(repos))) if isinstance(repos, list) else 0
+active = 20 if any(now - t < 90 * 86400 for t in recent) else (10 if any(now - t < 365 * 86400 for t in recent) else 0)
+
+# --- water-account penalty from suspects.json (high -20 / medium -10) --
+sus_penalty = 0
+try:
+    ss = J(open(susp_file).read())
+    items = ss.get("suspects", []) if isinstance(ss, dict) else ss
+    lvl = {x.get("login"): x.get("level", "high") for x in items if isinstance(x, dict) and x.get("login")}
+    sus_penalty = 20 if lvl.get(login) == "high" else (10 if lvl.get(login) == "medium" else 0)
+except Exception:
+    pass
 
 # --- monetization signals (TODO P0-1) -------------------------------
 # site: a real personal/project URL in the profile (blog field; empty when
@@ -133,18 +161,28 @@ elif hireable:
 else:
     mode = "other"; note = "未归类" + ("：" + bio[:60] if bio else "")
 
+# --- radar quality score: output recognition (stars) + focus (stars/repo)
+# + activity (recent pushes) dominate; followers/age demoted; water-account
+# penalty applied. Cap ≈ 123 (40+25+20+20+10+5+3).
+score = min(40, star_total // 10) + min(25, int(star_per_repo * 5)) + active \
+      + min(20, followers // 50) + min(10, age_years) \
+      + (5 if hireable else 0) + (3 if bio else 0) - sus_penalty
+
 print(json.dumps({"login": login, "mode": mode, "note": note[:140],
-                  "score": 0, "followers": followers, "hireable": hireable,
+                  "score": score, "followers": followers, "hireable": hireable,
                   "loc": loc, "blog": blog, "company": company, "top_repos": repos_top[:2],
-                  "site": site, "product": product, "sponsor": sponsor, "signals": signals}))
+                  "site": site, "product": product, "sponsor": sponsor, "signals": signals,
+                  "age_years": age_years, "star_total": star_total,
+                  "star_per_repo": round(star_per_repo, 1), "active": active,
+                  "sus_penalty": sus_penalty}))
 EOF
   sleep "$GAP"
 done
 
 # merge with scores + write radar.json
-python3 - "$ROOT/data/github/$OWNER" /tmp/radar-scan.raw.ndjson << 'EOF'
+python3 - "$ROOT/data/github/$OWNER" /tmp/radar-scan.raw.ndjson "$MIN_SCORE" << 'EOF'
 import json, os, sys, time
-owner_dir, raw = sys.argv[1], sys.argv[2]
+owner_dir, raw, min_score = sys.argv[1], sys.argv[2], int(sys.argv[3])
 scores = {}
 try:
     scores = json.load(open(os.path.join(owner_dir, "scores.json")))
@@ -156,12 +194,14 @@ for line in open(raw):
     if not line: continue
     e = json.loads(line)
     sc = scores.get(e["login"], {})
-    e["score"] = int(sc.get("score", 0) or 0)
+    # radar computes its own score (star/activity quality); fall back to the
+    # people-score only when the profile fetch failed
+    e["score"] = int(e.get("score", 0) or 0) or int(sc.get("score", 0) or 0)
     e["repos"] = int(sc.get("repos", 0) or 0)
     radar.append(e)
 radar.sort(key=lambda r: -r["score"])
 out = {"owner": os.path.basename(owner_dir), "scanned_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-       "min_score": 120, "people": radar}
+       "min_score": min_score, "people": radar}
 json.dump(out, open(os.path.join(owner_dir, "radar.json"), "w"), ensure_ascii=False, indent=1)
 print("radar-scan: %d people classified -> radar.json" % len(radar))
 EOF

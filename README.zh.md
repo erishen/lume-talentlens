@@ -156,7 +156,7 @@ GH_TOKEN=ghp_xxx bash scripts/unfollow.sh
 
 ## 高手雷达、评分与值得关注
 
-`scripts/people-score.sh` 用影响力评分给每个粉丝/关注排名（`min(50, repos*2) + min(50, followers/20) + min(30, age_years*3) + 5·hireable + 3·bio`），写入 `scores.json`（gitignored）。仪表盘按评分排序并给高分打 `高分` 徽标；同时计算**互相关注**与**值得关注**（你还没关注的粉丝里的高分者）列表，并在每次刷新后展示人脉变动 diff：
+`scripts/people-score.sh` 用影响力评分给每个粉丝/关注排名（`min(40, repos/2) + min(20, followers/50) + min(15, 粉丝/关注比·5) + min(10, 年限) + 5·hireable + 3·bio`，水号在合并时 −20/−10），写入 `scores.json`（gitignored）。粉丝数刻意降权（虚高粉丝是营销号典型特征），改用**粉丝/关注比**校准；水号扣分使其无法靠灌粉买到排名。仪表盘按评分排序并给高分打 `高分` 徽标；同时计算**互相关注**与**值得关注**（你还没关注的粉丝里的高分者）列表，并在每次刷新后展示人脉变动 diff：
 
 ```bash
 make score                 # 重新排名所有人（默认 owner）
@@ -169,7 +169,7 @@ DRY_RUN=1 make follow-worthy        # 只列清单
 make follow-worthy                  # 执行关注
 ```
 
-`scripts/radar-scan.sh`（make radar）扫描你的**互相关注高分者**（评分 ≥ 120），从实时档案 + Top 仓库把每个人按盈利模式分类 —— startup / crypto / company / content / tools / hunting / other，写入 `data/github/<owner>/radar.json`。仪表盘的**高手洞察 · 盈利模式**面板按模式分组展示，点击任意人像卡片可在应用内分析：
+`scripts/radar-scan.sh`（make radar）扫描你的**互相关注高分者**（people-score ≥ 60），再用**以 star 质量为主**的评分重排（`min(40, star总数/10) + min(25, star/仓库·5) + 活跃度(近90天 20 / 近1年 10) + 降权的粉丝/年限 + hireable/bio − 水号扣分`，上限约 123），并按盈利模式分类 —— startup / crypto / company / content / tools / hunting / other，从实时档案 + 完整仓库列表写入 `data/github/<owner>/radar.json`。仪表盘的**高手洞察 · 盈利模式**面板按模式分组展示，点击任意人像卡片可在应用内分析：
 
 每个人还带**变现信号徽标**：`site`（档案 blog 字段是真实个人/产品站点）、`product`（Top 仓库带落地页 —— 典型的 SaaS/付费产品特征）、`sponsor`（GitHub Sponsors 列表，配置 token 时经 GraphQL 探测；探测失败记为 null/"unknown"，绝不误报为否）。无公开信号的人显示"无公开变现信号"小字。
 

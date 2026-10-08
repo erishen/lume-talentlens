@@ -39,7 +39,7 @@ function evidenceTitle(t: (k: string, p?: Record<string, string | number>) => st
 // water-account flags). A high score also suppresses the water-account badge
 // for the same person — a genuinely productive account flagged as a suspect
 // is a false positive on the pre-screen, so radar wins.
-export const RADAR_SCORE = 120; // influence score at/above which a person is "radar"
+export const RADAR_SCORE = 60; // people-score threshold for radar candidacy (2026-10 rework: quality-weighted, cap 93; radar re-scores with stars/activity)
 
 function PersonList({ title, people, totals, note, onOpen }: {
   title: string; people: PersonView[]; totals: number; note?: string;

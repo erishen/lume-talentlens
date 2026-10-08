@@ -81,6 +81,7 @@ if not d or "login" not in d:
     sys.exit(0)
 repos = int(d.get("public_repos", 0) or 0)
 followers = int(d.get("followers", 0) or 0)
+following = int(d.get("following", 0) or 0)
 hireable = bool(d.get("hireable"))
 bio = (d.get("bio") or "").strip()
 created = d.get("created_at") or ""
@@ -90,12 +91,16 @@ if created:
         age_years = max(0, int(time.strftime("%Y")) - int(created[:4]))
     except Exception:
         age_years = 0
-# influence score: repos (breadth) + followers (reach) + age (seniority) +
-# hireable + bio presence — each capped so no single factor dominates
-score = min(50, repos * 2) + min(50, int(followers / 20)) + min(30, age_years * 3) \
-      + (5 if hireable else 0) + (3 if bio else 0)
+# profile-only influence score (the radar re-scores with star/activity once
+# it has the repo lists): breadth (repos) and reach (followers) are demoted,
+# followers-vs-following ratio catches one-way-following marketing accounts,
+# water-account penalty is applied at merge time. Cap ≈ 93 (40+20+15+10+5+3).
+score = min(40, repos // 2) + min(20, int(followers / 50)) \
+      + min(15, int((followers / max(1, following)) * 5)) \
+      + min(10, age_years) + (5 if hireable else 0) + (3 if bio else 0)
 print(json.dumps({"login": login, "score": score, "repos": repos,
-                  "followers": followers, "age_years": age_years,
+                  "followers": followers, "following": following,
+                  "age_years": age_years,
                   "hireable": hireable, "bio": bio[:80]}))
 EOF
   sleep "$GAP"
@@ -112,6 +117,22 @@ for line in open(ndjson):
         continue
     e = json.loads(line)
     merged[e["login"]] = e
+# water-account penalty: suspects.json marks high (fake followers / spam) and
+# medium (likely) accounts — demote them hard so inflated follower counts
+# cannot buy radar/ranking placement
+try:
+    ss = json.load(open(os.path.join(owner_dir, "suspects.json")))
+    items = ss.get("suspects", []) if isinstance(ss, dict) else ss
+    for x in items:
+        if not isinstance(x, dict) or not x.get("login"):
+            continue
+        pen = 20 if x.get("level", "high") == "high" else 10
+        e = merged.get(x["login"])
+        if e:
+            e["score"] = max(0, int(e.get("score", 0) or 0) - pen)
+            e["sus_penalty"] = pen
+except Exception:
+    pass
 out = os.path.join(owner_dir, "scores.json")
 json.dump(merged, open(out, "w"), ensure_ascii=False, indent=1)
 print("people-score: %d people scored -> %s" % (len(merged), out))
