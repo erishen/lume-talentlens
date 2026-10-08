@@ -372,7 +372,6 @@ export function Dashboard() {
 
               <section className="kpis">
                 <Kpi n={String(ov.count)} label={t("kpi.repos")} />
-                <Kpi n={String(ov.non_fork_count)} label={t("kpi.original")} />
                 <Kpi n={String(ov.totals.stars)} label={t("kpi.stars_total")} />
                 <Kpi n={String(ov.totals.forks)} label={t("kpi.forks_total")} />
                 <Kpi n={String(ov.recency.active || 0)} label={t("kpi.active_90d")} />

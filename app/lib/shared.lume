@@ -80,7 +80,10 @@ export func load_snap(owner) {
 // them for history, this is purely a display/analysis filter.
 export func active_repos(snap) {
   let all = get(snap, "repos", []);
-  return filter((r) => not bool(get(r, "archived", false)), all);
+  // public views show only the owner's own work: no archived, no forks
+  return filter((r) =>
+    not bool(get(r, "archived", false))
+    and not bool(get(r, "fork", false)), all);
 }
 
 // shared no-snapshot JSON error shape (JSON routes)

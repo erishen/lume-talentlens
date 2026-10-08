@@ -40,7 +40,6 @@ get "/overview", (req) => {
 
     el("section", { class: "kpis" },
       ui.kpi(str(a.count), ui.t(lang, "ov_kpi_repos")),
-      ui.kpi(str(a.non_fork_count), ui.t(lang, "ov_kpi_original")),
       ui.kpi(str(int(get(tot, "stars", 0))), ui.t(lang, "ov_kpi_stars")),
       ui.kpi(str(int(get(tot, "forks", 0))), ui.t(lang, "ov_kpi_forks"))),
 

@@ -301,9 +301,9 @@ function buildOverview(
   reposRaw: any[],
   partial: boolean
 ): Overview {
-  // archived repos are excluded from every public view (server parity: the
-  // cached path filters via active_repos() too)
-  const all = reposRaw.map(toView).filter((r) => !r.archived).sort((a, b) => (a.updated < b.updated ? 1 : -1));
+  // archived and forked repos are excluded from every public view (server
+  // parity: the cached path filters via active_repos() too)
+  const all = reposRaw.map(toView).filter((r) => !r.archived && !r.is_fork).sort((a, b) => (a.updated < b.updated ? 1 : -1));
   const originals = all.filter((r) => !r.is_fork);
   return {
     owner,
@@ -375,7 +375,7 @@ export function buildOverviewFull(
 export function ovRepos(reposRaw: any[]): RepoView[] {
   return reposRaw
     .map(toView)
-    .filter((r) => !r.archived)
+    .filter((r) => !r.archived && !r.is_fork)
     .sort((a, b) => (a.updated < b.updated ? 1 : -1));
 }
 
