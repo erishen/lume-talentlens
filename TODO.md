@@ -1,6 +1,6 @@
 # TODO — lume-talentlens 开发路线图
 
-状态：对外开源就绪（干净历史 + LICENSE + 双语文档 + 测试/CI + 无敏感数据），尚未推远端。
+状态：已推送 GitHub（公开 erishen/lume-talentlens），CI 全绿；干净历史 + LICENSE + 双语文档 + 测试 + 无敏感数据。
 优先级：P0 短期（直接提升日常价值）→ P1 中期（需要设计）→ P2 长期/开源协作。每项含动机、范围、验收标准。
 
 ---
