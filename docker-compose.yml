@@ -32,11 +32,15 @@ services:
       # masked name); the container runs lume directly, so inject the alias.
       # compose interpolates ${GH_TOKEN} from the repo-root .env.
       - GH_ANALYZER_PAT=${GH_TOKEN:-}
-      # If you route GitHub API calls through a proxy that runs on the host
-      # (Clash / V2Ray …), point it at the host from inside the container —
-      # 127.0.0.1 in .env would refer to the container itself and be ignored:
-      # - LUME_HTTP_PROXY=http://host.docker.internal:7897
-      # (leave the value in .env commented out, or override it here)
+      # .env values that point at 127.0.0.1 / localhost refer to the CONTAINER
+      # itself, so those two get rewritten to the host (host.docker.internal)
+      # inside the container. Override via LUME_HTTP_PROXY_HOST /
+      # LLM_API_URL_HOST in .env when the host service listens elsewhere.
+      #   - empty proxy  -> direct GitHub calls (slow on CN networks);
+      #   - host proxy   -> route through the host Clash/V2Ray on :7897.
+      - LUME_HTTP_PROXY=${LUME_HTTP_PROXY_HOST:-http://host.docker.internal:7897}
+      # the LLM gateway that runs on the host for the local `make dev` install
+      - LLM_API_URL=${LLM_API_URL_HOST:-http://host.docker.internal:19070/v1/chat/completions}
     volumes:
       - ./data:/app/data   # snapshots + live-cache disk tier (persist across rebuilds)
       - ./logs:/app/logs
