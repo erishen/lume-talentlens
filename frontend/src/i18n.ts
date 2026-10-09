@@ -109,7 +109,7 @@ const zh: Record<string, string> = {
   "bars.months_note": "近 12 个月中有 {n} 个月有推送 · 本月有推送的仓库：{cur}",
   // people lists
   "people.title": "粉丝 / 关注",
-  "people.loading": "加载中…",
+  "people.loading": "正在拉取粉丝与关注…",
   "people.error_title": "粉丝 / 关注",
   "people.retry": "重试",
   "people.followers": "粉丝",
@@ -352,7 +352,7 @@ const en: Record<string, string> = {
   "bars.older": "older",
   "bars.months_note": "{n} of last 12 months had pushes · repos pushed this month: {cur}",
   "people.title": "Followers & Following",
-  "people.loading": "Loading…",
+  "people.loading": "Fetching followers & following…",
   "people.error_title": "Followers & Following",
   "people.retry": "Retry",
   "people.followers": "Followers",

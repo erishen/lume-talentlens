@@ -126,6 +126,10 @@ export function useDashboardData(t: T, lang: Lang) {
     setPeopleLoading(true);
     setRadar(null);
     setStargazers(null);
+    // any people pull (snapshot or live) shows on the shared progress panel,
+    // so the pull is visible from the overview tab instead of a bare
+    // "loading…" note on the people tab.
+    setLiveProgress({ page: 0, total: 0, repos: 0, kind: "people" });
     const target = o.trim();
     if (!target) return;
     if (viaLive) {
@@ -140,6 +144,7 @@ export function useDashboardData(t: T, lang: Lang) {
       }
       setPeople(r as People);
       setPeopleLoading(false);
+      if (seq === peopleSeq.current) setLiveProgress(null);
       // network change diff rides along — best-effort, failures are silent
       api.peopleDiff(target).then((d) => {
         if (seq === peopleSeq.current && d && d.ok) setPeopleDiff(d);
