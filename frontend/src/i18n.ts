@@ -95,7 +95,7 @@ const zh: Record<string, string> = {
   "live.proxy_note_authed": "实时获取走服务器的 /api/live/github 代理，GitHub 已认证（5000 次/时）。",
   "live.proxy_note_anon": "实时获取走服务器的 /api/live/github 代理（出站 http_get）；未认证时共享约 60 req/h——设置 GH_TOKEN 可提升。",
   "live.error_network": "无法连接 GitHub（网络或限流）。缓存账号请重启服务器使 /api/people 可用，再点击重试。",
-  "live.error_failed": "加载粉丝/关注列表失败。",
+  "live.error_failed": "加载粉丝/关注列表失败（网络波动，已自动重试）。点击重试，或稍后再试。",
   // KPIs
   "kpi.repos": "仓库",
   "kpi.original": "原创",
@@ -343,7 +343,7 @@ const en: Record<string, string> = {
   "live.proxy_note_authed": "Live fetch goes through the server's /api/live/github proxy; GitHub is authenticated (5000 req/h).",
   "live.proxy_note_anon": "Live fetch goes through the server's /api/live/github proxy (outbound http_get); unauthenticated it is shared at ~60 req/h — set GH_TOKEN to raise it.",
   "live.error_network": "Could not reach GitHub for this owner (network or rate limit). For a cached owner, restart the server so /api/people is available, then click Retry.",
-  "live.error_failed": "Failed to load followers/following.",
+  "live.error_failed": "Failed to load followers/following (network issue, auto-retried). Click Retry or try again later.",
   "kpi.repos": "repos",
   "kpi.original": "original",
   "kpi.stars_total": "stars total",

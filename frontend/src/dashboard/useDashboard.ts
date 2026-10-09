@@ -202,7 +202,9 @@ export function useDashboardData(t: T, lang: Lang) {
   // browser-side people fetch (live owners + fallback when server lacks route).
   // GitHub may be rate-limited / unreachable (e.g. from mainland China); in
   // that case we surface an explicit error state instead of silent emptiness.
-  function loadLivePeople(o: string, seq?: number, refresh?: boolean) {
+  // A transient handshake failure gets one automatic retry (the same pattern
+  // as the follow action) before the error is surfaced.
+  function loadLivePeople(o: string, seq?: number, refresh?: boolean, attempt = 0) {
     const target = o.trim();
     if (!target) return;
     const s = seq ?? ++peopleSeq.current;
@@ -224,6 +226,14 @@ export function useDashboardData(t: T, lang: Lang) {
       if (s === peopleSeq.current) setLiveProgress(null);
     }).catch(() => {
       if (s !== peopleSeq.current) return;
+      if (attempt === 0) {
+        // first failure is usually a flaky GitHub handshake — retry once
+        // before giving up; the loading state stays up so the retry is visible
+        window.setTimeout(() => {
+          if (s === peopleSeq.current) loadLivePeople(target, s, refresh, 1);
+        }, 1200);
+        return;
+      }
       setPeople(null);
       setPeopleError(t("live.error_failed"));
       setPeopleLoading(false);

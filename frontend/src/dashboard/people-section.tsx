@@ -75,7 +75,12 @@ export function PeopleSection(props: PeopleSectionProps) {
         <div className="panel error" style={{ gridColumn: "1 / -1" }}>
           <h2>{t("people.error_title")}</h2>
           <p>{peopleError}</p>
-          <button className="btn" onClick={() => loadPeople(owner, viaLive)}>{t("people.retry")}</button>
+          <div className="no-snap-actions">
+            <button className="btn" onClick={() => loadPeople(owner, viaLive)}>{t("people.retry")}</button>
+            <button className="btn" onClick={onRefresh} disabled={refreshing}>
+              {refreshing ? t("people.refreshing") : t("people.refresh")}
+            </button>
+          </div>
         </div>
       )}
       {!peopleLoading && !peopleError && people && (
