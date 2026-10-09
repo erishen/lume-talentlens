@@ -6,7 +6,7 @@ import React from "react";
 import { api } from "../api";
 import type { Overview, RepoView, NoSnapshot, People, PeopleDiff, Radar, Stargazers } from "../types";
 import { isNoSnapshot } from "../types";
-import { fetchLive, fetchLiveProfile, fetchLiveRepos, buildOverviewPartial, buildOverviewFull, ovRepos, writeLiveCacheResult, fetchLivePeople, searchLocal, type LiveResult, type LiveProgress } from "../live";
+import { fetchLive, fetchLiveProfile, fetchLiveRepos, buildOverviewPartial, buildOverviewFull, ovRepos, writeLiveCacheResult, readLiveCache, fetchLivePeople, searchLocal, type LiveResult, type LiveProgress } from "../live";
 import { deriveTalent, healthScore, loadHealthWeights, saveHealthWeights, type HealthWeights } from "../talent";
 import type { Lang } from "../i18n";
 
@@ -237,6 +237,24 @@ export function useDashboardData(t: T, lang: Lang) {
   async function loadLive(o: string, refresh?: boolean) {
     const target = o.trim();
     if (!target) return;
+    // Browser live-cache hit: re-running "实时获取" on an owner fetched in the
+    // last 10 minutes renders instantly. The cache was written by this path
+    // but only read by the compare fetch, so the button always re-pulled
+    // GitHub — "结果已缓存，重复查看秒回" was not actually true for the button.
+    if (!refresh) {
+      const cached = readLiveCache(target);
+      if (cached) {
+        ++reqSeq.current; // drop any in-flight older load for this owner
+        setLiveLoading(false);
+        setLiveErr("");
+        setRepoErr("");
+        setNoSnap(null);
+        setOv(cached.overview);
+        setLive({ overview: cached.overview, all: cached.all });
+        setLiveInfo({ cached: true, ms: 0 });
+        return;
+      }
+    }
     const seq = ++reqSeq.current;
     const t0 = performance.now();
     setLiveLoading(true);
