@@ -279,7 +279,6 @@ export function useDashboardData(t: T, lang: Lang) {
         setLiveProgress(null);
         setRepoErr(e2 instanceof Error ? e2.message : String(e2));
       }
-      loadPeople(target, true);
     } catch (e) {
       if (seq !== reqSeq.current) return;
       setLiveErr(e instanceof Error ? e.message : String(e));

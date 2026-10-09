@@ -394,8 +394,8 @@ function RelationPanel({ title, people, emptyNote, t, onOpen, action }: {
         <p className="muted">{emptyNote}</p>
       ) : (
         <div className="person-list">
-          {people.map((p, i) => (
-            <PersonChip key={i} p={p} t={t} onOpen={onOpen} href={p.url} />
+          {people.map((p) => (
+            <PersonChip key={p.login} p={p} t={t} onOpen={onOpen} href={p.url} />
           ))}
         </div>
       )}

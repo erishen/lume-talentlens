@@ -146,8 +146,8 @@ function PersonList({ title, people, totals, note, onOpen }: {
       {people.length === 0 && <p className="muted">{note || t("people.no_data")}</p>}
       {people.length > 0 && (
         <div className="person-list">
-          {visible.map((p, i) => (
-            <PersonChip key={i} p={p} t={t} onOpen={onOpen} />
+          {visible.map((p) => (
+            <PersonChip key={p.login} p={p} t={t} onOpen={onOpen} />
           ))}
         </div>
       )}

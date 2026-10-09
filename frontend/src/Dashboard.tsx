@@ -74,6 +74,26 @@ export function Dashboard() {
     setPeopleView("relation");
   }, [owner]);
 
+  // Picking a cached owner from the dropdown analyzes it immediately (the
+  // "分析" button stays for typing a new owner manually). Loading is idempotent
+  // — loadOverview reads the local snapshot; an uncached owner lands on the
+  // live-fetch panel.
+  function handleOwnerPick(o: string) {
+    onOwnerPick(o);
+    loadOverview(o);
+  }
+
+  // The people tab loads on demand: opening it with no people data pulls the
+  // snapshot (falling back to a live fetch when uncached) instead of the old
+  // behaviour where every live overview fetch eagerly paged through the whole
+  // follower/following list in the background.
+  React.useEffect(() => {
+    if (tab === "people" && owner && !peopleLoading && !people && !peopleError) {
+      loadPeople(owner, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, owner, people, peopleLoading, peopleError]);
+
   return (
     <div>
       <section className="hero">
@@ -81,7 +101,7 @@ export function Dashboard() {
         <p>{t("hero.subtitle")}</p>
       </section>
 
-      <OwnerPicker value={owner} cached={cached} onPick={onOwnerPick} onAnalyze={loadOverview} busy={loading} />
+      <OwnerPicker value={owner} cached={cached} onPick={handleOwnerPick} onAnalyze={loadOverview} busy={loading} />
 
       <div className="tabs">
         <button className={tab === "overview" ? "tab active" : "tab"} onClick={() => setTab("overview")}>
