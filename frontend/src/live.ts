@@ -268,8 +268,13 @@ export async function fetchLive(
   return result;
 }
 
-// live people: fetch followers + following (first page of 100 each) directly
-// from GitHub in the browser, shaped to the same `People` the server emits.
+// live people: fetch followers + following from GitHub through the server
+// proxy, paging to completion (per_page=100, up to 10 pages — same bounds as
+// the server-side snapshot refresh). A mid-way network / rate-limit failure
+// stops the loop and returns what was fetched; callers that need to be exact
+// should treat a short list with suspicion, but the common case now matches
+// the snapshot counts instead of showing only the first page (which used to
+// under-report mutual followers: following 298 -> first page 100 -> mutual 3).
 // `totals` is optional — when omitted (or a count is missing) it falls back
 // to the number actually fetched, so callers can rely on it without needing
 // a fresh profile in closure.
@@ -280,19 +285,26 @@ export async function fetchLivePeople(
   refresh?: boolean
 ): Promise<People> {
   async function page(kind: "followers" | "following"): Promise<PersonView[]> {
-    try {
-      const data: any[] = await getGithub(
-        "/users/" + encodeURIComponent(owner) + "/" + kind + "?per_page=100",
-        owner,
-        signal,
-        refresh
-      );
-      return Array.isArray(data) ? data.map(toPerson) : [];
-    } catch {
-      // rate limit / not found / unreachable -> empty list (caller surfaces
-      // an actionable hint when both lists are empty).
-      return [];
+    const out: PersonView[] = [];
+    for (let pg = 1; pg <= 10; pg++) {
+      let data: any[] = [];
+      try {
+        data = await getGithub(
+          "/users/" + encodeURIComponent(owner) + "/" + kind + "?per_page=100&page=" + pg,
+          owner,
+          signal,
+          refresh
+        );
+      } catch {
+        // rate limit / not found / unreachable mid-way -> keep what we have
+        // (caller surfaces an actionable hint when both lists are empty).
+        break;
+      }
+      if (!Array.isArray(data) || data.length === 0) break;
+      out.push(...data.map(toPerson));
+      if (data.length < 100) break;
     }
+    return out;
   }
   const [followers, following] = await Promise.all([
     page("followers"),
