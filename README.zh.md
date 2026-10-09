@@ -64,16 +64,16 @@ make dev PORT=9000
 
 ## Docker 部署
 
-附带容器化部署：镜像会用 esbuild 打包 React UI、从 fork 源码**编译 Lume 二进制**（发布版二进制缺 `http_get`/`http_put`/`http_delete` 出站 HTTP 内建，实时拉取/刷新/关注接口依赖它们），然后在 :8091 提供服务。
+附带容器化部署：镜像会用 esbuild 打包 React UI、从 fork 源码**编译 Lume 二进制**（发布版二进制缺 `http_get`/`http_put`/`http_delete` 出站 HTTP 内建，实时拉取/刷新/关注接口依赖它们），并发布在宿主机的 :18091 端口。
 
 ```bash
 docker compose up -d --build   # 首次构建要编译 Rust，耗时较长
-open http://127.0.0.1:8091
+open http://127.0.0.1:18091
 ```
 
 - **配置**：来自 `.env`（与 `make dev` 同一文件），由 compose 注入；`OWNER` / `GH_TOKEN` / `LLM_*` 用法不变。
 - **数据持久化**：`./data` 挂载进容器（快照 + 实时缓存磁盘层，重建不丢）。
-- **仅回环**：端口发布为 `127.0.0.1:8091:8091`，容器对外不可达（与原生安装一致的暴露姿态，见[安全与隐私](#安全与隐私)）。
+- **仅回环**：端口发布为 `127.0.0.1:18091:8091`（宿主机 18091 → 容器 8091），容器对外不可达（与原生安装一致的暴露姿态，见[安全与隐私](#安全与隐私)）。
 - **容器内抓快照**：`docker compose exec app make fetch`（或 `OWNER=foo docker compose exec app make fetch`）。
 - **宿主代理**：若 GitHub 请求走宿主上的代理（Clash / V2Ray…），在 `docker-compose.yml` 里取消注释 `LUME_HTTP_PROXY=http://host.docker.internal:7897` —— `.env` 里的 `127.0.0.1` 在容器内会指向容器自身。
 - **git / crates 下载慢或失败**（大陆 TLS 重置）：用代理作为构建参数重编：`docker compose build --build-arg HTTP_PROXY=http://host.docker.internal:7897 --build-arg HTTPS_PROXY=http://host.docker.internal:7897`。

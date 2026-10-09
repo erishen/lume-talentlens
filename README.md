@@ -93,20 +93,20 @@ holds the port before starting.
 A containerised deployment is included: the image bundles the React UI with
 esbuild, compiles the Lume fork binary (released binaries lack the
 outbound-HTTP builtins `http_get`/`http_put`/`http_delete` that the live
-fetch / refresh / follow endpoints need) and serves on :8091.
+fetch / refresh / follow endpoints need) and publishes it on host port :18091.
 
 ```bash
 docker compose up -d --build   # first build compiles Rust — takes a while
-open http://127.0.0.1:8091
+open http://127.0.0.1:18091
 ```
 
 - **Configuration** comes from `.env` (the same file `make dev` reads),
   injected by compose; `OWNER` / `GH_TOKEN` / `LLM_*` work unchanged.
 - **Data persists** under `./data` (mounted into the container): snapshots
   plus the live-cache disk tier survive rebuilds.
-- **Loopback only** — the port is published as `127.0.0.1:8091:8091`, the
-  container is never reachable from the network (same posture as the native
-  install; see [Security & privacy](#security--privacy)).
+- **Loopback only** — the port is published as `127.0.0.1:18091:8091` (host
+  18091 → container 8091), the container is never reachable from the network
+  (same posture as the native install; see [Security & privacy](#security--privacy)).
 - **Fetch inside the container**: `docker compose exec app make fetch`
   (or `OWNER=foo docker compose exec app make fetch`).
 - **Host proxy**: if you route GitHub calls through a proxy running on the
