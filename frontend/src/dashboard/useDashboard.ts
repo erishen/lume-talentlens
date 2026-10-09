@@ -6,7 +6,8 @@ import React from "react";
 import { api } from "../api";
 import type { Overview, RepoView, NoSnapshot, People, PeopleDiff, Radar, Stargazers } from "../types";
 import { isNoSnapshot } from "../types";
-import { fetchLive, fetchLiveProfile, fetchLiveRepos, buildOverviewPartial, buildOverviewFull, ovRepos, writeLiveCacheResult, readLiveCache, fetchLivePeople, searchLocal, type LiveResult, type LiveProgress } from "../live";
+import { fetchLive, fetchLiveProfile, fetchLiveRepos, buildOverviewPartial, buildOverviewFull, ovRepos, writeLiveCacheResult, fetchLivePeople, searchLocal, type LiveResult, type LiveProgress } from "../live";
+import { readLiveCache } from "../live-core";
 import { deriveTalent, healthScore, loadHealthWeights, saveHealthWeights, type HealthWeights } from "../talent";
 import type { Lang } from "../i18n";
 
