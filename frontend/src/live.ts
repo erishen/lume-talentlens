@@ -72,8 +72,16 @@ export async function detectGhAuth(): Promise<boolean> {
 }
 
 // true after we've seen a rate-limit; getGithub stops issuing new calls.
+// Not permanent: after a cooldown the breaker half-opens and lets a single
+// call through — a transient 429/403 (proxy node swap, momentary GitHub
+// throttling) must not wedge the page for the rest of the session.
 let ghTripped = false;
+let ghTrippedAt = 0;
+const GH_TRIP_COOLDOWN_MS = 60_000;
 export function ghTrippedNow(): boolean {
+  if (ghTripped && Date.now() - ghTrippedAt > GH_TRIP_COOLDOWN_MS) {
+    ghTripped = false; // half-open: let one call through after the cooldown
+  }
   return ghTripped;
 }
 export function resetGhThrottle(): void {
@@ -81,7 +89,7 @@ export function resetGhThrottle(): void {
 }
 
 async function acquireGithubSlot(): Promise<void> {
-  if (ghTripped) {
+  if (ghTrippedNow()) {
     throw new Error("GitHub rate limit already hit earlier — stop here (add GH_TOKEN or use cached owners)");
   }
   if (ghAuthed === null) {
@@ -135,6 +143,7 @@ async function fetchGithubOnce(path: string, owner: string, signal?: AbortSignal
   }
   if (env.status === 403 || env.status === 429) {
     ghTripped = true; // stop the rest of the batch early
+    ghTrippedAt = Date.now();
     throw new Error("GitHub rate limit / access (HTTP " + env.status + ") — try a cached owner or add GH_TOKEN");
   }
   if (env.status === 404) throw new Error("owner '" + owner + "' not found on GitHub");
