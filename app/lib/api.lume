@@ -263,14 +263,20 @@ func s(v) {
 func refresh_fetch_kind(owner, headers, kind) {
   let users = [];
   let page = 1;
+  // a fetch is complete only when the paging loop ends on a normal terminator
+  // (short final page or an empty page). Breaking out on a non-2xx / unparsable
+  // response means GitHub throttled us or the network died mid-way — callers
+  // must NOT persist a partial list over a good snapshot.
+  let complete = true;
   while (true) {
     let url = "https://api.github.com/users/" + owner + "/" + kind + "?per_page=100&page=" + str(page);
     let r = sh.gh_get(url, headers);
     let up = int(get(r, "status", 0), 0);
     let body = str(get(r, "body", ""));
-    if (up < 200 or up >= 300) { break; }
+    if (up < 200 or up >= 300) { complete = false; break; }
     let d = json(body);
-    if (d == null or len(d) == 0) { break; }
+    if (d == null) { complete = false; break; }
+    if (len(d) == 0) { break; }
     for (let u in d) {
       let login = s(get(u, "login", null));
       let nm = s(get(u, "name", null));
@@ -285,9 +291,9 @@ func refresh_fetch_kind(owner, headers, kind) {
     }
     if (len(d) < 100) { break; }
     page = page + 1;
-    if (page > 10) { break; }
+    if (page > 10) { complete = false; break; }
   }
-  return users;
+  return { users: users, complete: complete };
 }
 
 get "/api/refresh", (req) => {
@@ -305,8 +311,17 @@ get "/api/refresh", (req) => {
   let tok = env("GH_ANALYZER_PAT");
   if (tok != null and tok != "") { put(headers, "Authorization", "Bearer " + str(tok)); }
 
-  let followers = refresh_fetch_kind(owner, headers, "followers");
-  let following = refresh_fetch_kind(owner, headers, "following");
+  let followers_r = refresh_fetch_kind(owner, headers, "followers");
+  let following_r = refresh_fetch_kind(owner, headers, "following");
+  let followers = get(followers_r, "users", []);
+  let following = get(following_r, "users", []);
+  // Never overwrite a good snapshot with a partial pull: a mid-way GitHub
+  // failure (rate limit / TLS reset) would shrink the follower list to a
+  // handful and make the dashboard report bogus mutual counts. Keep the
+  // existing file and tell the UI why.
+  if (!get(followers_r, "complete", false) or !get(following_r, "complete", false)) {
+    return { ok: false, status: 502, err: "partial fetch (network or rate limit) — existing snapshot kept" };
+  }
   if (len(followers) == 0 and len(following) == 0) {
     return { ok: false, status: 502, err: "upstream unreachable (network or rate limit)" };
   }

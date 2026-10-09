@@ -99,7 +99,10 @@ export function useDashboardData(t: T, lang: Lang) {
       } else if (j && j.status === 429) {
         setRefreshMsg(t("people.refresh_cooldown", { wait: Math.max(1, Math.ceil(j.wait || 60)) }));
       } else {
-        setRefreshMsg(t("people.refresh_fail"));
+        // e.g. 502 "partial fetch (network or rate limit) — existing
+        // snapshot kept": surface the server's reason instead of a generic
+        // failure so the user knows the old data was intentionally kept.
+        setRefreshMsg((j && j.err) || t("people.refresh_fail"));
       }
     } catch {
       setRefreshMsg(t("people.refresh_fail"));
