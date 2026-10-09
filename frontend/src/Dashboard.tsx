@@ -220,7 +220,14 @@ export function Dashboard() {
         <div className="panel">
           <h2>{t("live.fetching", { owner })}</h2>
           {liveProgress && liveProgress.kind === "people" ? (
-            <p className="muted">{t("live.people_fetching")}</p>
+            <p className="muted">
+              {t(
+                liveProgress.detail === "following"
+                  ? "live.people_fetching_following"
+                  : "live.people_fetching_followers",
+                { page: liveProgress.page }
+              )}
+            </p>
           ) : liveProgress && liveProgress.kind === "refresh" ? (
             <p className="muted">{t("live.refresh_progress")}</p>
           ) : liveProgress && liveProgress.total > 0 ? (

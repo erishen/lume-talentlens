@@ -289,9 +289,7 @@ export async function fetchLivePeople(
   refresh?: boolean,
   onProgress?: LiveProgressFn
 ): Promise<People> {
-  let done = 0;
   async function page(kind: "followers" | "following"): Promise<PersonView[]> {
-    const out: PersonView[] = [];
     for (let pg = 1; pg <= 10; pg++) {
       let data: any[] = [];
       try {
@@ -308,10 +306,10 @@ export async function fetchLivePeople(
       }
       if (!Array.isArray(data) || data.length === 0) break;
       out.push(...data.map(toPerson));
-      done++;
       // the overview progress panel renders a kind-specific label; people
-      // progress carries no numeric total (page bounds are unknown upfront).
-      onProgress?.({ page: done, total: 0, repos: 0, kind: "people" });
+      // progress carries no numeric total (page bounds are unknown upfront),
+      // but reports which list and which page so the user sees movement.
+      onProgress?.({ page: pg, total: 0, repos: 0, kind: "people", detail: kind });
       if (data.length < 100) break;
     }
     return out;
