@@ -3,9 +3,12 @@
 #   docker compose up -d --build
 #   open http://127.0.0.1:18091
 #
-# The port is published on the host loopback only — the container is never
-# reachable from the network, matching the native install's loopback-only
-# posture (see README → Security & privacy).
+# The container runs with `network_mode: host` so it shares the host network
+# stack: the GitHub proxy (127.0.0.1:7897) and the LLM gateway
+# (127.0.0.1:19070) are reached exactly like the native `make dev` install.
+# (The published-port alternative `127.0.0.1:18091:8091` used host.docker.internal
+# for the proxy, which proved slow and flaky on this machine — 1-2s locally vs
+# 29-40s or timeouts through that link.) The server still binds loopback only.
 #
 # Configuration is read from .env (OWNER / GH_TOKEN / LLM_* / AGENTHTTPD_CSP_IMG_SRC
 # / LIVE_* / LUME_GITHUB_PORT). Add or edit .env, then `docker compose up -d`.
@@ -20,33 +23,32 @@ services:
         LUME_REPO: https://github.com/erishen/lume.git
     image: lume-talentlens:latest
     container_name: lume-talentlens
-    ports:
-      - "127.0.0.1:18091:8091"
+    # host networking: 127.0.0.1 inside the container IS the host loopback,
+    # so the host's Clash/V2Ray proxy and LLM gateway are reachable directly
+    # (no host.docker.internal hop). Loopback-only bind keeps it private.
+    network_mode: host
     env_file:
       - .env
     environment:
-      # required so the host can reach the server through the mapped port
-      # (the container's 127.0.0.1 would not be reachable from the host)
-      - LUME_GITHUB_BIND=0.0.0.0
+      # loopback-only, on a port that does not collide with the native
+      # `make dev` install (8091)
+      - LUME_GITHUB_BIND=127.0.0.1
+      - LUME_GITHUB_PORT=18091
       # dev.sh aliases GH_TOKEN -> GH_ANALYZER_PAT (the server only reads the
       # masked name); the container runs lume directly, so inject the alias.
       # compose interpolates ${GH_TOKEN} from the repo-root .env.
       - GH_ANALYZER_PAT=${GH_TOKEN:-}
-      # .env values that point at 127.0.0.1 / localhost refer to the CONTAINER
-      # itself, so those two get rewritten to the host (host.docker.internal)
-      # inside the container. Override via LUME_HTTP_PROXY_HOST /
-      # LLM_API_URL_HOST in .env when the host service listens elsewhere.
-      #   - empty proxy  -> direct GitHub calls (slow on CN networks);
-      #   - host proxy   -> route through the host Clash/V2Ray on :7897.
-      - LUME_HTTP_PROXY=${LUME_HTTP_PROXY_HOST:-http://host.docker.internal:7897}
-      # the LLM gateway that runs on the host for the local `make dev` install
-      - LLM_API_URL=${LLM_API_URL_HOST:-http://host.docker.internal:19070/v1/chat/completions}
+      # host-mode: .env's 127.0.0.1 values now mean the host loopback, so the
+      # proxy and LLM endpoint work verbatim. Override only when a host
+      # service listens elsewhere.
+      - LUME_HTTP_PROXY=${LUME_HTTP_PROXY_HOST:-http://127.0.0.1:7897}
+      - LLM_API_URL=${LLM_API_URL_HOST:-http://127.0.0.1:19070/v1/chat/completions}
     volumes:
       - ./data:/app/data   # snapshots + live-cache disk tier (persist across rebuilds)
       - ./logs:/app/logs
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8091/api/owners"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:18091/api/owners"]
       interval: 30s
       timeout: 5s
       retries: 3
