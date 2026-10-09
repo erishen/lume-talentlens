@@ -34,6 +34,10 @@ export function useDashboardData(t: T, lang: Lang) {
   const poolSeq = React.useRef(0);
   const peopleSeq = React.useRef(0);
   const searchSeq = React.useRef(0);
+  // per-owner throttle for the auto-snapshot after a live fetch — the server
+  // also rate-limits /api/refresh to one run per owner per 60s, so this just
+  // avoids firing pointless refreshes when re-fetching the same owner.
+  const lastAutoSnapshot = React.useRef<Record<string, number>>({});
   // recruiting-scoring weights — an HR-team preference, persisted per browser
   const [weights, setWeights] = React.useState<HealthWeights>(() => loadHealthWeights());
   React.useEffect(() => {
@@ -118,6 +122,28 @@ export function useDashboardData(t: T, lang: Lang) {
     } finally {
       setRefreshing(false);
     }
+  }
+
+  // Best-effort server snapshot after a successful live fetch: writes
+  // people.json via /api/refresh so the owner appears in the cached-owners
+  // dropdown and the people data persists (the browser live cache alone
+  // expires in 10 min). Silent on failure — the live cache still serves
+  // repeat views. Throttled to once per owner per 60s.
+  async function autoSnapshot(target: string) {
+    const last = lastAutoSnapshot.current[target] ?? 0;
+    if (Date.now() - last < 60_000) return;
+    lastAutoSnapshot.current[target] = Date.now();
+    setLiveProgress({ page: 0, total: 0, repos: 0, kind: "refresh" });
+    try {
+      const res = await fetch("/api/refresh?owner=" + encodeURIComponent(target));
+      const j = await res.json().catch(() => null);
+      if (j && j.ok) {
+        // the owner now has a snapshot — refresh the dropdown list so it
+        // shows up immediately instead of after the next manual refresh
+        api.owners().then((o) => setCached(o.owners)).catch(() => {});
+      }
+    } catch { /* keep the live cache as the only store */ }
+    setLiveProgress(null);
   }
 
   function loadPeople(o: string, viaLive: boolean) {
@@ -291,6 +317,9 @@ export function useDashboardData(t: T, lang: Lang) {
         setLiveInfo({ cached: false, ms: Math.round(performance.now() - t0) });
         writeLiveCacheResult(target, liveRes);
         setLiveProgress(null);
+        // persist a server snapshot in the background so the owner lands in
+        // the cached-owners list and the people data survives cache expiry
+        autoSnapshot(target);
       } catch (e2) {
         // Phase-2 failure keeps the profile visible; the repo area shows the
         // error instead of nuking the whole card (phase 1 already succeeded).
