@@ -234,10 +234,32 @@ export function useDashboardData(t: T, lang: Lang) {
         }, 1200);
         return;
       }
+      // second failure: fall back to the server-side refresh instead of
+      // giving up. /api/refresh retries each page (gh_get, up to 3x) and
+      // persists a snapshot, so it survives transient proxy wobble that the
+      // browser's live pulls trip over. Slower (~10-20s) — keep the progress
+      // panel up, then reload from the freshly written snapshot.
       setPeople(null);
-      setPeopleError(t("live.error_failed"));
-      setPeopleLoading(false);
-      if (s === peopleSeq.current) setLiveProgress(null);
+      setLiveProgress({ page: 0, total: 0, repos: 0, kind: "refresh" });
+      fetch("/api/refresh?owner=" + encodeURIComponent(target))
+        .then((r) => r.json().catch(() => null))
+        .then((j) => {
+          if (s !== peopleSeq.current) return;
+          if (j && j.ok) {
+            setRefreshMsg(t("people.refresh_ok", { followers: j.followers, following: j.following }));
+            loadPeople(target, false); // snapshot now exists — normal load path
+          } else {
+            setPeopleError((j && j.err) || t("live.error_failed"));
+            setPeopleLoading(false);
+            if (s === peopleSeq.current) setLiveProgress(null);
+          }
+        })
+        .catch(() => {
+          if (s !== peopleSeq.current) return;
+          setPeopleError(t("live.error_failed"));
+          setPeopleLoading(false);
+          if (s === peopleSeq.current) setLiveProgress(null);
+        });
     });
   }
 
