@@ -73,6 +73,8 @@ const zh: Record<string, string> = {
   // live fetch / no snapshot
   "live.fetching": "正在从 GitHub 实时获取 {owner}…",
   "live.pulling": "拉取仓库中…",
+  "live.people_fetching": "正在拉取粉丝与关注…",
+  "live.refresh_progress": "正在刷新快照（粉丝/关注）…",
   "live.pulling_repos": "正在拉取 {owner} 的仓库…",
   "live.repos_failed": "仓库拉取失败（资料已显示）",  "live.page_progress": "仓库第 {page}/{total} 页 · 已拉取 {repos} 个仓库",
   "live.failed": "实时获取失败 @{owner}",
@@ -316,6 +318,8 @@ const en: Record<string, string> = {
   "cmp.note": "Accent value wins each row · higher is better for all metrics shown.",
   "live.fetching": "Fetching {owner} live from GitHub…",
   "live.pulling": "pulling repos…",
+  "live.people_fetching": "Fetching followers & following…",
+  "live.refresh_progress": "Refreshing snapshot (followers/following)…",
   "live.pulling_repos": "Pulling {owner} repositories…",
   "live.repos_failed": "Repo fetch failed (profile is shown)",
   "live.page_progress": "repos page {page}/{total} · {repos} repos pulled",

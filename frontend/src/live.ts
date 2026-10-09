@@ -170,6 +170,10 @@ export interface LiveProgress {
   page: number;
   total: number;
   repos: number;
+  // what is being pulled — the overview progress panel renders a tailored
+  // label per kind; `detail` overrides the label entirely (e.g. people/refresh).
+  kind?: "repos" | "people" | "refresh";
+  detail?: string;
 }
 export type LiveProgressFn = (p: LiveProgress) => void;
 
@@ -282,8 +286,10 @@ export async function fetchLivePeople(
   owner: string,
   totals?: { followers: number; following: number },
   signal?: AbortSignal,
-  refresh?: boolean
+  refresh?: boolean,
+  onProgress?: LiveProgressFn
 ): Promise<People> {
+  let done = 0;
   async function page(kind: "followers" | "following"): Promise<PersonView[]> {
     const out: PersonView[] = [];
     for (let pg = 1; pg <= 10; pg++) {
@@ -302,6 +308,10 @@ export async function fetchLivePeople(
       }
       if (!Array.isArray(data) || data.length === 0) break;
       out.push(...data.map(toPerson));
+      done++;
+      // the overview progress panel renders a kind-specific label; people
+      // progress carries no numeric total (page bounds are unknown upfront).
+      onProgress?.({ page: done, total: 0, repos: 0, kind: "people" });
       if (data.length < 100) break;
     }
     return out;

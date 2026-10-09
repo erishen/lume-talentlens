@@ -90,22 +90,30 @@ export function useDashboardData(t: T, lang: Lang) {
     if (!target || refreshing) return;
     setRefreshing(true);
     setRefreshMsg("");
+    // show the refresh in the overview progress panel too — the server-side
+    // pull has no per-page steps, so render an indeterminate "refreshing"
+    // label there until the snapshot reload completes.
+    setLiveProgress({ page: 0, total: 0, repos: 0, kind: "refresh" });
     try {
       const res = await fetch("/api/refresh?owner=" + encodeURIComponent(target));
       const j = await res.json().catch(() => null);
       if (j && j.ok) {
         setRefreshMsg(t("people.refresh_ok", { followers: j.followers, following: j.following }));
         loadPeople(target, !!live);
+        if (!live) setLiveProgress(null);
       } else if (j && j.status === 429) {
         setRefreshMsg(t("people.refresh_cooldown", { wait: Math.max(1, Math.ceil(j.wait || 60)) }));
+        setLiveProgress(null);
       } else {
         // e.g. 502 "partial fetch (network or rate limit) — existing
         // snapshot kept": surface the server's reason instead of a generic
         // failure so the user knows the old data was intentionally kept.
         setRefreshMsg((j && j.err) || t("people.refresh_fail"));
+        setLiveProgress(null);
       }
     } catch {
       setRefreshMsg(t("people.refresh_fail"));
+      setLiveProgress(null);
     } finally {
       setRefreshing(false);
     }
@@ -166,7 +174,12 @@ export function useDashboardData(t: T, lang: Lang) {
     const target = o.trim();
     if (!target) return;
     const s = seq ?? ++peopleSeq.current;
-    fetchLivePeople(target, undefined, undefined, refresh).then((p) => {
+    // report per-page progress to the shared live panel (overview tab), so
+    // pulling followers/following shows up next to the repo progress instead
+    // of finishing silently.
+    fetchLivePeople(target, undefined, undefined, refresh, (p) => {
+      if (s === peopleSeq.current) setLiveProgress(p);
+    }).then((p) => {
       if (s !== peopleSeq.current) return;
       if (p.followers.length === 0 && p.following.length === 0) {
         setPeople(p);
@@ -176,11 +189,13 @@ export function useDashboardData(t: T, lang: Lang) {
         setPeopleError("");
       }
       setPeopleLoading(false);
+      if (s === peopleSeq.current) setLiveProgress(null);
     }).catch(() => {
       if (s !== peopleSeq.current) return;
       setPeople(null);
       setPeopleError(t("live.error_failed"));
       setPeopleLoading(false);
+      if (s === peopleSeq.current) setLiveProgress(null);
     });
   }
 

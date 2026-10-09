@@ -216,10 +216,14 @@ export function Dashboard() {
 
       {loading && <div className="panel">{t("misc.loading")}</div>}
 
-      {liveLoading && (
+      {(liveLoading || refreshing || (liveProgress && liveProgress.kind === "people")) && (
         <div className="panel">
           <h2>{t("live.fetching", { owner })}</h2>
-          {liveProgress && liveProgress.total > 0 ? (
+          {liveProgress && liveProgress.kind === "people" ? (
+            <p className="muted">{t("live.people_fetching")}</p>
+          ) : liveProgress && liveProgress.kind === "refresh" ? (
+            <p className="muted">{t("live.refresh_progress")}</p>
+          ) : liveProgress && liveProgress.total > 0 ? (
             <>
               <div className="pool-prog-bar">
                 <div
