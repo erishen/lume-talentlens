@@ -1,5 +1,7 @@
-# pnpm 12+ settings live here (the package.json "pnpm" field is no longer read).
-# esbuild runs a postinstall script to wire up its platform binary; without
-# this allow-list pnpm refuses to run it and `esbuild` fails at build time.
-allowBuilds:
-  esbuild: true
+# pnpm 12+ supply-chain policy lives here (the package.json "pnpm" field is
+# no longer read). esbuild runs a postinstall to wire up its platform binary;
+# without this allow-list pnpm refuses to run it and `esbuild` fails at build
+# time with ERR_PNPM_IGNORED_BUILDS (fresh installs — CI/container — hit this;
+# older local stores that predate pnpm 12 are unaffected).
+onlyBuiltDependencies:
+  - esbuild

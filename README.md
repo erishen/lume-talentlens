@@ -88,6 +88,34 @@ The server always runs in the **foreground** — there is no background
 `make run`; `make dev` is the one dev loop and it kills whatever already
 holds the port before starting.
 
+## Docker
+
+A containerised deployment is included: the image bundles the React UI with
+esbuild, compiles the Lume fork binary (released binaries lack the
+outbound-HTTP builtins `http_get`/`http_put`/`http_delete` that the live
+fetch / refresh / follow endpoints need) and serves on :8091.
+
+```bash
+docker compose up -d --build   # first build compiles Rust — takes a while
+open http://127.0.0.1:8091
+```
+
+- **Configuration** comes from `.env` (the same file `make dev` reads),
+  injected by compose; `OWNER` / `GH_TOKEN` / `LLM_*` work unchanged.
+- **Data persists** under `./data` (mounted into the container): snapshots
+  plus the live-cache disk tier survive rebuilds.
+- **Loopback only** — the port is published as `127.0.0.1:8091:8091`, the
+  container is never reachable from the network (same posture as the native
+  install; see [Security & privacy](#security--privacy)).
+- **Fetch inside the container**: `docker compose exec app make fetch`
+  (or `OWNER=foo docker compose exec app make fetch`).
+- **Host proxy**: if you route GitHub calls through a proxy running on the
+  host (Clash / V2Ray…), uncomment
+  `LUME_HTTP_PROXY=http://host.docker.internal:7897` in `docker-compose.yml`
+  — the `127.0.0.1` value in `.env` would point at the container itself.
+- **Slow / failing git+crates downloads**: rebuild with the proxy as build
+  args: `docker compose build --build-arg HTTP_PROXY=http://host.docker.internal:7897 --build-arg HTTPS_PROXY=http://host.docker.internal:7897`.
+
 Open <http://127.0.0.1:8091/> for the React dashboard, `/chat` for the agent,
 or the JSON below.
 

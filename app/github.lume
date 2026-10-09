@@ -75,10 +75,19 @@ func server_port() {
   return p;
 }
 
+// bind address is env-overridable (LUME_GITHUB_BIND). The default
+// 127.0.0.1 keeps the server loopback-only; containers set 0.0.0.0 and
+// publish the port on the host loopback so exposure stays local.
+func server_bind() {
+  let v = env("LUME_GITHUB_BIND");
+  if (v == null || v == "") { return "127.0.0.1"; }
+  return v;
+}
+
 server {
   port = server_port();
   workers = 4;
-  bind = "127.0.0.1";
+  bind = server_bind();
   docroot = "./www";
   views = "github";
 }
