@@ -1,0 +1,100 @@
+// tests/live_guard.lume — unit tests for lib/live.lume's SSRF guard.
+//
+// Run from the repo root:  lume tests/live_guard.lume
+// Prints "PASS <ok>/<total>" on success; every failure prints a
+// "FAIL: <name>" line first. The Makefile test target greps for ^PASS.
+//
+// Covered surface (the app's real call shapes live.ts:197-306 issues, plus
+// the malformed inputs the guard must reject: alternate hosts/schemes,
+// URL-encoded traversal, backslashes, unexpected endpoints, rogue query
+// params). See also the docs in app/lib/live.lume.
+
+import "../app/lib/live.lume" as live;
+
+// lume semantics: assignment to a top-level name inside a function creates
+// a NEW local (set-or-define) and does NOT mutate the top-level binding —
+// so counters live in a map (reference type) mutated via put().
+let stats = { ok: 0, total: 0 };
+
+func accept(name, p) {
+  put(stats, "total", get(stats, "total", 0) + 1);
+  if (live.live_safe_path(p)) {
+    put(stats, "ok", get(stats, "ok", 0) + 1);
+  } else {
+    print("FAIL (should accept): " + name + "  <- " + p);
+  }
+}
+
+func reject(name, p) {
+  put(stats, "total", get(stats, "total", 0) + 1);
+  if (live.live_safe_path(p)) {
+    print("FAIL (should reject): " + name + "  <- " + p);
+  } else {
+    put(stats, "ok", get(stats, "ok", 0) + 1);
+  }
+}
+
+// repeat0: helper building an over-long login (lume has no string-mul).
+// Defined before first use: top-level calls evaluate in source order.
+func repeat0(s, n) {
+  let out = "";
+  let i = 0;
+  while (i < n) { out = out + s; i = i + 1; }
+  return out;
+}
+
+// ---- the five shapes the frontend actually sends (frontend/src/live.ts) --
+accept("profile", "/users/octocat");
+accept("repos+query", "/users/octocat/repos?type=owner&sort=pushed&direction=desc&per_page=1");
+accept("repos+page", "/users/octocat/repos?type=owner&sort=updated&per_page=100&page=3");
+accept("followers", "/users/octocat/followers?per_page=100&page=10");
+accept("following", "/users/octocat/following?per_page=100&page=1");
+accept("repos-no-query", "/users/octocat/repos");
+accept("hyphen-login", "/users/a-b-9");
+accept("digits-login", "/users/1234567");
+accept("max-login", "/users/" + repeat0("a", 39));
+accept("trailing-amp-free", "/users/octocat?per_page=100");
+
+// ---- host / scheme smuggling ---------------------------------------------
+reject("empty", "");
+reject("absolute-url", "https://evil.com/users/octocat");
+reject("protocol-relative", "//evil.com/users/octocat");
+reject("colon-port", "/users/octocat:8080");
+reject("no-leading-slash", "users/octocat");
+
+// ---- traversal & encoding attacks -----------------------------------------
+reject("dotdot", "/users/../admin");
+reject("dotdot-encoded-owner", "/users/..%2Fadmin");
+reject("dotdot-in-query", "/users/octocat/repos?page=1&..=x");
+reject("backslash", "/users/\\admin");
+reject("pct-encoded-login", "/users/tor%2Evalds");
+reject("pct-slash-owner", "/users/oct%2Fcat");
+reject("pct-null-owner", "/users/oct%00at");
+reject("space", "/users/oc tocat");
+reject("pct-in-query-value", "/users/octocat?per_page=10%20");
+
+// ---- endpoint whitelist ----------------------------------------------------
+reject("empty-owner", "/users/");
+reject("trailing-slash", "/users/octocat/");
+reject("deep-path", "/users/octocat/repos/extra");
+reject("non-users-endpoint", "/orgs/octocat/repos");
+reject("unknown-tail", "/users/octocat/gists?per_page=100");
+reject("unknown-tail2", "/users/octocat/events");
+
+// ---- query allowlist --------------------------------------------------------
+reject("query-unknown-key", "/users/octocat?foo=bar");
+reject("query-unknown-key-2", "/users/octocat?type=owner&evil=1");
+reject("query-empty-value", "/users/octocat?per_page=");
+reject("query-double-eq", "/users/octocat?page=1=2");
+reject("query-bare-key", "/users/octocat?per_page");
+reject("query-second-?", "/users/octocat?per_page=1?type=owner");
+reject("query-fragment", "/users/octocat#frag");
+reject("bad-value-chars", "/users/octocat?sort=pushed;drop");
+
+// ---- length guards -----------------------------------------------------------
+reject("oversize", "/users/" + repeat0("a", 600));
+
+let okc = get(stats, "ok", 0);
+let tot = get(stats, "total", 0);
+print("PASS " + str(okc) + "/" + str(tot));
+if (okc < tot) { print("GUARD TESTS FAILED"); }

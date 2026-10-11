@@ -120,7 +120,10 @@ clean:
 	rm -f www/github/app.js ./.run ./.api-ov.json .lume-*.log
 	rm -rf logs
 
-# Frontend unit tests (vitest — pure logic: talent derivation, i18n parity).
+# Frontend unit tests (vitest — pure logic: talent derivation, i18n parity)
+# plus the .lume SSRF-guard unit tests (pure functions, no server needed).
 test:
+	@echo "== lume guard unit tests =="
+	@out=$$($(LUME) tests/live_guard.lume 2>&1); echo "$$out"; echo "$$out" | grep -q '^PASS ' || exit 1; echo "$$out" | grep -q 'GUARD TESTS FAILED' && exit 1 || true
 	@echo "== frontend unit tests =="
 	cd frontend && pnpm test

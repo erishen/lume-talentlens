@@ -10,13 +10,88 @@
 
 import "shared.lume" as sh;
 
-func live_safe_path(p) {
-  if (p == "" or len(p) > 512) { return false; }
-  // must be a user-scoped sub-path; the fixed "https://api.github.com" prefix
-  // plus these guards mean p can never smuggle another host or scheme.
-  if (not sh.contains(p, "/users/")) { return false; }
-  if (sh.contains(p, ":") or sh.contains(p, "//") or sh.contains(p, " ") or sh.contains(p, "..")) { return false; }
+// ---- SSRF guard: endpoint allowlist ------------------------------------
+// Only the user-scoped GitHub GETs the app actually issues may pass:
+//   /users/{owner}
+//   /users/{owner}/repos      ?type=&sort=&direction=&per_page=&page=
+//   /users/{owner}/followers  ?per_page=&page=
+//   /users/{owner}/following  ?per_page=&page=
+// The owner segment must be GitHub-login shaped ([A-Za-z0-9-], 1..39);
+// percent-encodings are rejected outright. Everything else —
+// alternate hosts, schemes, encodings, unexpected endpoints, extra query
+// params — is rejected before the URL is ever joined onto the fixed
+// "https://api.github.com" prefix.
+
+let _LIVE_LOGIN_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-";
+let _LIVE_TOKEN_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-";
+let _LIVE_QUERY_KEYS = " type sort direction per_page page ";
+
+// every char of s must appear in chars (single-char contains via replace).
+func live_all_chars_in(s, chars) {
+  let i = 0;
+  let n = len(s);
+  while (i < n) {
+    if (not sh.contains(chars, substr(s, i, 1))) { return false; }
+    i = i + 1;
+  }
   return true;
+}
+
+// owner: 1..39 chars, strictly GitHub-login shaped ([A-Za-z0-9-]).
+// No percent-encoding: the frontend sends encodeURIComponent(login), which
+// is the identity transform for legal logins, so allowing %XX would only
+// widen the surface (encoded traversal like %2F/%2E..) without ever
+// being needed by a real request.
+func live_valid_owner(s) {
+  let n = len(s);
+  if (n == 0 or n > 39) { return false; }
+  return live_all_chars_in(s, _LIVE_LOGIN_CHARS);
+}
+
+// query value: 1..32 plain token chars (no %, &, =, etc.).
+func live_valid_query_value(s) {
+  let n = len(s);
+  if (n == 0 or n > 32) { return false; }
+  return live_all_chars_in(s, _LIVE_TOKEN_CHARS);
+}
+
+// query: "" or &-separated k=v where k is in the allowlist and v is a
+// plain token. Unknown params, bare keys and k=v=x are all rejected.
+func live_valid_query(q) {
+  if (q == "") { return true; }
+  for (let kv in split(q, "&")) {
+    let parts = split(kv, "=");
+    if (len(parts) != 2) { return false; }
+    let k = parts[0];
+    let v = parts[1];
+    if (not sh.contains(_LIVE_QUERY_KEYS, " " + k + " ")) { return false; }
+    if (not live_valid_query_value(v)) { return false; }
+  }
+  return true;
+}
+
+// exported for tests/live_guard.lume
+export func live_safe_path(p) {
+  if (p == "" or len(p) > 512) { return false; }
+  // belt-and-braces: these are already implied by the segment/charset
+  // checks below, but keep them explicit as defense in depth.
+  if (sh.contains(p, "//") or sh.contains(p, " ") or sh.contains(p, "..") or sh.contains(p, "#")) { return false; }
+  let parts = split(p, "?");
+  if (len(parts) > 2) { return false; }
+  let path = parts[0];
+  let q = "";
+  if (len(parts) == 2) { q = parts[1]; }
+  // endpoint whitelist: ["", "users", owner] or ["", "users", owner, tail]
+  let segs = split(path, "/");
+  let nseg = len(segs);
+  if (nseg != 3 and nseg != 4) { return false; }
+  if (segs[0] != "" or segs[1] != "users") { return false; }
+  if (not live_valid_owner(segs[2])) { return false; }
+  if (nseg == 4) {
+    let tail = segs[3];
+    if (tail != "repos" and tail != "followers" and tail != "following") { return false; }
+  }
+  return live_valid_query(q);
 }
 
 // null-safe stringify for fields that may be null in the raw API payload.
