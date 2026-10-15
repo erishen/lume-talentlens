@@ -4,7 +4,7 @@ import { pct } from "../talent";
 // Small visual primitives shared across the dashboard panels: a number KPI,
 // a labeled progress bar, and a generic vertical bar chart.
 
-function Kpi({ n, label }: { n: string; label: string }) {
+function Kpi({ n, label }: { n: number | string; label: string }) {
   return (
     <div className="kpi">
       <div className="kpi-num">{n}</div>

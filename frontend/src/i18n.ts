@@ -31,6 +31,8 @@ const zh: Record<string, string> = {
   "tabs.overview": "概览",
   "tabs.repos": "仓库",
   "tabs.people": "人脉",
+  "tabs.trending": "趋势",
+  "tabs.classify": "归类",
   "hero.subtitle": "选择一个账号，读取其人才信号——画像、工程严谨度、产出、专注度（本地快照，离线可用）。",
   // owner picker
   "owner.label": "GitHub 账号",
@@ -204,6 +206,52 @@ const zh: Record<string, string> = {
   "all.top10": "按 Star 前 10",
   "all.prev": "上一页",
   "all.next": "下一页",
+  // trending projects (owner-independent tab)
+  "trend.title": "GitHub 趋势项目",
+  "trend.lead": "近期新建、Star 增长最快的项目——按创建时间窗口筛选，按 Star 排序（搜索 API 近似官方 trending，非官方接口）。",
+  "trend.daily": "今日",
+  "trend.weekly": "本周",
+  "trend.monthly": "本月",
+  "trend.lang_placeholder": "语言筛选（如 Go、Rust，可留空）",
+  "trend.apply": "筛选",
+  "trend.refresh": "刷新",
+  "trend.loading": "正在获取趋势项目…",
+  "trend.error": "获取趋势项目失败",
+  "trend.empty": "该窗口 / 语言下暂无项目",
+  "trend.scope_global": "全局趋势",
+  "trend.scope_owner": "@{owner} 的新仓库",
+  "trend.owner_lead": "只看 @{owner} 自己最近新建的仓库，按 Star 排序——这是搜索 API 能给出的、最接近\"该 owner 在 trending\"的信号；老仓库突然涨星不会出现在这里。",
+  "trend.owner_empty": "@{owner} 在该窗口内没有新建仓库，换个更长的窗口试试",
+  "trend.owner_meta": "近 {days} 天新建 · @{owner} · {n} 个项目",
+  "trend.meta": "近 {days} 天新建 · 按 Star 排序 · {n} 个项目",
+  "trend.cached": "缓存命中",
+  "trend.homepage": "主页",
+  "trend.created": "创建于 {date}",
+  "trend.mt": "机翻",
+  "trend.mt_title": "由本地模型机翻，仅供参考；悬停可看英文原文",
+  "trend.hint": "数据来自 GitHub 搜索 API（created:>date 按 stars 排序）；设置 GH_TOKEN 可放宽限流。中文界面下描述由本地模型自动翻译（机翻）。",
+  "classify.title": "归类总览 {owner}",
+  "classify.lead": "把该 owner 在所选窗口内新建的【公开】仓库，按 GitHub 的语言识别与主题标签聚合——看这批项目怎么归类（含 topics 频次与语言分布）。",
+  "classify.monthly": "近 1 月",
+  "classify.quarterly": "近 3 月",
+  "classify.year": "近 1 年",
+  "classify.refresh": "刷新",
+  "classify.loading": "正在获取归类数据…",
+  "classify.error": "获取归类数据失败",
+  "classify.no_owner": "请先在顶部选择一个 owner",
+  "classify.meta": "近 {days} 天新建 · {n} 个公开仓库",
+  "classify.loading_short": "获取中…",
+  "classify.kpi.repos": "公开仓库",
+  "classify.kpi.langs": "语言",
+  "classify.kpi.topics": "主题标签",
+  "classify.truncated": "GitHub 共 {total} 个，仅统计首 300",
+  "classify.cached": "缓存命中",
+  "classify.empty": "该窗口内暂无公开仓库",
+  "classify.languages": "语言分布",
+  "classify.topics": "主题标签聚合",
+  "classify.topic_unit": "标签 × 仓库数（字号按频次）",
+  "classify.repos": "仓库列表",
+  "classify.hint": "归类来自 GitHub 自动识别：语言由 Linguist 按代码字节判定，topics 为仓库已应用的标签（谁加的 API 无法区分）。查询恒带 is:public，只看公开仓库。",
   // profile card
   "pc.no_bio": "无简介。",
   "pc.open_to_work": "正在找工作",
@@ -282,6 +330,10 @@ const en: Record<string, string> = {
   "tabs.overview": "Overview",
   "tabs.repos": "Repos",
   "tabs.people": "People",
+  "tabs.trending": "Trending",
+  "tabs.classify": "Classify",
+  // the Chinese "归类" could be ambiguous elsewhere; keep "Classify" in EN for the tab,
+  // but the panel title/lead explain it clearly. (already set above)
   "hero.subtitle": "Pick an owner to read their talent signals — profile, engineering rigor, output, focus (local snapshots, offline).",
   "owner.label": "GitHub owner",
   "owner.placeholder": "enter a GitHub username",
@@ -448,6 +500,51 @@ const en: Record<string, string> = {
   "all.top10": "Top 10 by stars",
   "all.prev": "← prev",
   "all.next": "next →",
+  "trend.title": "GitHub trending projects",
+  "trend.lead": "Recently created repositories gaining stars fastest — created within the selected window, ranked by stars (search-API approximation of the trending page).",
+  "trend.daily": "Today",
+  "trend.weekly": "This week",
+  "trend.monthly": "This month",
+  "trend.lang_placeholder": "language filter (e.g. Go, Rust — optional)",
+  "trend.apply": "Filter",
+  "trend.refresh": "Refresh",
+  "trend.loading": "Fetching trending projects…",
+  "trend.error": "Failed to fetch trending projects",
+  "trend.empty": "No projects for this window / language",
+  "trend.scope_global": "Global",
+  "trend.scope_owner": "@{owner}'s new repos",
+  "trend.owner_lead": "Only repositories @{owner} created recently, ranked by stars — the closest signal the search API can give for an owner \"trending\"; older repos that suddenly gain stars won't appear here.",
+  "trend.owner_empty": "@{owner} created no repositories in this window — try a longer one",
+  "trend.owner_meta": "created in the last {days} days · @{owner} · {n} projects",
+  "trend.meta": "created in the last {days} days · sorted by stars · {n} projects",
+  "trend.cached": "cache hit",
+  "trend.homepage": "homepage",
+  "trend.created": "created {date}",
+  "trend.mt": "MT",
+  "trend.mt_title": "Machine-translated by a local model — hover to see the original English",
+  "trend.hint": "Data from the GitHub Search API (created:>date, sorted by stars); set GH_TOKEN to raise the rate limit. In the Chinese UI, descriptions are auto-translated by a local model (MT).",
+  "classify.title": "Classification overview {owner}",
+  "classify.lead": "Roll up the owner's public repositories created within the selected window — aggregated by GitHub's language detection (Linguist) and applied repository topics to see how they cluster.",
+  "classify.monthly": "Last 1 month",
+  "classify.quarterly": "Last 3 months",
+  "classify.year": "Last 1 year",
+  "classify.refresh": "Refresh",
+  "classify.loading": "Fetching classification data…",
+  "classify.error": "Failed to fetch classification data",
+  "classify.no_owner": "Please select an owner first (top of page)",
+  "classify.meta": "created in the last {days} days · {n} public repos",
+  "classify.loading_short": "Loading…",
+  "classify.kpi.repos": "Public repos",
+  "classify.kpi.langs": "Languages",
+  "classify.kpi.topics": "Topics",
+  "classify.truncated": "GitHub has {total} total; showing first 300",
+  "classify.cached": "cached",
+  "classify.empty": "No public repos in this window",
+  "classify.languages": "Language distribution",
+  "classify.topics": "Topic frequency",
+  "classify.topic_unit": "topics × repo count (font size by frequency)",
+  "classify.repos": "Repositories",
+  "classify.hint": "Classification comes from GitHub: language via Linguist (by bytes), topics are applied topics (attribution not exposed). Queries always include is:public (public-only).",
   "pc.no_bio": "No bio.",
   "pc.open_to_work": "open to work",
   "pc.followers": "followers",
@@ -529,15 +626,22 @@ export function useLang(): LangCtx {
 // nothing on the zh side.
 export function useT(): (key: string, params?: Record<string, string | number>) => string {
   const { lang } = useLang();
-  return (key, params) => {
-    let s = dicts[lang][key] ?? dicts.en[key] ?? key;
-    if (params) {
-      for (const [k, v] of Object.entries(params)) {
-        // split/join (not replace) — every occurrence of the placeholder is
-        // substituted, so a template may reference {owner} more than once
-        s = s.split("{" + k + "}").join(String(v));
+  // Memoised per language. Without this, every render returns a NEW function
+  // identity; any component that lists `t` in a useEffect/useCallback dep
+  // (e.g. the trending panel) would re-fire its effect on every render and
+  // loop. A stable reference also lets React bail out of needless re-renders.
+  return React.useCallback(
+    (key: string, params?: Record<string, string | number>) => {
+      let s = dicts[lang][key] ?? dicts.en[key] ?? key;
+      if (params) {
+        for (const [k, v] of Object.entries(params)) {
+          // split/join (not replace) — every occurrence of the placeholder is
+          // substituted, so a template may reference {owner} more than once
+          s = s.split("{" + k + "}").join(String(v));
+        }
       }
-    }
-    return s;
-  };
+      return s;
+    },
+    [lang]
+  );
 }

@@ -198,6 +198,77 @@ export interface Radar {
   people: RadarPerson[];
 }
 
+// GitHub trending projects (/api/trending — server-side Search API proxy:
+// repos created within the window, sorted by stars).
+export interface TrendingItem {
+  full_name: string;
+  name: string;
+  owner: string;
+  owner_avatar: string;
+  url: string;
+  desc: string;
+  desc_zh?: string;
+  lang: string;
+  stars: number;
+  forks: number;
+  issues: number;
+  topics: string[];
+  homepage: string;
+  created_at: string;
+  pushed_at: string;
+}
+export interface Trending {
+  ok: boolean;
+  scope?: "global" | "owner";
+  owner?: string;
+  since?: "daily" | "weekly" | "monthly";
+  lang?: string;
+  days?: number;
+  generated_at?: string;
+  count?: number;
+  items?: TrendingItem[];
+  cached?: boolean;
+  status?: number;
+  err?: string;
+}
+
+// GitHub classification rollup (/api/classify — one owner's public repos
+// created within a window, aggregated by Linguist language + topic tags).
+export interface ClassifyCount {
+  name: string;
+  count: number;
+}
+export interface ClassifyRepo {
+  full_name: string;
+  name: string;
+  owner: string;
+  url: string;
+  desc: string;
+  lang: string;
+  stars: number;
+  forks: number;
+  size: number;
+  created_at: string;
+  pushed_at: string;
+  topics: string[];
+}
+export interface Classify {
+  ok: boolean;
+  owner?: string;
+  since?: "daily" | "weekly" | "monthly" | "quarterly" | "year";
+  days?: number;
+  generated_at?: string;
+  count?: number;
+  total?: number;
+  truncated?: boolean;
+  languages?: ClassifyCount[];
+  topics?: ClassifyCount[];
+  repos?: ClassifyRepo[];
+  cached?: boolean;
+  status?: number;
+  err?: string;
+}
+
 // stargazer profile (make stargazers -> data/github/<owner>/stargazers.json)
 export interface StargazerEntry {
   login: string;

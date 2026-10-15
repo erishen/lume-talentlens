@@ -75,6 +75,12 @@ assert_code  "GET /api/people_diff"   200 "/api/people_diff?owner=$OWNER"
 assert_code  "GET /api/radar"         200 "/api/radar?owner=$OWNER"
 assert_code  "GET /discovery"         200 "/discovery"
 assert_code  "GET /api/github_auth"   200 "/api/github_auth"
+# trending hits the live Search API; the route always answers 200 with an
+# { ok, … } envelope (ok:false + err when GitHub is unreachable/rate-limited),
+# so this asserts registration even in an offline run.
+assert_code  "GET /api/trending"      200 "/api/trending?since=weekly&lang=go"
+assert_code  "GET /api/trending owner" 200 "/api/trending?since=weekly&owner=$OWNER"
+assert_code  "GET /api/classify"      200 "/api/classify?owner=$OWNER&since=quarterly"
 
 echo "-- SSR + SPA --"
 assert_code  "GET /"                  200 "/"
@@ -114,11 +120,15 @@ echo "-- payload shape --"
 assert_contains "overview has repo count" "/api/overview?owner=$OWNER" '"count"'
 assert_contains "people has totals"      "/api/people?owner=$OWNER" '"totals"'
 assert_contains "discovery has app catalog" "/discovery" '"app"'
+assert_contains "trending has ok envelope" "/api/trending?since=daily" '"ok":'
+assert_contains "classify has ok envelope" "/api/classify?owner=$OWNER&since=quarterly" '"ok":'
 
 if [ "${SKIP_LIVE:-0}" != "1" ]; then
   echo "-- live proxy (real GitHub call) --"
   assert_code   "GET /api/live/github profile" 200 "/api/live/github?path=/users/$OWNER"
   assert_contains "live body is slim JSON"     "/api/live/github?path=/users/$OWNER" '"ok":true'
+  assert_contains "trending owner scope"       "/api/trending?since=weekly&owner=$OWNER" '"scope":"owner"'
+  assert_contains "classify owner languages"   "/api/classify?owner=$OWNER&since=quarterly" '"languages":'
   echo "-- live cache (2nd hit must be served from cache) --"
   first=$(curl -s -m 30 "http://127.0.0.1:$PORT/api/live/github?path=/users/$OWNER")
   second=$(curl -s -m 30 "http://127.0.0.1:$PORT/api/live/github?path=/users/$OWNER")

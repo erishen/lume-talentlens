@@ -25,11 +25,13 @@ app/
   lib/live.lume      # 实时 GitHub 代理（/api/live/github）+ 鉴权探针
   lib/ssr.lume       # SSR 页面（/overview、/repos、/api 参考）
   lib/tools.lume     # LLM 智能体工具（repo_* / github_*）
+  lib/trending.lume  # GitHub 趋势项目（/api/trending，搜索 API）
+  lib/classify.lume  # 归类总览（/api/classify —— 语言 + 主题聚合）
   lib/actions.lume   # /discovery + POST /api/follow + DELETE /api/unfollow
   lib/ui.lume        # SSR 页面组件（nav、kpi、bars、repo_row、page）
 frontend/
   src/main.tsx       # React 入口 —— Dashboard（默认）或 Agent（data-page=chat）
-  src/Dashboard.tsx  # KPI、语言/节奏/年份柱状图、Top-10、搜索、分页列表
+  src/Dashboard.tsx  # 标签页：概览（KPI/柱状图/Top-10/对比）、仓库、人脉、趋势、归类
   src/Agent.tsx      # 服务端原生 /react/api/chat 的 SSE 聊天客户端
   src/api.ts, types.ts, tsconfig.json, package.json
 www/github/
@@ -55,6 +57,7 @@ make fetch        # 快照你的仓库 -> data/github/
 make ui           # esbuild React 打包 -> www/github/app.js
 make check        # 类型检查 .lume 文件 + 运行时 sanity（sanity.lume）
 make test         # 前端单测（vitest —— 人才推导、i18n 键一致性、CSV 转义）
+make classify     # 打印 owner 的仓库归类总览（需 :8091 上有服务运行）
 make dev PORT=9000
 ```
 
@@ -133,6 +136,8 @@ cp .env.example .env   # 然后编辑 OWNER=你的 GitHub 登录名
 | GET | `/api/refresh` | 服务端重新拉取粉丝/关注 + 档案总数，重写 `people.json`（限流，每 owner 60 秒） |
 | GET | `/api/live/github?path=/users/<x>` | 服务端 GitHub 代理（出站 `http_get`）；返回 `{ ok, status, data, err }` —— 大载荷先投影再返回 |
 | GET | `/api/github_auth` | `{ authed: bool }` —— live 调用是否带 `GH_TOKEN`（5000 次/时）；绝不泄露 token |
+| GET | `/api/classify?owner=<login>&since=daily\|weekly\|monthly\|quarterly\|year&pages=1` | 归类总览 —— 把该 owner 在窗口内新建的**公开**仓库，按 GitHub 的语言识别（Linguist）与已应用主题聚合；返回 `{ ok, owner, since, days, generated_at, count, total, languages, topics, repos, truncated }`，带 TTL 缓存（默认 `quarterly`=90 天，`pages` 默认 1、上限 3）。查询恒带 `is:public` 并丢弃私有条目兜底。驱动仪表盘"归类"页与 `make classify` |
+| GET | `/api/trending?since=daily\|weekly\|monthly&lang=go&tr=zh&owner=<login>` | GitHub 趋势项目 —— 窗口内新建的**公开**仓库、按 Star 排序（搜索 API 近似 github.com/trending）；返回 `{ ok, scope, owner, since, days, generated_at, count, items }`，带 TTL 缓存（`TRENDING_CACHE_TTL_SEC` 默认 600）。查询恒带 `is:public`（该调用使用服务端 token，否则可能看到 token 所有者的私有仓库），并额外丢弃私有条目兜底。`tr=zh` 时经 LLM 网关机翻描述为中文（`desc_zh`；尽力而为、按描述记忆化、失败回退英文）。`owner=<login>` 只看某个账号自己最近新建的公开仓库（`user:<login> created:>window is:public`，`scope:"owner"`）—— 这是搜索 API 能给出的"该 owner 在 trending"的近似；老仓库突然涨星仍不会出现 |
 | GET | `/discovery` | 启动期工具/技能/MCP 目录 |
 | POST | `/api/follow` | 用 PAT 关注某人 —— body `{ "login": … }`（幂等，204；需要 `user:follow`） |
 | DELETE | `/api/unfollow` | 用 PAT 取关某人 —— body `{ "login": … }`（幂等，204；需要 `user:follow`） |

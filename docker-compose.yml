@@ -38,11 +38,17 @@ services:
       # masked name); the container runs lume directly, so inject the alias.
       # compose interpolates ${GH_TOKEN} from the repo-root .env.
       - GH_ANALYZER_PAT=${GH_TOKEN:-}
+      # same alias trick for the LLM key used by the trending translator:
+      # env() masks LLM_API_KEY, so the server reads LLM_ANALYZER_KEY.
+      - LLM_ANALYZER_KEY=${LLM_API_KEY:-}
       # host-mode: .env's 127.0.0.1 values now mean the host loopback, so the
       # proxy and LLM endpoint work verbatim. Override only when a host
       # service listens elsewhere.
       - LUME_HTTP_PROXY=${LUME_HTTP_PROXY_HOST:-http://127.0.0.1:7897}
       - LLM_API_URL=${LLM_API_URL_HOST:-http://127.0.0.1:19070/v1/chat/completions}
+      # the LLM gateway is on loopback — bypass the proxy for it so the
+      # translator talks to it directly (direct is also faster)
+      - LUME_NO_PROXY=127.0.0.1,localhost
     volumes:
       - ./data:/app/data   # snapshots + live-cache disk tier (persist across rebuilds)
       - ./logs:/app/logs

@@ -299,6 +299,7 @@ export async function fetchLivePeople(
   onProgress?: LiveProgressFn
 ): Promise<People> {
   async function page(kind: "followers" | "following"): Promise<PersonView[]> {
+    const out: PersonView[] = [];
     for (let pg = 1; pg <= 10; pg++) {
       let data: any[] = [];
       try {

@@ -16,7 +16,7 @@ get "/discovery", (req) => {
       routes: ["/api/owners", "/api/overview", "/api/repos", "/api/top", "/api/langs",
                "/api/recency", "/api/year", "/api/people", "/api/search", "/api/radar",
                "/api/people_diff", "/api/refresh", "/api/live/github", "/api/github_auth",
-               "/discovery", "/overview", "/repos", "/api"],
+               "/api/trending", "/api/classify", "/discovery", "/overview", "/repos", "/api"],
       tools: ["repo_insights", "repo_search", "repo_language", "repo_recency", "repo_year",
               "repo_stats", "github_story", "github_owners", "github_radar", "github_people"],
       note: "framework agent-catalog builtins (discovery_endpoints/skills/tools/mcps) are absent from this build; app catalog attached instead",

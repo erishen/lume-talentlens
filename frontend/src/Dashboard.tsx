@@ -5,6 +5,8 @@ import { ProfileCard, TalentPanel, ComparePanel, PushTrend } from "./dashboard/p
 import { Bars, Kpi } from "./dashboard/bars";
 import { RepoRow, BrowsePage } from "./dashboard/lists";
 import { PeopleSection } from "./dashboard/people-section";
+import { TrendingPanel } from "./dashboard/trending";
+import { ClassifyPanel } from "./dashboard/classify";
 import { useFollowActions } from "./dashboard/useFollowActions";
 import { deriveTalent } from "./talent";
 import { useLang, useT } from "./i18n";
@@ -62,7 +64,7 @@ export function Dashboard() {
   // Tabs keep each view focused: overview (profile + signals + charts +
   // top repos + compare/pool), repos (search + full paged list), people
   // (followers/following/radar/mutual + the action toolbar).
-  const [tab, setTab] = React.useState<"overview" | "repos" | "people">("overview");
+  const [tab, setTab] = React.useState<"overview" | "repos" | "people" | "trending" | "classify">("overview");
   // people tab is split into three sub-views — relations (mutual + worth),
   // insights (radar + stargazers), lists (diff + followers + following)
   const [peopleView, setPeopleView] = React.useState<"relation" | "insight" | "list">("relation");
@@ -113,8 +115,16 @@ export function Dashboard() {
         <button className={tab === "people" ? "tab active" : "tab"} onClick={() => setTab("people")}>
           {t("tabs.people")}
         </button>
+        <button className={tab === "trending" ? "tab active" : "tab"} onClick={() => setTab("trending")}>
+          {t("tabs.trending")}
+        </button>
+        <button className={tab === "classify" ? "tab active" : "tab"} onClick={() => setTab("classify")}>
+          {t("tabs.classify")}
+        </button>
       </div>
 
+      {tab === "trending" && <TrendingPanel owner={owner} />}
+      {tab === "classify" && <ClassifyPanel owner={owner} />}
 
       {tab === "overview" && (
         <>
@@ -303,7 +313,7 @@ export function Dashboard() {
         </div>
       )}
 
-      {ov && !loading && !noSnap && !liveLoading && (
+      {ov && !loading && !noSnap && !liveLoading && tab !== "trending" && tab !== "classify" && (
         <>
           <div className="live-actions">
             <button className="btn" onClick={() => loadLive(owner)}>{t("live.fetch_live")}</button>

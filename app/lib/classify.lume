@@ -1,0 +1,215 @@
+// lib/classify.lume — GitHub classification overview (/api/classify).
+//
+// "归类总览": aggregates ONE owner's PUBLIC repositories created within a
+// window into the GitHub-side classification signals — the primary-language
+// distribution, the topic-tag frequency, and the per-repo list. GitHub has no
+// standalone "classify" API; this rolls up the fields the Search API returns
+// (`language`, `topics`) so the dashboard / CLI can show how a batch of repos
+// clusters.
+//
+//   GET /api/classify?owner=<login>&since=daily|weekly|monthly|quarterly|year
+//     -> { ok, owner, since, days, generated_at, count, total, truncated,
+//          languages: [{name,count}], topics: [{name,count}], repos: [ … ] }
+//     -> { ok: false, status, err } when owner is missing or GitHub errors
+//
+// The search runs with the server token, so `is:public` is a hard privacy
+// boundary (an authenticated search would otherwise see the token owner's
+// private repos) — see tests/classify_guard.lume. `since` defaults to
+// `quarterly` (90d). Responses are TTL-cached (shared TRENDING_CACHE_TTL_SEC).
+
+import "shared.lume" as sh;
+
+// classify window -> days back for the `created:>` cutoff (default quarterly).
+func classify_days(since) {
+  if (since == "daily") { return 1; }
+  if (since == "weekly") { return 7; }
+  if (since == "monthly") { return 30; }
+  if (since == "year") { return 365; }
+  return 90;
+}
+
+func classify_valid_since(since) {
+  if (since == "daily" or since == "weekly" or since == "monthly"
+      or since == "quarterly" or since == "year") { return true; }
+  return false;
+}
+
+func classify_ttl() {
+  let v = env("TRENDING_CACHE_TTL_SEC");
+  if (v == null) { return 600; }
+  let n = int(v, 600);
+  if (n < 0) { return 0; }
+  return n;
+}
+
+// null-safe stringify for fields that may be null in the raw API payload.
+func c_s(v) {
+  if (v == null) { return ""; }
+  return str(v);
+}
+
+// The http builtin does no percent-encoding (same hand-rolled scheme as
+// lib/trending.lume): encode "+"/"#" first, then the rest, spaces last.
+func classify_enc(x) {
+  x = replace(x, "+", "%2B");
+  x = replace(x, "#", "%23");
+  x = replace(x, ":", "%3A");
+  x = replace(x, ">", "%3E");
+  x = replace(x, "/", "%2F");
+  x = replace(x, " ", "+");
+  return x;
+}
+
+// Build the Search API query. Exported so tests/classify_guard.lume can pin
+// the privacy-critical `is:public` boundary and the `user:` scope.
+export func classify_query(owner, since) {
+  let days = classify_days(since);
+  let date = str(strftime("%Y-%m-%d", int(now(), 0) - days * 86400));
+  return "user:" + owner + " is:public created:>" + date;
+}
+
+// frequency map {name: count} over a list of strings
+func classify_freq(items) {
+  let f = {};
+  for (let x in items) {
+    if (x == "") { continue; }
+    put(f, x, int(get(f, x, 0), 0) + 1);
+  }
+  return f;
+}
+
+// {name: count} -> [{name,count}] sorted by count desc (no object-sort builtin,
+// so bucket by count from the max down; ties keep insertion order).
+func classify_pairs_desc(f) {
+  let out = [];
+  let ks = keys(f);
+  let maxc = 0;
+  for (let k in ks) {
+    let c = int(get(f, k, 0), 0);
+    if (c > maxc) { maxc = c; }
+  }
+  let c2 = maxc;
+  while (c2 >= 1) {
+    for (let k in ks) {
+      if (int(get(f, k, 0), 0) == c2) { push(out, { name: k, count: c2 }); }
+    }
+    c2 = c2 - 1;
+  }
+  return out;
+}
+
+// first n pairs (list is already desc)
+func classify_top(pairs, n) {
+  let out = [];
+  let i = 0;
+  while (i < len(pairs) and i < n) { push(out, pairs[i]); i = i + 1; }
+  return out;
+}
+
+let _classify_cache = {};
+
+get "/api/classify", (req) => {
+  let qp = get(req, "query_params", {});
+  let owner = sh.sanitize_owner(str(get(qp, "owner", "")));
+  if (owner == "") { owner = sh.default_owner(); }
+  if (owner == "") { return { ok: false, status: 400, err: "owner required" }; }
+  let since = str(get(qp, "since", "quarterly"));
+  if (not classify_valid_since(since)) { since = "quarterly"; }
+  // pages of 100 (Search API max); 1 by default, capped at 3 to bound cost.
+  let pages = int(get(qp, "pages", "1"), 1);
+  if (pages < 1) { pages = 1; }
+  if (pages > 3) { pages = 3; }
+
+  let key = owner + "|" + since + "|" + str(pages);
+  let ttl = classify_ttl();
+  if (ttl > 0) {
+    let hit = get(_classify_cache, key, null);
+    if (hit != null and (int(now(), 0) - int(get(hit, "at", 0), 0)) < ttl) {
+      let cached = json(str(get(hit, "body", "")));
+      if (cached != null) { put(cached, "cached", true); return cached; }
+    }
+  }
+
+  let days = classify_days(since);
+  let date = str(strftime("%Y-%m-%d", int(now(), 0) - days * 86400));
+  let q = classify_query(owner, since);
+
+  let headers = { "Accept": "application/vnd.github+json", "User-Agent": "lume-talentlens" };
+  let tok = env("GH_ANALYZER_PAT");
+  if (tok != null and tok != "") { put(headers, "Authorization", "Bearer " + str(tok)); }
+
+  let all = [];
+  let total = 0;
+  let p = 1;
+  while (p <= pages) {
+    let url = "https://api.github.com/search/repositories?q=" + classify_enc(q)
+      + "&sort=stars&order=desc&per_page=100&page=" + str(p);
+    let r = sh.gh_get(url, headers);
+    let up = int(get(r, "status", 0), 0);
+    let herr = str(get(r, "err", ""));
+    let body = str(get(r, "body", ""));
+    if (herr != "" or up < 200 or up >= 300) {
+      let emsg = herr;
+      if (emsg == "") { emsg = "github http " + str(up); }
+      return { ok: false, status: up, owner: owner, since: since, err: emsg };
+    }
+    let d = json(body);
+    let raw = get(d, "items", null);
+    if (raw == null) {
+      return { ok: false, status: up, owner: owner, since: since,
+               err: c_s(get(d, "message", "unexpected github response")) };
+    }
+    if (p == 1) { total = int(get(d, "total_count", 0), 0); }
+    for (let it in raw) { push(all, it); }
+    p = p + 1;
+  }
+
+  let repos = [];
+  let lang_list = [];
+  let topic_list = [];
+  for (let it in all) {
+    // defence-in-depth: never surface a private repo even if is:public failed.
+    if (get(it, "private", false) == true) { continue; }
+    let o = get(it, "owner", {});
+    let lang = c_s(get(it, "language", null));
+    if (lang == "") { lang = "Other"; }
+    let topics = get(it, "topics", []);
+    push(lang_list, lang);
+    for (let tp in topics) { push(topic_list, c_s(tp)); }
+    push(repos, {
+      full_name: c_s(get(it, "full_name", null)),
+      name: c_s(get(it, "name", null)),
+      owner: c_s(get(o, "login", null)),
+      url: c_s(get(it, "html_url", null)),
+      desc: c_s(get(it, "description", null)),
+      lang: lang,
+      stars: int(get(it, "stargazers_count", 0), 0),
+      forks: int(get(it, "forks_count", 0), 0),
+      size: int(get(it, "size", 0), 0),
+      created_at: c_s(get(it, "created_at", null)),
+      pushed_at: c_s(get(it, "pushed_at", null)),
+      topics: topics,
+    });
+  }
+
+  let languages = classify_pairs_desc(classify_freq(lang_list));
+  let topics = classify_top(classify_pairs_desc(classify_freq(topic_list)), 40);
+
+  let out = {
+    ok: true,
+    owner: owner,
+    since: since,
+    days: days,
+    generated_at: date,
+    count: len(repos),
+    total: total,
+    truncated: total > len(repos),
+    languages: languages,
+    topics: topics,
+    repos: repos,
+  };
+  if (ttl > 0) {
+    put(_classify_cache, key, { at: int(now(), 0), body: str(out) });
+  }
+  return out;
+};

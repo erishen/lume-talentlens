@@ -14,6 +14,8 @@
 //   lib/api.lume      JSON APIs: owners/overview/repos/top/langs/recency/year/
 //                     people/search/radar/refresh/people_diff
 //   lib/live.lume     live GitHub proxy (/api/live/github + /api/github_auth)
+//   lib/trending.lume GitHub trending projects (/api/trending, search API)
+//   lib/classify.lume GitHub classification overview (/api/classify, search API)
 //   lib/ssr.lume      SSR pages (/overview, /repos, /api reference)
 //   lib/tools.lume    LLM agent tools (repo_* / github_*)
 //   lib/actions.lume  /discovery + POST /api/follow + DELETE /api/unfollow
@@ -35,6 +37,8 @@
 //   /api/people /api/people_diff /api/refresh
 //   /api/live/github  — server-side GitHub fetch proxy (?path=)
 //   /api/github_auth  — whether live calls are authenticated (bool only)
+//   /api/trending     — GitHub trending projects (?since=&lang=, search API)
+//   /api/classify     — GitHub classification rollup (?owner=&since=, search API)
 //   /discovery    — boot-time tool/skill/MCP catalog
 //   POST /api/follow / DELETE /api/unfollow — act on the user's account
 //
@@ -61,6 +65,8 @@
 import "lib/shared.lume" as sh;
 import "lib/api.lume" as api;
 import "lib/live.lume" as live;
+import "lib/trending.lume" as trending;
+import "lib/classify.lume" as classify;
 import "lib/ssr.lume" as ssr;
 import "lib/tools.lume" as tools;
 import "lib/actions.lume" as actions;

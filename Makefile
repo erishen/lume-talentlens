@@ -32,7 +32,7 @@ PORT    ?= 8091
 OWNER ?=
 PORT ?= 8091
 
-.PHONY: dev check fetch ui clean people-scan suspects unfollow score follow-worthy radar smoke test
+.PHONY: dev check fetch ui clean people-scan suspects unfollow score follow-worthy radar smoke test classify
 
 # Boot the app on an isolated port and assert every public contract the
 # frontend/agent relies on (tears its own server down; never touches :8091).
@@ -46,9 +46,11 @@ dev:
 	@echo "== dev loop: kill :$(PORT) + rebuild + watch + run =="
 	@PORT="$(PORT)" bash scripts/dev.sh
 
+# --check takes a single script; the entry transitively parse+type-checks every
+# module it imports (lib/*), so checking $(APP) covers the whole app.
 check:
 	@echo "== type-checking .lume =="
-	$(LUME) --check app/lib/analyze.lume app/lib/shared.lume app/lib/api.lume app/lib/live.lume app/lib/ssr.lume app/lib/tools.lume app/lib/actions.lume app/lib/ui.lume $(APP)
+	$(LUME) --check $(APP)
 	@echo "== runtime sanity (constructs the app relies on) =="
 	$(LUME) app/sanity.lume
 
@@ -106,6 +108,14 @@ follow-worthy:
 radar:
 	@OWNER="$(OWNER)" bash scripts/radar-scan.sh
 
+# "归类总览" — curl the running server's /api/classify and print a compact
+# summary. Expects a server on :$(PORT) (e.g. `make dev` in another terminal).
+#   make classify                # quarterly for default owner
+#   SINCE=monthly make classify  # 3m also maps to quarterly in the script above
+#   OWNER=foo make classify
+classify:
+	@OWNER="$(OWNER)" PORT="$(PORT)" bash scripts/classify.sh
+
 # Stargazer scan: aggregate everyone who starred the owner's repos, score
 # each with the people-score influence formula, write data/github/<owner>/
 # stargazers.json and print a ranked table (★ EXPERT >= RADAR_SCORE, SELF /
@@ -121,9 +131,13 @@ clean:
 	rm -rf logs
 
 # Frontend unit tests (vitest — pure logic: talent derivation, i18n parity)
-# plus the .lume SSRF-guard unit tests (pure functions, no server needed).
+# plus the .lume unit tests (pure functions, no server needed): SSRF guard
+# (tests/live_guard.lume) and the trending is:public privacy boundary
+# (tests/trending_guard.lume).
 test:
 	@echo "== lume guard unit tests =="
 	@out=$$($(LUME) tests/live_guard.lume 2>&1); echo "$$out"; echo "$$out" | grep -q '^PASS ' || exit 1; echo "$$out" | grep -q 'GUARD TESTS FAILED' && exit 1 || true
+	@out=$$($(LUME) tests/trending_guard.lume 2>&1); echo "$$out"; echo "$$out" | grep -q '^PASS ' || exit 1; echo "$$out" | grep -q 'GUARD TESTS FAILED' && exit 1 || true
+	@out=$$($(LUME) tests/classify_guard.lume 2>&1); echo "$$out"; echo "$$out" | grep -q '^PASS ' || exit 1; echo "$$out" | grep -q 'GUARD TESTS FAILED' && exit 1 || true
 	@echo "== frontend unit tests =="
 	cd frontend && pnpm test

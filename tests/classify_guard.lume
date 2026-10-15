@@ -1,0 +1,34 @@
+// tests/classify_guard.lume — unit tests for lib/classify.lume query boundary.
+//
+// Run from the repo root:  lume tests/classify_guard.lume
+// The route issues the search with the server's GitHub token; an authenticated
+// search WITHOUT `is:public` returns the token owner's PRIVATE repos. This is a
+// hard privacy boundary — every query must carry `is:public` and `user:<login>`.
+
+import "../app/lib/classify.lume" as classify;
+
+let stats = { ok: 0, total: 0 };
+
+func check(name, cond) {
+  put(stats, "total", get(stats, "total", 0) + 1);
+  if (cond) {
+    put(stats, "ok", get(stats, "ok", 0) + 1);
+  } else {
+    print("FAIL: " + name);
+  }
+}
+
+let q = classify.classify_query("erishen", "quarterly");
+check("has is:public", contains(q, "is:public"));
+check("has user:erishen", contains(q, "user:erishen"));
+check("has created:>", contains(q, "created:>"));
+
+let q2 = classify.classify_query("alice", "year");
+check("year has user:alice", contains(q2, "user:alice"));
+check("year has is:public", contains(q2, "is:public"));
+
+if (get(stats, "ok", 0) == get(stats, "total", 0)) {
+  print("PASS " + str(get(stats, "ok", 0)) + "/" + str(get(stats, "total", 0)));
+} else {
+  print("GUARD TESTS FAILED");
+}

@@ -49,13 +49,17 @@ app/
   lib/shared.lume    # owner/snapshot/string helpers + gh_get (shared by modules)
   lib/api.lume       # JSON APIs: owners/overview/repos/…/people/refresh/people_diff
   lib/live.lume      # live GitHub proxy (/api/live/github) + auth probe
+  lib/trending.lume  # GitHub trending projects (/api/trending, search API)
+  lib/classify.lume  # classification rollup (/api/classify — language + topic rollup)
   lib/ssr.lume       # SSR pages (/overview, /repos, /api reference)
   lib/tools.lume     # LLM agent tools (repo_* / github_*)
   lib/actions.lume   # /discovery + POST /api/follow + DELETE /api/unfollow
   lib/ui.lume        # SSR page components (nav, kpi, bars, repo_row, page)
 frontend/
   src/main.tsx       # React entry — Dashboard (default) or Agent (data-page=chat)
-  src/Dashboard.tsx  # KPIs, language/recency/year bars, top-10, search, paged list
+  src/Dashboard.tsx  # tabs: overview (KPIs/bars/top-10/compare/pool), repos, people, trending, classify
+  src/dashboard/trending.tsx  # GitHub trending tab: global feed + per-owner "new repos" scope
+  src/dashboard/classify.tsx  # classification tab: language distribution + topic frequency
   src/Agent.tsx      # SSE chat client for the server-native /react/api/chat
   src/api.ts, types.ts, tsconfig.json, package.json
 www/github/
@@ -81,6 +85,7 @@ make fetch        # snapshot your repos -> data/github/
 make ui           # esbuild React bundle -> www/github/app.js
 make check        # type-check the .lume files + runtime sanity (sanity.lume)
 make test         # frontend unit tests (vitest — talent derivation, i18n parity, CSV escaping)
+make classify     # print the owner's repo classification rollup (needs a server on :8091)
 make dev PORT=9000
 ```
 
@@ -214,6 +219,8 @@ normal env var (e.g. `OWNER=acme make fetch`), which always wins.
 | GET | `/api/refresh` | server-side re-fetch of followers/following + profile totals, rewrites `people.json` (rate-limited, 60s per owner) |
 | GET | `/api/live/github?path=/users/<x>` | server-side GitHub proxy (outbound `http_get`); returns `{ ok, status, data, err }` — big payloads are slim-projected before returning |
 | GET | `/api/github_auth` | `{ authed: bool }` — whether live calls carry `GH_TOKEN` (5000 req/h); never leaks the token |
+| GET | `/api/classify?owner=<login>&since=monthly\|quarterly\|year` | Classification rollup — the owner's **public** repos created within the window, aggregated by GitHub's language detection (Linguist) and applied topics. Returns `{ ok, owner, since, days, generated_at, count, total, truncated, languages:[{name,count}], topics:[{name,count}], repos:[…] }`, TTL-cached. Default window `quarterly` (90d); `pages` (default 1, max 3 → at most 300 repos). Queries always carry `is:public` and drop private items defensively. Fuels the dashboard "classify" tab and `make classify` |
+| GET | `/api/trending?since=daily\|weekly\|monthly&lang=go&tr=zh&owner=<login>` | GitHub trending projects — **public** repos created within the window, sorted by stars (Search API emulation of github.com/trending); returns `{ ok, scope, owner, since, days, generated_at, count, items }`, TTL-cached (`TRENDING_CACHE_TTL_SEC` default 600). Searches always carry `is:public` (the call uses the server token, which can otherwise see the token owner's private repos), and private items are dropped defensively. `tr=zh` machine-translates descriptions into Chinese via the LLM gateway (`desc_zh`; best-effort, memoised, falls back to English). `owner=<login>` narrows to one account's own newly-created public repos (`user:<login> created:>window is:public`, `scope:"owner"`) — the API-only proxy for "this owner is trending"; older repos that suddenly gain stars still won't appear |
 | GET | `/discovery` | boot-time tool/skill/MCP catalog |
 | POST | `/api/follow` | follow a login with the PAT — body `{ "login": … }` (idempotent, 204; needs `user:follow`) |
 | DELETE | `/api/unfollow` | unfollow a login with the PAT — body `{ "login": … }` (idempotent, 204; needs `user:follow`) |

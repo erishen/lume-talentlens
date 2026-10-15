@@ -21,6 +21,9 @@
 html, body {
   margin: 0;
   min-height: 100%;
+  /* always reserve the vertical scrollbar's width so content never shifts
+     sideways when a tab's height crosses the viewport (scrollbar toggling) */
+  scrollbar-gutter: stable;
   background:
     radial-gradient(1100px 480px at 50% -10%, #101a33 0%, rgba(16, 26, 51, 0) 70%),
     var(--bg);
@@ -1059,3 +1062,113 @@ footer { text-align: center; color: var(--muted); font-size: .78rem; padding: 24
 .sg-score { font-weight: 700; }
 .sg-score.hot { color: var(--warn, #f59e0b); }
 .chip.sg-self { color: var(--accent, #3b82f6); border-color: var(--accent, #3b82f6); }
+
+/* ---- trending projects tab (owner-independent) ---- */
+.trend-lead { margin: 0 0 12px; font-size: .85rem; max-width: 760px; }
+.trend-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.trend-windows { display: flex; gap: 6px; }
+.trend-lang { flex: 1 1 320px; margin-bottom: 0; }
+.trend-lang .search-input { max-width: 280px; }
+.trend-meta { font-size: .8rem; margin: 10px 0 8px; }
+.trend-loading { font-size: .8rem; margin: 10px 0 6px; }
+.trend-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+/* dim the list in place during a re-fetch instead of unmounting it, so the
+   page height stays put and the scrollbar doesn't flicker (jump/jitter) */
+.trend-list-loading { opacity: .55; transition: opacity .15s; }
+.trend-card {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #0d1526;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  transition: border-color .15s, background .15s;
+}
+.trend-card:hover { border-color: #2e436e; background: #0f1a30; }
+.trend-card .rank { color: var(--muted); width: 24px; flex: none; font-variant-numeric: tabular-nums; }
+.trend-body { flex: 1; min-width: 0; }
+.trend-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.trend-desc { margin: 6px 0; color: var(--muted); font-size: .85rem; }
+.trend-sub { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: .78rem; }
+.trend-topics { display: flex; gap: 5px; flex-wrap: wrap; }
+.chip.topic { color: var(--accent, #38bdf8); border-color: rgba(56, 189, 248, .35); }
+.chip.mt { color: var(--muted); border-color: var(--line); font-size: .68rem; cursor: help; }
+.trend-note { font-size: .75rem; margin: 10px 0 0; }
+
+/* === Classification overview === */
+.cls-lead { margin: 0 0 12px; font-size: .85rem; max-width: 760px; }
+.cls-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cls-controls .trend-windows { margin-right: auto; }
+.cls-refresh { padding: 6px 14px; font-size: .84rem; }
+.cls-note { font-size: .82rem; margin: 8px 0; }
+.cls-kpis { margin: 14px 0 4px; }
+.cls-meta { font-size: .8rem; margin: 4px 0 12px; }
+/* dim the body in place on a window switch instead of unmounting it, so the
+   layout height stays put (same anti-jitter trick as .trend-list-loading) */
+.cls-body { transition: opacity .15s; }
+.cls-body-loading { opacity: .55; }
+.cls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+.cls-col {
+  background: #0d1526;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.cls-h3 {
+  margin: 0 0 10px;
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+.cls-bar-fill { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.cls-cloud { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cls-tag { display: inline-flex; align-items: baseline; }
+.cls-tag-n {
+  margin-left: 5px;
+  font-size: .68rem;
+  font-weight: 700;
+  color: var(--accent);
+  opacity: .85;
+}
+.cls-repos-h { margin-top: 18px; }
+.cls-repos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cls-repo {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  background: #0d1526;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  transition: border-color .15s, background .15s;
+}
+.cls-repo:hover { border-color: #2e436e; background: #0f1a30; }
+.cls-repo .rank { color: var(--muted); width: 22px; flex: none; font-variant-numeric: tabular-nums; }
+.cls-repo-body { flex: 1; min-width: 0; }
+.cls-repo-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cls-repo-topics { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.cls-repo-date { font-size: .74rem; flex: none; font-variant-numeric: tabular-nums; }
+.cls-hint { font-size: .75rem; margin: 14px 0 0; }

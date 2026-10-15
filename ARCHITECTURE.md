@@ -57,6 +57,8 @@ lume-talentlens/
 │       ├── shared.lume        # 共享层：owner/快照/字符串 helpers + gh_get
 │       ├── api.lume           # JSON 路由（16+ 端点）
 │       ├── live.lume          # live 代理 + 鉴权探针
+│       ├── trending.lume      # GitHub 趋势项目（/api/trending，搜索 API）
+│       ├── classify.lume      # 归类总览（/api/classify，语言 + 主题聚合）
 │       ├── ssr.lume           # SSR 页面
 │       ├── tools.lume         # 智能体工具（repo_* / github_*）
 │       ├── actions.lume       # follow/unfollow 写操作
@@ -100,6 +102,8 @@ lume-talentlens/
 | `shared.lume` | owner 解析、快照读取、字符串/数组 helpers、`gh_get`（带重试） | analyze | 被所有模块引用；不放路由 |
 | `api.lume` | 全部 JSON 端点 + people 合并（水号/评分标签）+ refresh | shared, analyze | 响应体必须小于框架上限（见 §7.3） |
 | `live.lume` | `/api/live/github` 代理 + `/api/github_auth` | shared | 路径白名单 + slim_body 投影 |
+| `trending.lume` | `/api/trending`（GitHub 趋势项目） | shared | 服务端搜索 API + 语言准入白名单 + 结果投影 + TTL 缓存；查询恒带 `is:public` 并丢弃私有条目（隐私边界，见 `tests/trending_guard.lume`）；`tr=zh` 经本地 LLM 网关机翻描述（`desc_zh`，键读 `LLM_ANALYZER_KEY`，按描述记忆化 + 失败退避）；`owner=<login>` 限定该账号自己的新仓库（`user:<login> created:>window is:public`，`scope:"owner"`，缓存键含 owner） |
+| `classify.lume` | `/api/classify`（归类总览） | shared | 搜该 owner 窗口内新建的公开仓库，按 `language` + `topics` 聚合（语言 dist 用递归 helpers，排序避免对象比较）；查询恒带 `is:public` 并丢弃私有条目（隐私边界，见 `tests/classify_guard.lume`）；TTL 缓存键 `owner\|since\|pages` |
 | `ssr.lume` | /overview /repos /api 三页 | shared, analyze, ui | 只读视图，无 JS 依赖 |
 | `tools.lume` | 10 个智能体工具注册 | shared, analyze | 工具在 fork 出的 worker 上运行，每次读快照 |
 | `actions.lume` | /discovery + follow/unfollow | 无 | 写操作需要 `user:follow` PAT |
@@ -240,6 +244,8 @@ main.tsx（路由：/ 仪表盘  |  /chat 智能体）
 │   ├── dashboard/useDashboard.ts     # 数据 hook：拉取 + 派生（互相关注/值得关注/高分）
 │   ├── dashboard/pickers.tsx         # owner 选择器 + live fetch
 │   ├── dashboard/panels.tsx          # 概览/人才信号/对比面板（HR 视角）
+│   ├── dashboard/trending.tsx        # GitHub 趋势项目 tab（全局 + owner 新仓库两档）
+│   ├── dashboard/classify.tsx        # 归类总览 tab（窗口切换 + 语言分布 + 主题频次 + 仓库列表）
 │   ├── dashboard/lists.tsx           # 粉丝/关注/水号/值得关注列表 + 雷达面板（人像卡片 + tooltip 证据 + 变现信号徽标）
 │   ├── dashboard/bars.tsx            # 语言/活跃/年份柱状图
 │   ├── LangSwitch.tsx + i18n.ts      # 中英切换（所有文案走字典）

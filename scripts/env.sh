@@ -45,3 +45,18 @@ if [ -z "${OWNER:-}" ] && [ -f "$ROOT/data/github/last_owner" ]; then
   OWNER="$(cat "$ROOT/data/github/last_owner")"
   export OWNER
 fi
+
+# Non-credential alias for the LLM key: .lume's env() masks names containing
+# API_KEY/TOKEN/SECRET/..., so the trending-description translator reads
+# LLM_ANALYZER_KEY instead (same pattern as GH_ANALYZER_PAT for GH_TOKEN).
+# Empty when no LLM key is configured — translation then degrades to the
+# original English, which is the intended fallback.
+export LLM_ANALYZER_KEY="${LLM_ANALYZER_KEY:-${LLM_API_KEY:-}}"
+
+# The translator calls the LLM gateway on loopback; make sure such addresses
+# bypass any configured HTTP proxy (LUME_NO_PROXY has the highest precedence).
+# Additive: keeps whatever the user already listed.
+case ",${LUME_NO_PROXY:-}," in
+  *,127.0.0.1,*) : ;;
+  *) export LUME_NO_PROXY="${LUME_NO_PROXY:+$LUME_NO_PROXY,}127.0.0.1,localhost" ;;
+esac

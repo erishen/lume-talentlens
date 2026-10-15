@@ -1,0 +1,297 @@
+// lib/trending.lume — GitHub trending projects (/api/trending).
+//
+// GitHub has no official "trending" API, so this route emulates the
+// github.com/trending page with the Search API: repositories *created* within
+// the selected window, sorted by stars. The search is issued server-side via
+// the shared gh_get() (same outbound path as the live proxy), so the browser
+// needs no route to api.github.com and GH_TOKEN can be injected (search API:
+// 30 req/min authenticated vs 10 req/min anonymous).
+//
+//   GET /api/trending?since=daily|weekly|monthly&lang=<language>&tr=zh&owner=<login>
+//     -> { ok, scope, owner, since, lang, days, generated_at, count, items: [ … ] }
+//     -> { ok: false, status, err } when GitHub is unreachable / rate-limited
+//
+// `owner=<login>` narrows the search to ONE account's own repositories
+// (`user:<login> created:>window`, still sorted by stars) — "the owner's new
+// repos", the closest API-only proxy for an owner's trending. It is NOT the
+// same as github.com/trending, which ranks by internal star velocity: an
+// established owner's older repos that suddenly gain stars will not appear.
+//
+// The Search API quota is tighter than the REST core, so responses are
+// TTL-cached in memory (TRENDING_CACHE_TTL_SEC, default 600s; 0 disables).
+//
+// &tr=zh requests machine translation of the repo descriptions: the items gain
+// a `desc_zh` field (the English `desc` is kept). Translation goes through the
+// local OpenAI-compatible gateway (LLM_API_URL / LLM_MODEL); the key is read
+// from LLM_ANALYZER_KEY because env() masks LLM_API_KEY. It is best-effort and
+// memoised per description — see trending_translate_items() below.
+
+import "shared.lume" as sh;
+
+// language qualifier: GitHub language names are plain ([A-Za-z0-9+#-.] for
+// "C++" / "C#" / ".NET"…). Anything else is rejected before the URL is built.
+let _TRENDING_LANG_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+#.-";
+
+// null-safe stringify for fields that may be null in the raw API payload.
+func s(v) {
+  if (v == null) { return ""; }
+  return str(v);
+}
+
+func trending_ttl() {
+  let v = env("TRENDING_CACHE_TTL_SEC");
+  if (v == null) { return 600; }
+  let n = int(v, 600);
+  if (n < 0) { return 0; }
+  return n;
+}
+
+func trending_valid_lang(x) {
+  let n = len(x);
+  if (n == 0 or n > 30) { return false; }
+  let i = 0;
+  while (i < n) {
+    if (not sh.contains(_TRENDING_LANG_CHARS, substr(x, i, 1))) { return false; }
+    i = i + 1;
+  }
+  return true;
+}
+
+// window -> how many days back the `created:>` cutoff reaches
+func trending_days(since) {
+  if (since == "weekly") { return 7; }
+  if (since == "monthly") { return 30; }
+  return 1;
+}
+
+// Build the Search API `q` value for a window, optional language and optional
+// owner scope. Split out (and exported) so tests/trending_guard.lume can assert
+// the PRIVACY-CRITICAL invariants: every query carries `is:public` (the search
+// runs with the server token, which can otherwise see the token owner's private
+// repos — worst under user:<login>), and owner scope is expressed as user:<login>.
+export func trending_query(since, lang, owner_login) {
+  let days = trending_days(since);
+  let date = str(strftime("%Y-%m-%d", int(now(), 0) - days * 86400));
+  let q = "created:>" + date + " is:public";
+  if (owner_login != "") { q = "user:" + owner_login + " " + q; }
+  if (lang != "") { q = q + " language:" + lang; }
+  return q;
+}
+
+// The outbound request line carries the query verbatim (the http builtin does
+// no percent-encoding), so encode the search qualifiers we emit by hand.
+// Order matters: encode "+"/"#" before turning spaces into "+".
+func trending_enc(x) {
+  x = replace(x, "+", "%2B");
+  x = replace(x, "#", "%23");
+  x = replace(x, ":", "%3A");
+  x = replace(x, ">", "%3E");
+  x = replace(x, "/", "%2F");
+  x = replace(x, " ", "+");
+  return x;
+}
+
+// ------------------------------------------------ description translation
+// The trending feed is English-first; when the UI is Chinese we machine-
+// translate the descriptions so the list reads in the user's language. The
+// gateway is the same local OpenAI-compatible endpoint the agent uses, but we
+// call it directly with http_post (allow_private: the router is loopback).
+//
+// Best-effort and memoised:
+//   * no config / bad response -> descriptions stay English (UI falls back);
+//   * a failed batch trips a short backoff so a dead gateway is not re-hit on
+//     every request (the request would otherwise hang on the 30s timeout);
+//   * results are cached per English description, so switching windows or
+//     re-viewing the tab never re-translates the same string.
+let _tr_state = { fail_until: 0, cache: {} };
+
+func trending_strip_fences(x) {
+  x = replace(x, "```json", "");
+  x = replace(x, "```", "");
+  return x;
+}
+
+func trending_translate_items(items) {
+  let url = env("LLM_API_URL");
+  let key = env("LLM_ANALYZER_KEY");
+  if (url == null or str(url) == "" or key == null or str(key) == "") { return; }
+  if (int(now(), 0) < int(get(_tr_state, "fail_until", 0), 0)) { return; }
+
+  let cache = get(_tr_state, "cache", {});
+  // collect the unique, non-empty descriptions still missing a translation
+  let need = [];
+  let seen = {};
+  for (let it in items) {
+    let d = str(get(it, "desc", ""));
+    if (d == "" or get(cache, d, null) != null or get(seen, d, null) != null) { continue; }
+    put(seen, d, true);
+    push(need, d);
+  }
+  if (len(need) > 0) {
+    let model = env("LLM_MODEL");
+    if (model == null or str(model) == "") { model = "auto"; }
+    let sys = "You translate GitHub repository descriptions into Simplified Chinese. "
+      + "Preserve technical terms, library/product names and code identifiers. "
+      + "Reply with ONLY a JSON array of strings — same length and order as the "
+      + "input, no prose and no code fences.";
+    let payload = {
+      model: str(model),
+      stream: false,
+      temperature: 0,
+      messages: [
+        { role: "system", content: sys },
+        { role: "user", content: str(need) },
+      ],
+    };
+    let headers = { "Content-Type": "application/json", "Authorization": "Bearer " + str(key) };
+    let r = http_post(str(url), {
+      headers: headers,
+      body: str(payload),
+      timeout: 30,
+      max_bytes: 262144,
+      allow_private: true,
+    });
+    let up = int(get(r, "status", 0), 0);
+    let resp = json(str(get(r, "body", "")));
+    if (up < 200 or up >= 300 or resp == null) {
+      put(_tr_state, "fail_until", int(now(), 0) + 120);
+      return;
+    }
+    let ch = get(resp, "choices", []);
+    if (len(ch) == 0) {
+      put(_tr_state, "fail_until", int(now(), 0) + 120);
+      return;
+    }
+    let content = str(get(get(ch[0], "message", {}), "content", ""));
+    let arr = json(trending_strip_fences(content));
+    if (arr == null) {
+      put(_tr_state, "fail_until", int(now(), 0) + 120);
+      return;
+    }
+    // map positionally: arr[i] is the translation of need[i]
+    let n = len(need);
+    let m = len(arr);
+    let i = 0;
+    while (i < n and i < m) {
+      let zh = str(arr[i]);
+      if (zh != "" and zh != "null") { put(cache, need[i], zh); }
+      i = i + 1;
+    }
+    // bound the memo: descriptions churn, so drop it wholesale past a cap
+    if (len(cache) > 2000) { put(_tr_state, "cache", {}); cache = get(_tr_state, "cache", {}); }
+  }
+
+  // attach the translation (when we have one) without dropping the original
+  for (let it in items) {
+    let zh = get(cache, str(get(it, "desc", "")), null);
+    if (zh != null and str(zh) != "") { put(it, "desc_zh", str(zh)); }
+  }
+}
+
+let _trending_cache = {};
+
+get "/api/trending", (req) => {
+  let qp = get(req, "query_params", {});
+  let since = str(get(qp, "since", "daily"));
+  if (since != "daily" and since != "weekly" and since != "monthly") { since = "daily"; }
+  let lang = str(get(qp, "lang", ""));
+  if (lang != "" and not trending_valid_lang(lang)) {
+    return { ok: false, status: 400, err: "invalid lang" };
+  }
+  // translation target (only Simplified Chinese is supported for now); part of
+  // the cache key so an English request never gets a translated payload.
+  let tr = str(get(qp, "tr", ""));
+  if (tr != "zh") { tr = ""; }
+  // optional owner scope: rank ONE owner's own newly-created repos instead of
+  // the global feed (user:<login> created:>window). Invalid logins are ignored
+  // (fall back to the global feed) rather than 400 — the owner box is optional.
+  let owner_login = sh.sanitize_owner(str(get(qp, "owner", "")));
+
+  // memory TTL cache keyed by window+language+translation+scope: repeated tab
+  // views reuse one upstream search instead of burning the Search API quota.
+  let key = since + "|" + lang + "|" + tr + "|" + owner_login;
+  let ttl = trending_ttl();
+  if (ttl > 0) {
+    let hit = get(_trending_cache, key, null);
+    if (hit != null and (int(now(), 0) - int(get(hit, "at", 0), 0)) < ttl) {
+      let cached = json(str(get(hit, "body", "")));
+      if (cached != null) { put(cached, "cached", true); return cached; }
+    }
+  }
+
+  let days = trending_days(since);
+  let date = str(strftime("%Y-%m-%d", int(now(), 0) - days * 86400));
+  // query carries is:public (see trending_query) — never broaden it.
+  let q = trending_query(since, lang, owner_login);
+  let url = "https://api.github.com/search/repositories?q=" + trending_enc(q)
+    + "&sort=stars&order=desc&per_page=25";
+
+  let headers = { "Accept": "application/vnd.github+json", "User-Agent": "lume-talentlens" };
+  // GH_ANALYZER_PAT is the Makefile alias of GH_TOKEN (env() masks names
+  // containing TOKEN/API_KEY/SECRET/PASSWORD; the trusted route reads the alias).
+  let tok = env("GH_ANALYZER_PAT");
+  if (tok != null and tok != "") { put(headers, "Authorization", "Bearer " + str(tok)); }
+
+  let r = sh.gh_get(url, headers);
+  let up = int(get(r, "status", 0), 0);
+  let herr = str(get(r, "err", ""));
+  let body = str(get(r, "body", ""));
+  if (herr != "" or up < 200 or up >= 300) {
+    let emsg = herr;
+    if (emsg == "") { emsg = "github http " + str(up); }
+    return { ok: false, status: up, since: since, lang: lang, err: emsg };
+  }
+
+  let d = json(body);
+  let items_raw = get(d, "items", null);
+  if (items_raw == null) {
+    return { ok: false, status: up, since: since, lang: lang, err: s(get(d, "message", "unexpected github response")) };
+  }
+
+  // project each result down to the handful of fields the dashboard renders
+  // (25 items -> a few KB; the framework caps a single response body).
+  let items = [];
+  for (let it in items_raw) {
+    // defence-in-depth: drop anything the API still marks private, so a private
+    // repo name/description can never reach the client even if is:public fails.
+    if (get(it, "private", false) == true) { continue; }
+    let owner = get(it, "owner", {});
+    push(items, {
+      full_name: s(get(it, "full_name", null)),
+      name: s(get(it, "name", null)),
+      owner: s(get(owner, "login", null)),
+      owner_avatar: s(get(owner, "avatar_url", null)),
+      url: s(get(it, "html_url", null)),
+      desc: s(get(it, "description", null)),
+      lang: s(get(it, "language", null)),
+      stars: int(get(it, "stargazers_count", 0), 0),
+      forks: int(get(it, "forks_count", 0), 0),
+      issues: int(get(it, "open_issues_count", 0), 0),
+      topics: get(it, "topics", []),
+      homepage: s(get(it, "homepage", null)),
+      created_at: s(get(it, "created_at", null)),
+      pushed_at: s(get(it, "pushed_at", null)),
+    });
+  }
+
+  // machine-translate the descriptions when requested (adds desc_zh in place)
+  if (tr == "zh") { trending_translate_items(items); }
+
+  let scope = "owner";
+  if (owner_login == "") { scope = "global"; }
+  let out = {
+    ok: true,
+    scope: scope,
+    owner: owner_login,
+    since: since,
+    lang: lang,
+    days: days,
+    generated_at: date,
+    count: len(items),
+    items: items,
+  };
+  if (ttl > 0) {
+    put(_trending_cache, key, { at: int(now(), 0), body: str(out) });
+  }
+  return out;
+};

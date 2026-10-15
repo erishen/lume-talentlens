@@ -1,0 +1,52 @@
+// tests/trending_guard.lume — unit tests for lib/trending.lume's search query.
+//
+// Run from the repo root:  lume tests/trending_guard.lume
+// Prints "PASS <ok>/<total>" on success; every failure prints a
+// "FAIL: <name>" line first. The Makefile test target greps for ^PASS.
+//
+// The route issues the search with the server's GitHub token. An authenticated
+// Search API call WITHOUT `is:public` returns the token owner's PRIVATE repos
+// too — and under `user:<login>` it isolates a single account, so private repos
+// are surfaced directly. `is:public` is therefore a hard privacy boundary and
+// every generated query must carry it. These tests pin that invariant.
+
+import "../app/lib/trending.lume" as trending;
+
+// lume: assigning a top-level name inside a func creates a new local, so the
+// counter lives in a map (reference type) mutated via put().
+let stats = { ok: 0, total: 0 };
+
+func check(name, cond) {
+  put(stats, "total", get(stats, "total", 0) + 1);
+  if (cond) {
+    put(stats, "ok", get(stats, "ok", 0) + 1);
+  } else {
+    print("FAIL: " + name);
+  }
+}
+
+// ---- global feed ----
+let g = trending.trending_query("monthly", "", "");
+check("global carries is:public", contains(g, "is:public"));
+check("global carries created:>", contains(g, "created:>"));
+check("global has no user: scope", not contains(g, "user:"));
+
+// ---- owner scope ----
+let o = trending.trending_query("weekly", "", "erishen");
+check("owner scope uses user:<login>", contains(o, "user:erishen"));
+check("owner scope keeps is:public", contains(o, "is:public"));
+
+// ---- language + owner combined ----
+let l = trending.trending_query("daily", "C++", "erishen");
+check("language qualifier appended", contains(l, "language:C++"));
+check("language+owner keeps is:public", contains(l, "is:public"));
+
+// ---- no scope must EVER drop is:public (regression guard) ----
+let noOwner = trending.trending_query("daily", "Rust", "");
+check("lang-only keeps is:public", contains(noOwner, "is:public"));
+
+if (get(stats, "ok", 0) == get(stats, "total", 0)) {
+  print("PASS " + str(get(stats, "ok", 0)) + "/" + str(get(stats, "total", 0)));
+} else {
+  print("GUARD TESTS FAILED");
+}

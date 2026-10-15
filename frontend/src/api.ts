@@ -9,6 +9,8 @@ import type {
   NoSnapshot,
   Radar,
   Stargazers,
+  Trending,
+  Classify,
 } from "./types";
 
 // Every route accepts an optional `owner` (defaults server-side to the last
@@ -54,4 +56,16 @@ export const api = {
     j<Radar | NoSnapshot>("/api/radar" + (owner ? "?" + ownerQS(owner) : "")),
   stargazers: (owner?: string) =>
     j<Stargazers | NoSnapshot>("/api/stargazers" + (owner ? "?" + ownerQS(owner) : "")),
+  trending: (since: string, lang?: string, tr?: string, owner?: string) => {
+    const params = ["since=" + encodeURIComponent(since)];
+    if (lang) params.push("lang=" + encodeURIComponent(lang));
+    if (tr) params.push("tr=" + encodeURIComponent(tr));
+    if (owner) params.push("owner=" + encodeURIComponent(owner));
+    return j<Trending>("/api/trending?" + params.join("&"));
+  },
+  classify: (owner: string, since?: string) => {
+    const params = ["owner=" + encodeURIComponent(owner)];
+    if (since) params.push("since=" + encodeURIComponent(since));
+    return j<Classify>("/api/classify?" + params.join("&"));
+  },
 };
