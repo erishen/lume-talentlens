@@ -9,6 +9,12 @@ logs/
 
 # generated snapshot (regenerate via `make fetch`)
 data/github/
+# scratch written by tests (e.g. tests/history_guard.lume -> data/.tmp/)
+data/.tmp/
+
+# python bytecode caches (scripts/*.py); not every machine has a global ignore
+__pycache__/
+*.pyc
 
 # local dev
 .env

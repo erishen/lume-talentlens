@@ -23,6 +23,8 @@
 #   DRY_RUN=1 bash scripts/daily-scan.sh  # compose the summary from existing
 #                                         #  data — no network, no re-fetch
 #   NOTIFY=1  bash scripts/daily-scan.sh  # also push the summary to the webhook
+#   NOTIFY=1 NOTIFY_YES=1 bash scripts/daily-scan.sh  # push without the PII warning
+#   NOTIFY=1 REDACT_LOGINS=1 bash scripts/daily-scan.sh  # push masked logins only
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -230,7 +232,7 @@ failed_steps = [l.strip() for l in open(failed) if l.strip()]
 if failed_steps:
     L.append("## 失败步骤（本轮未完成，旧数据未破坏）")
     for s in failed_steps:
-        L.append("- `%s`" % s)
+        L.append("- %s" % s)
     L.append("")
 
 open(out, "w").write("\n".join(L) + "\n")
@@ -246,7 +248,17 @@ echo "daily-scan: summary -> $OUT"
 #   <ISO ts> owner=<owner> status=<ok|fail> rc=<0|1>
 push_rc=0
 if [ "${NOTIFY:-0}" = "1" ]; then
-  if python3 "$ROOT/scripts/notify.py" --markdown < "$OUT"; then
+  # The summary names third parties (new/lost followers, mutual high scorers,
+  # unfollowed water accounts). Make that explicit before it leaves the machine;
+  # NOTIFY_YES=1 silences it for unattended launchd/cron runs. REDACT_LOGINS=1
+  # sends a masked version instead (logins become `er***en`).
+  if [ "${NOTIFY_YES:-0}" != "1" ]; then
+    echo "daily-scan: 提示：本次推送含他人 GitHub 登录名（新增/流失粉丝、高分互关、取关水号），将发往所配置的聊天服务商。" >&2
+    echo "daily-scan:       设 NOTIFY_YES=1 关闭提示；设 REDACT_LOGINS=1 只推脱敏版。" >&2
+  fi
+  notify_args=(--markdown)
+  if [ "${REDACT_LOGINS:-0}" = "1" ]; then notify_args+=(--redact-logins); fi
+  if python3 "$ROOT/scripts/notify.py" "${notify_args[@]}" < "$OUT"; then
     echo "daily-scan: summary pushed to webhook"
     status="ok"
   else

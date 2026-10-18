@@ -34,6 +34,7 @@ function OwnerPicker({
         {cached.map((o) => <option key={o} value={o} />)}
       </datalist>
       <button className="btn" disabled={busy || input.trim() === ""}
+        aria-busy={busy}
         onClick={() => { onPick(input.trim()); onAnalyze(input.trim()); }}>
         {busy ? "…" : t("owner.analyze")}
       </button>

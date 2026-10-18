@@ -2,7 +2,8 @@ import React from "react";
 import { exportPeopleCsv } from "../exportCsv";
 import { PersonList, RadarPanel, StargazersPanel, RADAR_SCORE } from "./lists";
 import { DiffLine, RelationPanel } from "./panels";
-import type { People, PeopleDiff, PersonView, Radar, Stargazers } from "../types";
+import { PeopleTimeline } from "./timeline";
+import type { People, PeopleDiff, PeopleHistory, PersonView, Radar, Stargazers } from "../types";
 import type { FollowState } from "./useFollowActions";
 
 // The whole "people" tab — split out of Dashboard.tsx so the dashboard file
@@ -13,11 +14,12 @@ export interface PeopleSectionProps {
   people: People | null;
   peopleLoading: boolean;
   peopleError: string;
-  peopleView: "relation" | "insight" | "list";
-  setPeopleView: (v: "relation" | "insight" | "list") => void;
+  peopleView: "relation" | "insight" | "list" | "timeline";
+  setPeopleView: (v: "relation" | "insight" | "list" | "timeline") => void;
   owner: string;
   defaultOwner: string;
   peopleDiff: PeopleDiff | null;
+  peopleHistory: PeopleHistory | null;
   radar: Radar | null;
   stargazers: Stargazers | null;
   refreshMsg: string;
@@ -39,7 +41,7 @@ export function PeopleSection(props: PeopleSectionProps) {
     people, peopleLoading, peopleError,
     peopleView, setPeopleView,
     owner, defaultOwner,
-    peopleDiff, radar, stargazers,
+    peopleDiff, peopleHistory, radar, stargazers,
     refreshMsg, refreshing, onRefresh,
     loadPeople, viaLive, openOwner,
     followState, unfollowState, waterFollowing, followAll, unfollowWater,
@@ -135,6 +137,12 @@ export function PeopleSection(props: PeopleSectionProps) {
             >
               {t("people.view_list")}
             </button>
+            <button
+              className={effectiveView === "timeline" ? "chip subtab active" : "chip subtab"}
+              onClick={() => setPeopleView("timeline")}
+            >
+              {t("people.view_timeline")}
+            </button>
           </div>
           {followState.err && (
             <p className="muted" style={{ gridColumn: "1 / -1" }}>
@@ -221,6 +229,14 @@ export function PeopleSection(props: PeopleSectionProps) {
                 onOpen={openOwner}
               />
             </>
+          )}
+          {effectiveView === "timeline" && (
+            <PeopleTimeline
+              points={peopleHistory?.points ?? []}
+              weeks={12}
+              onOpen={openOwner}
+              t={t}
+            />
           )}
         </>
       )}

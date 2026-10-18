@@ -45,6 +45,25 @@ check("language+owner keeps is:public", contains(l, "is:public"));
 let noOwner = trending.trending_query("daily", "Rust", "");
 check("lang-only keeps is:public", contains(noOwner, "is:public"));
 
+// ---- zh cacheability (transient-outage cache-poisoning guard) ----
+// A configured gateway with missing descriptions that translated NONE of them
+// must not have its (English) response cached as `tr=zh`.
+check("configured+missing+no success -> not cacheable",
+  trending.tr_cacheable(true, 3, false) == false);
+check("configured+missing+some success -> cacheable",
+  trending.tr_cacheable(true, 3, true) == true);
+check("configured+nothing-missing -> cacheable",
+  trending.tr_cacheable(true, 0, false) == true);
+check("unconfigured gateway -> cacheable",
+  trending.tr_cacheable(false, 5, false) == true);
+
+// ---- translation memo disk persistence ----
+// English->zh memo is written to disk so workers/restarts reuse it instead of
+// re-paying the LLM. Guard the save/load round-trip (merges on disk).
+trending.tr_disk_save({ "__guard_test_desc__": "guard-zh" });
+let zc = trending.tr_disk_load();
+check("tr disk save/load round-trip", get(zc, "__guard_test_desc__", "") == "guard-zh");
+
 if (get(stats, "ok", 0) == get(stats, "total", 0)) {
   print("PASS " + str(get(stats, "ok", 0)) + "/" + str(get(stats, "total", 0)));
 } else {

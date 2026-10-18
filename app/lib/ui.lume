@@ -68,6 +68,7 @@ func lang_dict(lang, key) {
     api_tool_1: "repo_insights / repo_language / repo_recency / repo_year / repo_stats / github_story — 可选 { owner }",
     api_tool_2: "repo_search — { owner?, q } 名称/描述/主题/语言子串",
     api_tool_3: "github_owners / github_radar / github_people — 网络分析与盈利模式",
+    api_tool_4: "radar_insights — { owner?, query?, min_score, top } 关键词+分数过滤雷达池",
   };
   let en = {
     nav_dashboard: "Dashboard",
@@ -121,6 +122,7 @@ func lang_dict(lang, key) {
     api_tool_1: "repo_insights / repo_language / repo_recency / repo_year / repo_stats / github_story — optional { owner }",
     api_tool_2: "repo_search — { owner?, q } substring across name/desc/topics/lang",
     api_tool_3: "github_owners / github_radar / github_people — network & money-pattern analysis",
+    api_tool_4: "radar_insights — { owner?, query?, min_score, top } keyword+score filter over the radar pool",
   };
   let v = get(zh, key, null);
   if (lang == "en") { v = get(en, key, null); }
@@ -140,6 +142,7 @@ export func page(title, page_id, body, lang) {
     + "<meta charset='utf-8'>"
     + "<meta name='viewport' content='width=device-width, initial-scale=1'>"
     + "<title>{0} · lume-talentlens</title>"
+    + "<link rel='icon' href='/favicon.svg' type='image/svg+xml'>"
     + "<link rel='stylesheet' href='/app.css'>"
     + "</head>"
     + "<body data-page='{1}'>"

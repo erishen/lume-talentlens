@@ -1,0 +1,244 @@
+// lib/history.lume — daily-history storage for the recruiter timeline.
+//
+// Two JSONL files per owner, one record per calendar day (last write wins):
+//   data/github/<owner>/people_history.jsonl
+//     { "date":"YYYY-MM-DD", "ts":"...", "followers":[login...],
+//       "following":[login...], "counts":{"followers":N,"following":M} }
+//   data/github/<owner>/health_history.jsonl
+//     { "date":"YYYY-MM-DD", "ts":"...", "total":N,
+//       "pillars":{"activity":0..1,"rigor":..,"focus":..,"influence":..} }
+//
+// people_history is written by scripts/fetch-github.sh (make fetch) and by the
+// /api/refresh endpoint; health_history is written by /api/overview (the score
+// is derived from the overview aggregates — see analyze.health_from_overview,
+// a server-side mirror of frontend/src/talent.ts). Keeping the whole login
+// lists in each day's record lets the API diff ANY two days, so the dashboard
+// can answer "who followed/unfollowed last week" without a separate log.
+//
+// Records are keyed by date and sorted ascending; writes are upserts, so
+// re-running a scan on the same day just refreshes that day's point.
+
+// safe_json guard for malformed JSONL lines (see shared.lume)
+import "shared.lume" as sh;
+
+// ---- time helpers (strftime is localtime, matching the server's notion of "today")
+
+// today as YYYY-MM-DD
+export func now_date() {
+  return str(strftime("%Y-%m-%d", int(now(), 0)));
+}
+// now as an ISO-8601-ish UTC stamp (local time, Z-suffixed for readability)
+export func now_ts() {
+  return str(strftime("%Y-%m-%dT%H:%M:%SZ", int(now(), 0)));
+}
+
+// ---- JSONL IO
+
+// parse a JSONL file into a list of maps; blank / unparsable lines are skipped
+// (a partial write or a hand-edited line must never take the whole file down).
+// json() throws on malformed input, so use the shared safe_json guard: a
+// corrupt line yields null and is skipped instead of aborting the route.
+export func read_jsonl(path) {
+  let raw = read_file(path);
+  if (raw == null or raw == "") { return []; }
+  let out = [];
+  for (let line in split(raw, "\n")) {
+    let l = trim(replace(line, "\r", ""));
+    if (l == "") { continue; }
+    let m = sh.safe_json(l);
+    if (m != null) { push(out, m); }
+  }
+  return out;
+}
+
+// serialize records as JSONL (str() on a map emits valid JSON, same contract
+// /api/refresh relies on for people.json).
+export func write_jsonl(path, records) {
+  let lines = [];
+  for (let r in records) { push(lines, str(r)); }
+  let body = join(lines, "\n");
+  if (body != "") { body = body + "\n"; }
+  write_file(path, body);
+}
+
+// ---- ordering + upsert
+
+// "YYYY-MM-DD" -> 20261016 (sort key; avoids string relational ops)
+func daynum(date) {
+  return int(replace(str(date), "-", ""), 0);
+}
+
+// ascending by date — insertion sort (the installed Lume build predates the
+// builtin sort(), and these lists are tiny).
+export func sort_by_date(records) {
+  let out = [];
+  for (let r in records) {
+    let d = daynum(get(r, "date", ""));
+    let placed = false;
+    let next = [];
+    for (let x in out) {
+      if (not placed and d < daynum(get(x, "date", ""))) {
+        push(next, r);
+        placed = true;
+      }
+      push(next, x);
+    }
+    if (not placed) { push(next, r); }
+    out = next;
+  }
+  return out;
+}
+
+// replace the record for that date (or append), keeping ascending order
+export func upsert_day(records, rec) {
+  let date = str(get(rec, "date", ""));
+  let kept = filter((r) => str(get(r, "date", "")) != date, records);
+  push(kept, rec);
+  return sort_by_date(kept);
+}
+
+// newest N records (ascending order preserved)
+export func last_n(records, n) {
+  let sorted = sort_by_date(records);
+  let total = len(sorted);
+  if (n <= 0 or total <= n) { return sorted; }
+  let out = [];
+  for (let i = total - n; i < total; i = i + 1) {
+    push(out, get(sorted, i, null));
+  }
+  return out;
+}
+
+func cap_history(records, max) {
+  return last_n(records, max);
+}
+
+// ---- people-record helpers
+
+// fetch-github.sh stores bare login strings; tolerate anything by stringifying.
+func logins(rows) {
+  let out = [];
+  for (let r in rows) {
+    if (r == null) { continue; }
+    push(out, str(r));
+  }
+  return out;
+}
+
+// set-difference over two login lists (see api.lume's people_diff for the
+// snapshot-vs-prev variant).
+export func diff_logins(cur, prev) {
+  let prev_set = {};
+  for (let l in prev) { put(prev_set, str(l), 1); }
+  let cur_set = {};
+  for (let l in cur) { put(cur_set, str(l), 1); }
+  let added = filter((l) => get(prev_set, str(l), null) == null, cur);
+  let gone = filter((l) => get(cur_set, str(l), null) == null, prev);
+  return { added: added, gone: gone };
+}
+
+// turn raw daily records into timeline points: counts + per-day adds/gone vs
+// the previous day. The first point has empty added/gone (no prior day).
+export func people_points(records) {
+  let sorted = sort_by_date(records);
+  let out = [];
+  let prev_f = [];
+  let prev_g = [];
+  let first = true;
+  for (let r in sorted) {
+    let f = logins(get(r, "followers", []));
+    let g = logins(get(r, "following", []));
+    let af = [];
+    let gf = [];
+    let ag = [];
+    let gg = [];
+    if (not first) {
+      let df = diff_logins(f, prev_f);
+      af = get(df, "added", []);
+      gf = get(df, "gone", []);
+      let dg = diff_logins(g, prev_g);
+      ag = get(dg, "added", []);
+      gg = get(dg, "gone", []);
+    }
+    let counts = get(r, "counts", {});
+    push(out, {
+      date: str(get(r, "date", "")),
+      ts: str(get(r, "ts", "")),
+      followers: int(get(counts, "followers", len(f)), len(f)),
+      following: int(get(counts, "following", len(g)), len(g)),
+      added_followers: af,
+      gone_followers: gf,
+      added_following: ag,
+      gone_following: gg,
+    });
+    prev_f = f;
+    prev_g = g;
+    first = false;
+  }
+  return out;
+}
+
+// ---- writers (idempotent per day: skip the write when nothing changed)
+
+// the owner's data dir always exists for snapshot owners, but a caller that
+// only ever hits the history endpoints shouldn't need one — create it (mkdir
+// is idempotent) so a stray write can't fail silently.
+func ensure_owner_dir(owner) {
+  mkdir("data/github/" + owner);
+}
+
+// append/replace today's people snapshot. `followers` / `following` are login
+// string lists; `counts` is the profile totals map.
+export func record_people(owner, followers, following, counts) {
+  let path = "data/github/" + owner + "/people_history.jsonl";
+  let recs = read_jsonl(path);
+  let date = now_date();
+  let rec = {
+    date: date,
+    ts: now_ts(),
+    followers: followers,
+    following: following,
+    counts: counts,
+  };
+  let existing = null;
+  for (let r in recs) {
+    if (str(get(r, "date", "")) == date) { existing = r; }
+  }
+  if (existing != null
+      and str(get(existing, "followers", [])) == str(followers)
+      and str(get(existing, "following", [])) == str(following)) {
+    return existing;
+  }
+  recs = upsert_day(recs, rec);
+  ensure_owner_dir(owner);
+  write_jsonl(path, cap_history(recs, 400));
+  return rec;
+}
+
+// append/replace today's health point. `health` is the {total, pillars} map
+// from analyze.health_from_overview.
+export func record_health(owner, health) {
+  let path = "data/github/" + owner + "/health_history.jsonl";
+  let recs = read_jsonl(path);
+  let date = now_date();
+  let rec = {
+    date: date,
+    ts: now_ts(),
+    total: int(get(health, "total", 0), 0),
+    pillars: get(health, "pillars", {}),
+  };
+  let existing = null;
+  for (let r in recs) {
+    if (str(get(r, "date", "")) == date) { existing = r; }
+  }
+  if (existing != null
+      and int(get(existing, "total", -1), -1) == int(get(rec, "total", -2), -2)
+      and str(get(existing, "pillars", {})) == str(get(rec, "pillars", {}))) {
+    return existing;
+  }
+  recs = upsert_day(recs, rec);
+  ensure_owner_dir(owner);
+  write_jsonl(path, cap_history(recs, 400));
+  return rec;
+}
+

@@ -46,10 +46,11 @@ development roadmap (prioritised feature/quality backlog).
 app/
   github.lume        # entry: imports the lib modules, server{}, run()
   lib/analyze.lume   # pure analysis helpers (histograms, sort, view, bundle)
+  lib/history.lume   # daily timeline store — people/health history (JSONL, one record per day)
   lib/shared.lume    # owner/snapshot/string helpers + gh_get (shared by modules)
-  lib/api.lume       # JSON APIs: owners/overview/repos/…/people/refresh/people_diff
+  lib/api.lume       # JSON APIs: owners/overview/repos/…/people/refresh/people_diff/people_history/health_history
   lib/live.lume      # live GitHub proxy (/api/live/github) + auth probe
-  lib/trending.lume  # GitHub trending projects (/api/trending, search API)
+  lib/trending.lume  # GitHub trending projects (/api/trending, scrape + search fallback)
   lib/classify.lume  # classification rollup (/api/classify — language + topic rollup)
   lib/ssr.lume       # SSR pages (/overview, /repos, /api reference)
   lib/tools.lume     # LLM agent tools (repo_* / github_*)
@@ -86,6 +87,9 @@ make ui           # esbuild React bundle -> www/github/app.js
 make check        # type-check the .lume files + runtime sanity (sanity.lume)
 make test         # frontend unit tests (vitest — talent derivation, i18n parity, CSV escaping)
 make classify     # print the owner's repo classification rollup (needs a server on :8091)
+make daily        # daily radar + change digest -> logs/daily/<date>.md
+make trending-push # push the GitHub trending board to a group robot (DingTalk/WeCom/Server酱)
+make archive      # export the radar pool as a markdown knowledge base (for HR/learning)
 make dev PORT=9000
 ```
 
@@ -109,15 +113,20 @@ open http://127.0.0.1:18091
   injected by compose; `OWNER` / `GH_TOKEN` / `LLM_*` work unchanged.
 - **Data persists** under `./data` (mounted into the container): snapshots
   plus the live-cache disk tier survive rebuilds.
-- **Loopback only** — the port is published as `127.0.0.1:18091:8091` (host
-  18091 → container 8091), the container is never reachable from the network
+- **Loopback only** — the port is published as `127.0.0.1:18091:18091` (host
+  18091 → container 18091), the container is never reachable from the network
   (same posture as the native install; see [Security & privacy](#security--privacy)).
+  The bridge network needs the app to bind `0.0.0.0` *inside* the container
+  (`LUME_GITHUB_BIND` is set by compose); only the host mapping is loopback.
 - **Fetch inside the container**: `docker compose exec app make fetch`
   (or `OWNER=foo docker compose exec app make fetch`).
-- **Host proxy**: if you route GitHub calls through a proxy running on the
-  host (Clash / V2Ray…), uncomment
-  `LUME_HTTP_PROXY=http://host.docker.internal:7897` in `docker-compose.yml`
-  — the `127.0.0.1` value in `.env` would point at the container itself.
+- **Host services**: the container runs on the bridge network, so its
+  `127.0.0.1` is the container itself — compose rewrites the proxy and LLM
+  endpoint to `host.docker.internal` (e.g.
+  `LUME_HTTP_PROXY=http://host.docker.internal:7897`,
+  `LLM_API_URL=http://host.docker.internal:19070/v1/chat/completions`),
+  which OrbStack forwards to the host loopback. Set `LUME_HTTP_PROXY_HOST` /
+  `LLM_API_URL_HOST` in `.env` only if a host service listens elsewhere.
 - **Slow / failing git+crates downloads**: rebuild with the proxy as build
   args: `docker compose build --build-arg HTTP_PROXY=http://host.docker.internal:7897 --build-arg HTTPS_PROXY=http://host.docker.internal:7897`.
 
@@ -184,15 +193,26 @@ normal env var (e.g. `OWNER=acme make fetch`), which always wins.
   the network. Don't tunnel or port-forward it to the public internet:
   `/api/follow` / `/api/unfollow` act on **your** GitHub account with your
   token, and the dashboards show your personal network graph.
-- **Write actions are CSRF-guarded.** Follow/unfollow accept only
+- **Write actions are CSRF-guarded.** Follow/unfollow/refresh accept only
   `Content-Type: application/json` (HTML forms and text/plain fetches are
   rejected with 403) and the server sends no CORS headers, so cross-site
-  JSON is blocked by the browser.
+  JSON is blocked by the browser. This Lume build does not expose request
+  headers, so no Origin/Referer allowlist is layered on top — keep the server
+  loopback-only.
 - **Secrets never leave `.env`.** `GH_TOKEN` / `LLM_API_KEY` are read via
   `env()`, which masks any name containing TOKEN/API_KEY/SECRET/PASSWORD, and
   are never logged. `.env` and `data/github/` (snapshots, scores, suspects)
   are gitignored — a public clone carries no credentials and no personal
   snapshot data.
+- **Least-privilege tokens.** Reads (snapshots, trending, live proxy) work with
+  a classic token that has **no scopes** (it still raises the limit to 5,000/h)
+  or a fine-grained token limited to public repositories (read-only). Only
+  follow/unfollow needs `user:follow`; use a **separate** token for it (or skip
+  those actions) instead of granting it to the read token.
+- **Local PII at rest.** `data/github/` snapshots and `.data/sessions/` agent
+  transcripts are plaintext; both are gitignored but never expire on their own.
+  `make purge` expires sessions older than `SESSIONS_TTL_DAYS` (default 30) and
+  `make purge-owner OWNER=x` deletes one owner's snapshot.
 - **LLM agent data.** When you configure `LLM_*` and chat with the agent, the
   relevant snapshot data (repo list, profile, radar/people summaries) is sent
   to the LLM provider you configured. Leave `LLM_*` unset to use the offline
@@ -216,11 +236,13 @@ normal env var (e.g. `OWNER=acme make fetch`), which always wins.
 | GET | `/api/search?q=rust` | substring match across name/desc/lang/topic — returns `{ owner, q, total, shown }` (shown ≤ 10) |
 | GET | `/api/radar` | talent radar as-is — `{status:404,…}` until `make radar` has run |
 | GET | `/api/people_diff` | who followed / unfollowed since the last refresh (`has_history: false` on first refresh) |
+| GET | `/api/people_history?owner=x&days=90` | daily follower/following timeline — `{ ok, owner, days, points:[{ date, ts, followers, following, added_followers, gone_followers, added_following, gone_following }] }`. One point per calendar day (upsert by date, written by `make fetch` / `/api/refresh`); the added_*/gone_* lists diff each day against the previous, so the dashboard can answer "who followed last week". `days` caps the window (default 90, max 365) |
+| GET | `/api/health_history?owner=x&days=90` | daily open-source-health score — `{ ok, owner, days, points:[{ date, ts, total, pillars:{ activity, rigor, focus, influence } }] }`. Recorded by `/api/overview` (same score the dashboard shows); pillars are stored 0..1 so the UI re-scores the series with the current weights |
 | GET | `/api/refresh` | server-side re-fetch of followers/following + profile totals, rewrites `people.json` (rate-limited, 60s per owner) |
 | GET | `/api/live/github?path=/users/<x>` | server-side GitHub proxy (outbound `http_get`); returns `{ ok, status, data, err }` — big payloads are slim-projected before returning |
 | GET | `/api/github_auth` | `{ authed: bool }` — whether live calls carry `GH_TOKEN` (5000 req/h); never leaks the token |
 | GET | `/api/classify?owner=<login>&since=monthly\|quarterly\|year` | Classification rollup — the owner's **public** repos created within the window, aggregated by GitHub's language detection (Linguist) and applied topics. Returns `{ ok, owner, since, days, generated_at, count, total, truncated, languages:[{name,count}], topics:[{name,count}], repos:[…] }`, TTL-cached. Default window `quarterly` (90d); `pages` (default 1, max 3 → at most 300 repos). Queries always carry `is:public` and drop private items defensively. Fuels the dashboard "classify" tab and `make classify` |
-| GET | `/api/trending?since=daily\|weekly\|monthly&lang=go&tr=zh&owner=<login>` | GitHub trending projects — **public** repos created within the window, sorted by stars (Search API emulation of github.com/trending); returns `{ ok, scope, owner, since, days, generated_at, count, items }`, TTL-cached (`TRENDING_CACHE_TTL_SEC` default 600). Searches always carry `is:public` (the call uses the server token, which can otherwise see the token owner's private repos), and private items are dropped defensively. `tr=zh` machine-translates descriptions into Chinese via the LLM gateway (`desc_zh`; best-effort, memoised, falls back to English). `owner=<login>` narrows to one account's own newly-created public repos (`user:<login> created:>window is:public`, `scope:"owner"`) — the API-only proxy for "this owner is trending"; older repos that suddenly gain stars still won't appear |
+| GET | `/api/trending?since=daily\|weekly\|monthly&lang=go&tr=zh&owner=<login>` | GitHub trending projects — for the global feed the server **scrapes github.com/trending itself** (the exact list, order and star counts the page shows); returns `{ ok, scope, owner, since, days, generated_at, source, count, items }`, TTL-cached (`TRENDING_CACHE_TTL_SEC` default 120, disk `TRENDING_DISK_TTL_SEC` default 600); `refresh=1` (UI refresh button, `make trending-push`) bypasses both to fetch fresh. `source` is `github-trending` or `github-search`. The page has no API and no owner scope, so `owner=<login>` (one account's own newly-created public repos, `user:<login> created:>window is:public`, `scope:"owner"`) and languages with no slug (C++, C#) fall back to the **Search API** (repos created within the window, sorted by stars) — that search always carries `is:public` (the call uses the server token, which can otherwise see the token owner's private repos), and private items are dropped defensively. `tr=zh` machine-translates descriptions into Chinese via the LLM gateway (`desc_zh`; best-effort, memoised, falls back to English) |
 | GET | `/discovery` | boot-time tool/skill/MCP catalog |
 | POST | `/api/follow` | follow a login with the PAT — body `{ "login": … }` (idempotent, 204; needs `user:follow`) |
 | DELETE | `/api/unfollow` | unfollow a login with the PAT — body `{ "login": … }` (idempotent, 204; needs `user:follow`) |
@@ -241,6 +263,11 @@ and `github_people` (followers/following first pages + totals + merged
 water-account suspect flags + mutual overlap). Ask the agent "who in my
 network are real talents / how do they make money / who are the water
 accounts" and it answers from local data with the radar/people tools.
+`radar_insights` filters the radar pool by keyword (`query`, all space-
+separated terms must match a person's bio/evidence note/company/mode/top-repo
+names+descriptions) and a `min_score`, returning the top hits with their
+one-line evidence — ask "which of my mutual high scorers build AI tools" and it
+cites real repos/stars.
 
 ## Data pipeline
 
@@ -295,6 +322,20 @@ merges that pre-screen into `/api/people` by login, so the dashboard shows
 make suspects                  # default owner, both lists (KIND=all)
 KIND=following make suspects   # one list only
 ```
+
+The heuristic thresholds are configurable via `.env` (no code change needed to
+change a judgment call) — `SUSPECT_MODE=standard|strict|lenient` picks a
+preset (default `standard` reproduces the historic behavior exactly; `strict`
+flags more accounts — recent = est. 2022+, a new year alone can be high —
+`lenient` flags fewer with higher confidence — recent must be 2025+ *and* have
+a login pattern, high needs 2026+ with ≥2 patterns). On top, individual knobs
+override the active preset: `SUSPECT_RECENT_BOUND`, `SUSPECT_HIGH_BOUND`,
+`SUSPECT_HIGH_NEEDS_PATTERN`, `SUSPECT_PATTERN_MIN`,
+`SUSPECT_RECENT_NEEDS_PATTERN`, `SUSPECT_USE_UID` (0 disables the avatar-uid
+age signal, leaving pattern-only detection), `SUSPECT_BUZZWORDS` /
+`SUSPECT_BATCH_NAMES` (comma lists that *replace* the default vocabularies).
+Every default is pinned by `scripts/suspects-selftest.py` (runs in
+`make test`).
 
 `scripts/unfollow.sh` is **data-driven** — it reads the `kind=following`
 suspects from `suspects.json` (default level `high`; `--level medium` /
@@ -359,6 +400,115 @@ The `hireable` flag is cross-checked against repo activity (≤90d push =
 genuinely job-hunting) and against founder signals (bio/company shows
 founder/CEO/CTO → the chip reads "open to collab/hiring" instead of "open
 to work", since founders keep the flag on to recruit).
+
+## Daily radar & change digest
+
+`scripts/daily-scan.sh` (`make daily`) runs the whole offline pipeline once a
+day — snapshot, people, suspects, scores, radar — and writes a readable
+day-over-day **change summary** to `logs/daily/<date>.md`: new followers /
+unfollowers, new mutual high scorers ("新增高手"), and unfollowed water
+accounts ("取关水号"). Safe to hook to a scheduler (launchd / cron) — it never
+pushes notifications unless asked (publication requires an explicit
+instruction; `NOTIFY=1` opts in, see "Push to a group robot"). A failed
+step is recorded in the summary (with a non-zero exit) instead of aborting:
+every overwriting step first snapshots the current file to a `*.prev.json`
+copy, so old data is never destroyed.
+
+```bash
+make daily                     # full pipeline (GH_TOKEN recommended for the radar)
+RADAR=0 make daily             # snapshot + people diff only (no score/radar)
+DRY_RUN=1 make daily           # compose the summary from existing data (read-only)
+```
+
+The digest compares against the previous calendar day in `people_history.jsonl`
+(already written by `make fetch` / `/api/refresh`), so consecutive runs produce
+readable diffs even when a retry runs twice in one day.
+
+## Push to a group robot (DingTalk / WeCom / Server酱)
+
+Pushing to a chat group is an **explicit opt-in** — nothing is sent by default
+(the "publication requires an instruction" rule). Configure a webhook in `.env`:
+
+```bash
+# .env
+TREND_WEBHOOK_URL=https://oapi.dingtalk.com/robot/send?access_token=XXX
+TREND_WEBHOOK_SECRET=SECxxx      # DingTalk 加签 secret; leave empty for keyword/IP mode
+
+make trending-push               # push the GitHub trending board (daily, top 10, Chinese)
+SINCE=weekly TOP=15 LANG_FILTER=Python make trending-push
+DRY_RUN=1 make trending-push     # print the message, don't send
+NOTIFY=1 make daily              # also push the daily change summary
+```
+
+- **Trending content**: prefers the running server's `/api/trending` — for the
+  global feed that now reads **github.com/trending itself** (the exact list,
+  order and star counts the page shows), TTL-cached, with `tr=zh` translating
+  the descriptions so the group reads Chinese. With no server up it falls back to
+  the **GitHub Search API** directly (repos created in the window, sorted by
+  stars; descriptions stay English).
+- **Message**: plain text (works for DingTalk/WeCom/Server酱), e.g.
+  `📈 GitHub 趋势榜 · 每日 · 2026-10-18` + `n. owner/repo ⭐3.4k · Lang` + desc.
+  Each repo is followed by its full `https://github.com/<owner>/<repo>` URL and
+  the footer links `https://github.com/trending` — plain-text clients auto-link
+  complete `https://` URLs, so every line is tappable (a bare `owner/repo` or
+  `github.com/…` without the scheme would not be).
+- **`scripts/notify.py`** is the transport: DingTalk 加签 (timestamp+sign, only
+  for `oapi.dingtalk.com`), transport-layer retries (timeout/5xx/429, honours
+  `Retry-After`), a business check on the 200 body's `errcode` (WeCom fails with
+  200 too), and it masks the token-bearing URL in logs. It mirrors
+  `work/sale/daoye-signal`'s module of the same name.
+- Robot security settings, pick one: **加签** (recommended, set
+  `TREND_WEBHOOK_SECRET`), **keyword** (set `TREND_WEBHOOK_KEYWORD` — `notify.py`
+  prepends `【<keyword>】` to every message so both the trending board and the
+  daily summary pass keyword inspection), or an **IP allowlist**.
+- **Push trail**: `NOTIFY=1 make daily` appends one line per attempt to
+  `logs/daily/last-push-status.log` (`<iso-ts> owner=… status=ok|fail rc=…`)
+  so the push history stays auditable even after the terminal output is gone.
+- **Privacy — this is the one place data leaves your machine.** The trending
+  board only carries public repo names/stars/descriptions, but
+  `NOTIFY=1 make daily` pushes the daily summary, which **includes third-party
+  personal data: the GitHub logins of your new / lost followers, high-score
+  mutuals, and unfollowed water accounts**. Only enable it (and only point it at
+  a group you trust) when you accept that those logins are sent to the chat
+  provider. Same rule for the LLM agent: with `LLM_*` set, chatting sends the
+  owner's people/radar data (third-party logins) to the configured endpoint.
+
+### Schedule it (macOS launchd)
+
+`make trending-push` sends once, when you run it. To send the board every day
+automatically, install a launchd agent:
+
+```bash
+make schedule-install              # install + load, daily at 09:00 local
+make schedule-install HOUR=8 MIN=30
+make schedule-status               # loaded? schedule? tail the run log
+make schedule-uninstall
+launchctl kickstart -k gui/$(id -u)/com.lume-talentlens.trending-push  # push now (test)
+```
+
+- `scripts/schedule.sh` renders `scripts/launchd/*.plist.in` into
+  `~/Library/LaunchAgents/com.lume-talentlens.trending-push.plist` and loads it;
+  `scripts/trending-push-scheduled.sh` is what it runs (same push as the make
+  target — the running server for Chinese descriptions, else a direct GitHub
+  fallback in English). Output lands in `logs/trending-push/scheduled.log`.
+- If the Mac is asleep at the scheduled minute, launchd runs the missed slot
+  **once** on next wake. `RunAtLoad` is deliberately off, so installing does not
+  fire an immediate push.
+- `launchd` is macOS-only; on Linux wire the same
+  `bash scripts/trending-push-scheduled.sh` into cron instead.
+
+## Talent knowledge base (`make archive`)
+
+`scripts/archive.py` (`make archive`) turns the radar pool — profit signals,
+money patterns, monetization signals (site / product / sponsor) — into a
+structured **markdown knowledge base** for HR / learning. Each person gets a
+section: one-line evidence, best-effort monetization tags (Sponsors / product
+landing page / personal site / course / consulting), blog, company, location,
+hireable status, star influence, and top repos. A summary table groups the pool
+by money pattern. Offline — reads only `radar.json` + `people.json` (needs
+`make score && make radar`, or `make daily`). Writes
+`data/github/<owner>/archive.md` (gitignored, personal); override with
+`OUT=/path/to/file.md make archive`.
 
 ## License
 

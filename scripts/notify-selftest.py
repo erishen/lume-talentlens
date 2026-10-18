@@ -10,10 +10,12 @@ Run from the repo root:  python3 scripts/notify-selftest.py
 Exits non-zero on any failure (wired into `make test`).
 """
 import base64
+import contextlib
 import hashlib
 import hmac
 import http.server
 import importlib.util
+import io
 import json
 import os
 import sys
@@ -114,6 +116,22 @@ check("md_to_text drops heading markers", "#" not in flat)
 check("md_to_text converts bullets", "· 新增 alice：3" in flat and "· 取关 bob：1" in flat)
 check("md_to_text strips backticks", "`" not in flat)
 
+# ------------------------------------------------------- notify: redact logins
+check("redact_logins masks a normal login",
+      notify.redact_logins("`erishen`") == "`er***en`")
+check("redact_logins masks short logins",
+      notify.redact_logins("`ab`") == "`**`" and notify.redact_logins("`bob`") == "`b***b`")
+check("redact_logins masks each token",
+      notify.redact_logins("`alice` 和 `bob`") == "`a***e` 和 `b***b`")
+check("redact_logins leaves non-backtick logins alone",
+      notify.redact_logins("erishen") == "erishen")
+check("redact_logins leaves prose backticks alone",
+      "make daily" in notify.redact_logins("run `make daily`"))
+redacted_flat = notify.md_to_text(notify.redact_logins(md))
+check("redact before flatten keeps masked names",
+      "alice" not in redacted_flat and "bob" not in redacted_flat
+      and "a***e" in redacted_flat and "b***b" in redacted_flat)
+
 # --------------------------------------------------- notify: send_text e2e
 srv, hook = start_server([(200, '{"errcode":0,"errmsg":"ok"}')])
 ok, msg = notify.send_text("hi", url=hook, secret="", retries=1)
@@ -192,10 +210,28 @@ check("render prefers Chinese desc", "中文描述" in msg and "ENONLY" not in m
 check("render falls back to English desc", "only english" in msg)
 check("render respects top limit", "3. e/f" not in msg and "2. c/d" in msg)
 check("render reports total", "共 3 项" in msg)
+check("render links each repo", "https://github.com/a/b" in msg and "https://github.com/c/d" in msg)
+check("render links the trending footer", "https://github.com/trending" in msg)
 
 # owner scope shows in the header
 msg2 = tpush.render_message({**payload, "owner": "acme"}, top=1)
 check("render shows owner scope", "@acme" in msg2)
+
+# ---------------------------------------------------- notify: --dry-run safety
+_sent = []
+_orig_send = notify.send_text
+notify.send_text = lambda *a, **k: _sent.append(1) or (True, "sent")
+_buf = io.StringIO()
+_argv = sys.argv
+sys.argv = ["notify.py", "--text", "hello", "--redact-logins", "--dry-run"]
+try:
+    with contextlib.redirect_stdout(_buf):
+        rc = notify.main()
+finally:
+    sys.argv = _argv
+    notify.send_text = _orig_send
+check("notify --dry-run prints and never calls send_text",
+      rc == 0 and not _sent and "hello" in _buf.getvalue())
 
 # -------------------------------------------------------------------------- done
 print()

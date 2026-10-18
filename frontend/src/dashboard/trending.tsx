@@ -1,14 +1,11 @@
 import React from "react";
 import { api } from "../api";
 import { useLang, useT } from "../i18n";
-import type { Trending, TrendingItem } from "../types";
-
-// GitHub trending projects — a standalone dashboard tab that does NOT depend
-// on the selected owner/snapshot. The server (/api/trending) emulates
-// github.com/trending with the Search API (repos created within the window,
-// sorted by stars) and returns an already-slimmed item list.
-
-const WINDOWS: Array<"daily" | "weekly" | "monthly"> = ["daily", "weekly", "monthly"];
+const WINDOWS: Array<"daily" | "weekly" | "monthly"> = ["daily", "weekly", "monthly"];// GitHub trending projects — a standalone dashboard tab that does NOT depend
+// on the selected owner/snapshot. The server (/api/trending) scrapes
+// github.com/trending itself (exact list/order/star counts) and returns an
+// already-slimmed item list; it falls back to the Search API (repos created
+// within the window, sorted by stars) when the page can't be parsed.
 
 function fmtDate(iso: string): string {
   return iso ? iso.slice(0, 10) : "—";
@@ -18,12 +15,71 @@ function homeUrl(h: string): string {
   return /^https?:/.test(h) ? h : "https://" + h;
 }
 
-function TrendRow({ it, rank }: { it: TrendingItem; rank: number }) {
+export interface PersonalProfile {
+  langs: Record<string, number>; // normalized language weights 0..1
+  topics: Set<string>;
+  topLangs: Array<{ name: string; w: number }>;
+}
+
+export function buildProfile(ov?: any | null): PersonalProfile | null {
+  if (!ov) return null;
+  const langs = ov.languages || {};
+  const entries = Object.entries(langs).sort((a:any,b:any)=>(b[1] as number)-(a[1] as number));
+  if (entries.length === 0) return null;
+  const max = entries[0][1] || 1;
+  const out: Record<string, number> = {};
+  const topLangs: Array<{name:string,w:number}> = [];
+  for (const [k,v] of entries) {
+    const w = (v as number) / (max as number);
+    out[k] = w;
+    if (topLangs.length < 3) topLangs.push({name:k,w});
+  }
+  const topics = new Set<string>();
+  const repos = [...(ov.top_by_stars||[]), ...(ov.top_by_activity||[])];
+  for (const r of repos) {
+    for (const tp of (r.topics||[])) {
+      topics.add(tp.toLowerCase());
+    }
+  }
+  return { langs: out, topics, topLangs };
+}
+
+export function matchScore(it: any, p: PersonalProfile | null): number {
+  if (!p) return 0;
+  let s = 0;
+  // language 60%
+  const itLang = (it.lang||"").toLowerCase();
+  const langKey = Object.keys(p.langs).find(k=>k.toLowerCase()===itLang);
+  if (langKey && p.langs[langKey]) s += p.langs[langKey]*60;
+  // topics 40%
+  const itTopics = (it.topics||[]).map((x:any)=>x.toLowerCase());
+  if (itTopics.length>0 && p.topics.size>0) {
+    let c=0;
+    for (const tp of itTopics) if (p.topics.has(tp)) c++;
+    s += (c/Math.max(1,itTopics.length))*40;
+  }
+  if (s<0) s=0; if (s>100) s=100;
+  return Math.round(s);
+}
+
+export function matchDetail(it: any, p: PersonalProfile | null): { lang: string | null; topics: string[] } {
+  if (!p) return { lang: null, topics: [] };
+  const itLang = (it.lang || "").toLowerCase();
+  const langKey = Object.keys(p.langs).find((k) => k.toLowerCase() === itLang) || null;
+  const hits: string[] = [];
+  for (const tp of (it.topics || []).map((x: any) => String(x).toLowerCase())) {
+    if (p.topics.has(tp)) hits.push(tp);
+  }
+  return { lang: langKey, topics: hits.slice(0, 3) };
+}
+
+function TrendRow({ it, rank, score, reasons }: { it: any; rank: number; score?: number; reasons?: string }) {
   const t = useT();
   // machine-translated description (when the UI is Chinese and the server
   // provided one); the English original stays available via the title tooltip.
   const zh = it.desc_zh && it.desc_zh.trim() !== "" ? it.desc_zh : "";
   const shown = zh || it.desc;
+  const showScore = typeof score === "number";
   return (
     <li className="trend-card">
       <span className="rank">{rank}</span>
@@ -33,6 +89,7 @@ function TrendRow({ it, rank }: { it: TrendingItem; rank: number }) {
           <span className="chip">{it.lang || "—"}</span>
           <span className="chip">★ {it.stars}</span>
           <span className="chip">⑂ {it.forks}</span>
+          {showScore ? <span className="chip match" title={reasons || undefined}>{t("trend.match_pct", { score: String(score ?? 0) })}</span> : null}
           {zh ? <span className="chip mt" title={t("trend.mt_title")}>{t("trend.mt")}</span> : null}
           {it.homepage ? (
             <a className="chip" href={homeUrl(it.homepage)} target="_blank" rel="noreferrer">
@@ -46,7 +103,7 @@ function TrendRow({ it, rank }: { it: TrendingItem; rank: number }) {
           <span>· {t("trend.created", { date: fmtDate(it.created_at) })}</span>
           {it.topics && it.topics.length > 0 ? (
             <span className="trend-topics">
-              {it.topics.slice(0, 6).map((tp) => (
+              {it.topics.slice(0, 6).map((tp: any) => (
                 <span key={tp} className="chip topic">{tp}</span>
               ))}
             </span>
@@ -57,7 +114,7 @@ function TrendRow({ it, rank }: { it: TrendingItem; rank: number }) {
   );
 }
 
-export function TrendingPanel({ owner = "" }: { owner?: string }) {
+export function TrendingPanel({ owner = "", ov }: { owner?: string; ov?: any | null }) {
   const t = useT();
   // UI language drives automatic description translation; `lang` below is the
   // unrelated GitHub-language FILTER for the search query.
@@ -66,19 +123,20 @@ export function TrendingPanel({ owner = "" }: { owner?: string }) {
   const [since, setSince] = React.useState<"daily" | "weekly" | "monthly">("daily");
   const [langDraft, setLangDraft] = React.useState("");
   const [lang, setLang] = React.useState("");
-  const [data, setData] = React.useState<Trending | null>(null);
+  const [data, setData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(false);
   const [err, setErr] = React.useState("");
+  const [order, setOrder] = React.useState<"trend" | "match">("trend");
   const seq = React.useRef(0);
 
   // owner scope only makes sense with a resolved login
   const ownerScope = scope === "owner" && owner !== "";
 
-  const load = React.useCallback(() => {
+  const load = React.useCallback((force?: boolean) => {
     const s = ++seq.current;
     setLoading(true);
     setErr("");
-    api.trending(since, lang, uiLang === "zh" ? "zh" : "", ownerScope ? owner : undefined).then((r) => {
+    api.trending(since, lang, uiLang === "zh" ? "zh" : "", ownerScope ? owner : undefined, force).then((r) => {
       if (s !== seq.current) return;
       if (r && r.ok) {
         setData(r);
@@ -97,7 +155,13 @@ export function TrendingPanel({ owner = "" }: { owner?: string }) {
 
   React.useEffect(() => { load(); }, [load]);
 
-  const items = data?.items ?? [];
+  const prof = React.useMemo(() => buildProfile(ov), [ov]);
+  const items0 = data?.items ?? [];
+  const items = React.useMemo(() => {
+    if (order !== "match" || !prof) return items0;
+    const withs = items0.map((it: any) => ({ it, score: matchScore(it, prof) }));
+    return withs.sort((a:any,b:any)=>b.score-a.score).map((x:any)=>x.it);
+  }, [items0, order, prof]);
 
   // an owner rarely ships daily — bump the default window when switching to
   // owner scope so the first result isn't almost always empty.
@@ -141,6 +205,12 @@ export function TrendingPanel({ owner = "" }: { owner?: string }) {
             </button>
           ))}
         </div>
+        {prof ? (
+          <div className="trend-windows">
+            <button className={order==="trend"?"chip subtab active":"chip subtab"} onClick={()=>setOrder("trend")}>{t("trend.order_trend")}</button>
+            <button className={order==="match"?"chip subtab active":"chip subtab"} onClick={()=>setOrder("match")}>{t("trend.order_match")}</button>
+          </div>
+        ) : null}
         <div className="search-row trend-lang">
           <input
             className="search-input"
@@ -150,7 +220,7 @@ export function TrendingPanel({ owner = "" }: { owner?: string }) {
             onKeyDown={(e) => e.key === "Enter" && setLang(langDraft.trim())}
           />
           <button className="btn" onClick={() => setLang(langDraft.trim())}>{t("trend.apply")}</button>
-          <button className="btn" onClick={load} disabled={loading}>{t("trend.refresh")}</button>
+          <button className="btn" onClick={() => load(true)} disabled={loading}>{t("trend.refresh")}</button>
         </div>
       </div>
 
@@ -168,14 +238,21 @@ export function TrendingPanel({ owner = "" }: { owner?: string }) {
               ? t("trend.owner_meta", { days: data.days ?? 0, owner, n: items.length })
               : t("trend.meta", { days: data.days ?? 0, n: items.length })}
             {data.cached ? <> · {t("trend.cached")}</> : null}
+            {prof && order==="match" ? <> · {t("trend.sorted_match")}</> : null}
           </p>
           {items.length === 0 ? (
             <p className="muted">{ownerScope ? t("trend.owner_empty", { owner }) : t("trend.empty")}</p>
           ) : (
             <ol className={loading ? "trend-list trend-list-loading" : "trend-list"}>
-              {items.map((it, i) => (
-                <TrendRow key={it.full_name} it={it} rank={i + 1} />
-              ))}
+              {items.map((it: any, i: number) => {
+                const score = prof ? matchScore(it, prof) : 0;
+                const d = prof ? matchDetail(it, prof) : { lang: null, topics: [] as string[] };
+                const reasonParts: string[] = [];
+                if (d.lang) reasonParts.push(t("trend.rec_lang", { lang: d.lang }));
+                if (d.topics.length > 0) reasonParts.push(t("trend.rec_topics", { topics: d.topics.join(", ") }));
+                const reasons = reasonParts.join(" · ");
+                return <TrendRow key={it.full_name} it={it} rank={i + 1} score={order==="match"||score>0? score: undefined} reasons={reasons} />;
+              })}
             </ol>
           )}
           <p className="muted trend-note">{t("trend.hint")}</p>

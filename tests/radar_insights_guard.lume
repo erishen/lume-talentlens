@@ -1,0 +1,69 @@
+// tests/radar_insights_guard.lume — unit tests for the radar_insights
+// filtering logic (lib/tools.lume): keyword AND-match over the radar pool,
+// the score floor, and empty-query behavior.
+//
+// Run from the repo root:  lume tests/radar_insights_guard.lume
+// Prints "PASS <ok>/<total>" on success; the Makefile test target greps for
+// that line. Tools register at top level (like app/sanity.lume), which is
+// harmless outside a server — only the exported pure helpers are exercised.
+
+import "../app/lib/tools.lume" as tools;
+
+let stats = { ok: 0, total: 0 };
+func check(name, cond) {
+  put(stats, "total", get(stats, "total", 0) + 1);
+  if (cond) {
+    put(stats, "ok", get(stats, "ok", 0) + 1);
+  } else {
+    print("FAIL: " + name);
+  }
+}
+
+let pool = [
+  { login: "a1", mode: "startup", score: 70,
+    note: "创业/创始人信号：building an AI tool",
+    top_repos: [{ name: "llm-x", desc: "a tool for LLM agents" }] },
+  { login: "b2", mode: "crypto", score: 60,
+    note: "加密/链上信号：defi data",
+    top_repos: [{ name: "onchain", desc: "blockchain indexer" }] },
+  { login: "c3", mode: "content", score: 50,
+    note: "内容/资源聚合：awesome lists",
+    top_repos: [] },
+];
+
+// --- radar_text: lowercase + folds repos/profile into one haystack ----
+let t1 = tools.radar_text(get(pool, 1, {}));
+check("radar_text lowercases", not contains(t1, "AI") and contains(t1, "ai"));
+check("radar_text includes repo desc", contains(t1, "defi") and contains(t1, "blockchain"));
+
+// --- radar_match: AND semantics over space-separated terms ---------------
+let ms = ["defi"];
+check("single term matches", tools.radar_match(t1, ms));
+check("non-matching term rejected", not tools.radar_match(t1, ["rust"]));
+check("empty term is ignored", tools.radar_match(t1, ["", "defi", ""]));
+let and_ = ["crypto", "data"];
+check("AND requires all terms", tools.radar_match(t1, and_));
+check("AND rejects partial", not tools.radar_match(t1, ["crypto", "quantum"]));
+
+// --- radar_filter: terms + score floor ------------------------------------
+let hit = tools.radar_filter(pool, ["tool"], 0);
+check("query filters by keyword", len(hit) == 1 and str(get(get(hit, 0, {}), "login", "")) == "a1");
+let scorec = tools.radar_filter(pool, [], 65);
+check("score floor filters", len(scorec) == 1 and str(get(get(scorec, 0, {}), "login", "")) == "a1");
+let noq = tools.radar_filter(pool, [], 0);
+check("empty query returns all", len(noq) == 3);
+let none = tools.radar_filter(pool, ["nonexistent-term-xyz"], 0);
+check("no match -> empty", len(none) == 0);
+let mixed = tools.radar_filter(pool, ["data"], 55);
+check("term+floor combine", len(mixed) == 1 and str(get(get(mixed, 0, {}), "login", "")) == "b2");
+
+// null people rows must not crash the filter
+let pool_bad = pool;
+push(pool_bad, null);
+check("null row skipped", len(tools.radar_filter(pool_bad, [], 0)) == 3);
+
+if (get(stats, "ok", 0) == get(stats, "total", 0)) {
+  print("PASS " + str(get(stats, "ok", 0)) + "/" + str(get(stats, "total", 0)));
+} else {
+  print("GUARD TESTS FAILED");
+}

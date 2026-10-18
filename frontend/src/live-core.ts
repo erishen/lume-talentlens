@@ -15,7 +15,12 @@ export interface LiveCacheStore {
   set(key: string, value: string): void;
 }
 
-const LIVE_CACHE_KEY = "lume-talentlens.live.v1";
+// v2: bumped when buildOverview gained the `talent` counters. Old v1 entries
+// were written without `talent`, so a cache HIT (the non-force "实时获取"
+// button / the compare fetch) would silently serve a talent-less overview —
+// rigor/activity collapse to 0 until the entry expires. Bumping the key drops
+// every stale entry at once.
+const LIVE_CACHE_KEY = "lume-talentlens.live.v2";
 export const LIVE_CACHE_TTL_MS = 10 * 60 * 1000;
 
 export interface LiveResult {
@@ -235,6 +240,41 @@ export function buildOverview(
     top_by_stars: topN([...all].sort((a, b) => b.stars - a.stars), 10),
     top_by_activity: topN([...all].sort((a, b) => b.created_year - a.created_year), 10),
     push_trend: pushTrend(all),
+    // talent counters — KEEP IN SYNC with analyze.lume analyze() so the live
+    // path and the cached snapshot feed the same pillar math. Without this the
+    // force-refresh overview has no `talent`, and rigor/activity collapse to 0.
+    talent: talentSignals(all),
+  };
+}
+
+// Mirrors analyze.lume count_with_desc / count_with_license / count_with_topics
+// / avg_days_since_push. Empty input yields the zeros the frontend already
+// treats as "no data".
+function talentSignals(all: RepoView[]): {
+  with_desc: number;
+  with_license: number;
+  with_topics: number;
+  avg_days_since_push: number;
+} {
+  let with_desc = 0;
+  let with_license = 0;
+  let with_topics = 0;
+  let pushSum = 0;
+  let pushN = 0;
+  for (const r of all) {
+    if (r.desc) with_desc++;
+    if (r.license && r.license !== "None") with_license++;
+    if (r.topics.length > 0) with_topics++;
+    if (r.days_since_push >= 0) {
+      pushSum += r.days_since_push;
+      pushN++;
+    }
+  }
+  return {
+    with_desc,
+    with_license,
+    with_topics,
+    avg_days_since_push: pushN ? pushSum / pushN : 0,
   };
 }
 

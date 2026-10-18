@@ -1,0 +1,101 @@
+// tests/history_guard.lume — unit tests for lib/history.lume + the server-side
+// health mirror (analyze.health_from_overview).
+//
+// Run from the repo root:  lume tests/history_guard.lume
+// Prints "PASS <ok>/<total>" on success; the Makefile test target greps ^PASS.
+//
+// These pin the timeline semantics the dashboard relies on:
+//   - per-day upsert keeps ONE record per date, ascending
+//   - people_points diffs consecutive days -> added/gone per kind
+//   - health_from_overview stays numerically comparable to the frontend score
+//     (frontend/src/talent.ts). If either side drifts, the sparkline lies.
+
+import "../app/lib/history.lume" as history;
+import "../app/lib/analyze.lume" as analyze;
+
+let stats = { ok: 0, total: 0 };
+func check(name, cond) {
+  put(stats, "total", get(stats, "total", 0) + 1);
+  if (cond) {
+    put(stats, "ok", get(stats, "ok", 0) + 1);
+  } else {
+    print("FAIL: " + name);
+  }
+}
+func close(a, b) {
+  return abs(a - b) < 0.001;
+}
+
+// ---- sort_by_date / upsert_day / last_n ----
+let raw = [
+  { date: "2026-10-16", v: 3 },
+  { date: "2026-10-14", v: 1 },
+  { date: "2026-10-15", v: 2 },
+];
+let sorted = history.sort_by_date(raw);
+check("sort ascending first", str(get(sorted, 0, {})) == str({ date: "2026-10-14", v: 1 }));
+check("sort ascending last", str(get(sorted, 2, {})) == str({ date: "2026-10-16", v: 3 }));
+
+let up = history.upsert_day(raw, { date: "2026-10-15", v: 9 });
+check("upsert replaces same date", len(up) == 3);
+check("upsert kept other days", str(get(up, 1, {})) == str({ date: "2026-10-15", v: 9 }));
+check("upsert appends new day", len(history.upsert_day(raw, { date: "2026-10-17", v: 4 })) == 4);
+
+check("last_n keeps newest", len(history.last_n(raw, 2)) == 2);
+check("last_n tail is newest", str(get(history.last_n(raw, 2), 1, {})) == str({ date: "2026-10-16", v: 3 }));
+check("last_n over-size returns all", len(history.last_n(raw, 99)) == 3);
+
+// ---- diff_logins ----
+let d = history.diff_logins(["a", "c"], ["a", "b"]);
+check("diff added", str(get(d, "added", [])) == str(["c"]));
+check("diff gone", str(get(d, "gone", [])) == str(["b"]));
+
+// ---- people_points: consecutive-day deltas ----
+let days = [
+  { date: "2026-10-14", ts: "t1", followers: ["a", "b"], following: ["x"], counts: { followers: 2, following: 1 } },
+  { date: "2026-10-15", ts: "t2", followers: ["a", "c"], following: ["x", "y"], counts: { followers: 2, following: 2 } },
+];
+let pts = history.people_points(days);
+check("points count", len(pts) == 2);
+check("first day has no adds", str(get(get(pts, 0, {}), "added_followers", [])) == str([]));
+check("added followers", str(get(get(pts, 1, {}), "added_followers", [])) == str(["c"]));
+check("gone followers", str(get(get(pts, 1, {}), "gone_followers", [])) == str(["b"]));
+check("added following", str(get(get(pts, 1, {}), "added_following", [])) == str(["y"]));
+check("gone following", str(get(get(pts, 1, {}), "gone_following", [])) == str([]));
+check("counts carried", int(get(get(pts, 1, {}), "followers", 0)) == 2);
+check("counts fallback to len", int(get(get(pts, 0, {}), "following", 0)) == 1);
+
+// ---- health_from_overview: parity with frontend/talent.ts (worked example) ----
+let ov = {
+  count: 10,
+  recency: { active: 8 },
+  talent: { with_desc: 8, with_license: 5, with_topics: 5, avg_days_since_push: 45 },
+  languages: { TypeScript: 6, JavaScript: 2, Go: 2 },
+  profile: { followers: 100 },
+  top_by_stars: [{ name: "r", stars: 20 }],
+};
+let hs = analyze.health_from_overview(ov);
+check("health total == 77", int(get(hs, "total", 0)) == 77);
+let pil = get(hs, "pillars", {});
+check("health activity ~0.828", close(get(pil, "activity", 0), 0.828));
+check("health rigor == 0.6", close(get(pil, "rigor", 0), 0.6));
+check("health focus == 0.8", close(get(pil, "focus", 0), 0.8));
+check("health influence == 1", close(get(pil, "influence", 0), 1));
+
+// empty overview must not divide by zero / produce NaN
+let hs0 = analyze.health_from_overview({ count: 0, recency: {}, talent: {}, languages: {}, profile: {}, top_by_stars: [] });
+check("empty overview total is a number", int(get(hs0, "total", -1)) >= 0);
+
+// ---- read_jsonl skips corrupt lines (regression: json() throws, so a
+// single bad line used to abort the whole route) ----
+mkdir("data/.tmp");
+let jl = "data/.tmp/_guard_history.jsonl";
+write_file(jl, "{\"date\":\"2026-01-01\"}\nNOT JSON AT ALL\n{\"date\":\"2026-01-02\"}\n");
+let recs = history.read_jsonl(jl);
+check("read_jsonl skips corrupt line", len(recs) == 2 and str(get(recs[0], "date", "")) == "2026-01-01");
+
+if (get(stats, "ok", 0) == get(stats, "total", 0)) {
+  print("PASS " + str(get(stats, "ok", 0)) + "/" + str(get(stats, "total", 0)));
+} else {
+  print("GUARD TESTS FAILED");
+}

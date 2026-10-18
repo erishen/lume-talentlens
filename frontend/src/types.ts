@@ -152,6 +152,54 @@ export interface OwnerList {
   current: string;
 }
 
+// /api/refresh result. ok=true carries the new totals; a failure carries a
+// status (429 cooldown / 502 partial or unreachable) and a human reason.
+export interface RefreshResult {
+  ok: boolean;
+  status?: number;
+  wait?: number;
+  err?: string;
+  owner?: string;
+  followers?: number;
+  following?: number;
+}
+
+// daily follower/following timeline (/api/people_history). One point per
+// calendar day; added_*/gone_* are the logins that changed vs the PREVIOUS day
+// (empty on the first day — no prior point to diff against).
+export interface PeopleHistoryPoint {
+  date: string;
+  ts: string;
+  followers: number;
+  following: number;
+  added_followers: string[];
+  gone_followers: string[];
+  added_following: string[];
+  gone_following: string[];
+}
+export interface PeopleHistory {
+  ok: boolean;
+  owner: string;
+  days: number;
+  points: PeopleHistoryPoint[];
+}
+
+// daily open-source-health timeline (/api/health_history). `pillars` are
+// weight-independent (0..1) so the UI can re-score the series with the user's
+// current weights; `total` is the server's score under the default weights.
+export interface HealthHistoryPoint {
+  date: string;
+  ts: string;
+  total: number;
+  pillars: { activity: number; rigor: number; focus: number; influence: number };
+}
+export interface HealthHistory {
+  ok: boolean;
+  owner: string;
+  days: number;
+  points: HealthHistoryPoint[];
+}
+
 // returned by every JSON route when the owner has no local snapshot yet
 export interface NoSnapshot {
   status: 404;

@@ -31,7 +31,8 @@ echo "build-ui: $ESB src/main.tsx -> ../www/github/app.js"
   --outfile=../www/github/app.js
 
 # 3) cache-bust: stamp a fresh version into the HTML shells so the browser
-#    picks up this bundle (they reference /app.js?v=<ts> and /app.css?v=<ts>).
+#    picks up this bundle (they reference /app.js?v=<ts>, /app.css?v=<ts> and
+#    /boot.js?v=<ts>).
 #    Match up to the closing quote so a stale suffix (e.g. an earlier manual
 #    "BUILD" stamp) can't survive the replacement.
 V="$(date +%s)"

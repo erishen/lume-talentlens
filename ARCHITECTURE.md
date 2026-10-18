@@ -74,8 +74,8 @@ lume-talentlens/
 │   └── markdown.tsx / exportCsv.ts
 ├── www/github/                # 静态产物（views 目录，index.html 挂 "/"）
 ├── data/github/<owner>/       # 快照与派生数据（全部 gitignored）
-├── scripts/                   # 离线管道（fetch/suspects/score/radar/follow/unfollow）
-├── Makefile                   # check / fetch / ui / dev
+├── scripts/                   # 离线管道（fetch/suspects/score/radar/follow/unfollow/daily/archive）
+├── Makefile                   # check / fetch / ui / dev / daily
 └── .env.example               # 配置模板（提交），.env 真实值（忽略）
 ```
 
@@ -102,10 +102,10 @@ lume-talentlens/
 | `shared.lume` | owner 解析、快照读取、字符串/数组 helpers、`gh_get`（带重试） | analyze | 被所有模块引用；不放路由 |
 | `api.lume` | 全部 JSON 端点 + people 合并（水号/评分标签）+ refresh | shared, analyze | 响应体必须小于框架上限（见 §7.3） |
 | `live.lume` | `/api/live/github` 代理 + `/api/github_auth` | shared | 路径白名单 + slim_body 投影 |
-| `trending.lume` | `/api/trending`（GitHub 趋势项目） | shared | 服务端搜索 API + 语言准入白名单 + 结果投影 + TTL 缓存；查询恒带 `is:public` 并丢弃私有条目（隐私边界，见 `tests/trending_guard.lume`）；`tr=zh` 经本地 LLM 网关机翻描述（`desc_zh`，键读 `LLM_ANALYZER_KEY`，按描述记忆化 + 失败退避）；`owner=<login>` 限定该账号自己的新仓库（`user:<login> created:>window is:public`，`scope:"owner"`，缓存键含 owner） |
+| `trending.lume` | `/api/trending`（GitHub 趋势项目） | shared, trending_html | 全局榜**抓取 github.com/trending 页面**（`trending_html.lume` 解析 `<article class="Box-row">`，列表/顺序/星数与页面一致；失败或页面结构变化时回退搜索 API）+ 搜索 API 回退 + `owner=<login>`（`user:<login> created:>window is:public`，`scope:"owner"`，缓存键含 owner，页面无 owner 维度故仅走搜索）+ 语言准入白名单 + 结果投影 + TTL 缓存（内存 `TRENDING_CACHE_TTL_SEC` 默认 120 / 磁盘 `TRENDING_DISK_TTL_SEC` 默认 600；github.com/trending 分钟级重排，故 TTL 短；`refresh=1` 跳过两层缓存取最新，前端刷新按钮与 `make trending-push` 使用）；搜索路径查询恒带 `is:public` 并丢弃私有条目（隐私边界，见 `tests/trending_guard.lume`；解析器见 `tests/trending_html_guard.lume`）；响应含 `source`（`github-trending`/`github-search`）；`tr=zh` 经本地 LLM 网关机翻描述（`desc_zh`，键读 `LLM_ANALYZER_KEY`，按描述记忆化 + 失败退避；分片串行、连续 2 片全败才判网关宕机——单片失败不中断整批；整批零翻译时**不写缓存**，防止瞬时抖动把英文响应当 `tr=zh` 缓存整个 TTL） |
 | `classify.lume` | `/api/classify`（归类总览） | shared | 搜该 owner 窗口内新建的公开仓库，按 `language` + `topics` 聚合（语言 dist 用递归 helpers，排序避免对象比较）；查询恒带 `is:public` 并丢弃私有条目（隐私边界，见 `tests/classify_guard.lume`）；TTL 缓存键 `owner\|since\|pages` |
 | `ssr.lume` | /overview /repos /api 三页 | shared, analyze, ui | 只读视图，无 JS 依赖 |
-| `tools.lume` | 10 个智能体工具注册 | shared, analyze | 工具在 fork 出的 worker 上运行，每次读快照 |
+| `tools.lume` | 11 个智能体工具注册 | shared, analyze | 工具在 fork 出的 worker 上运行，每次读快照 |
 | `actions.lume` | /discovery + follow/unfollow | 无 | 写操作需要 `user:follow` PAT |
 
 ### 4.1 Lume 模块机制（拆分的基石）
@@ -164,14 +164,16 @@ lume-talentlens/
 
 ```
 fetch-github.sh ──► snapshot.json        （分页 /users/<owner>/repos，预计算派生字段）
-people-suspects.py ─► suspects.json      （本地启发式水号筛查，零 API 成本）
+people-suspects.py ─► suspects.json      （本地启发式水号筛查，零 API 成本；SUSPECT_MODE 三档可配置）
 people-score.sh ───► scores.json         （影响力评分，全部粉丝/关注：仓库/触达降权 + 粉丝-关注比 + 水号扣分）
 radar-scan.sh ─────► radar.json          （互相关注高分者≥60 按盈利模式分类；star 质量分重排；变现信号：site / product / sponsor=GraphQL 探针，失败记 null 不误报）
 follow-worthy.sh ──► （写操作）回关未关注的高分粉丝（幂等，需 PAT）
 unfollow.sh ───────► （写操作）批量取关水号（数据驱动读 suspects.json，--dry-run 可预览）
+daily-scan.sh ─────► logs/daily/<date>.md（TODO #5：每天编排 快照+人脉+水号+评分+雷达 一遍，产出逐日变更摘要 —— 新粉丝/取关、新增高手、取关水号；失败步骤记入摘要而非中断，覆盖前先快照 *.prev.json；DRY_RUN=1 只读、RADAR=0 跳过评分/雷达）
+archive.py ────────► data/github/<owner>/archive.md（TODO #11：把雷达池变现信号沉淀为结构化 markdown 知识库，供 HR/学习；离线）
 ```
 
-管道全是**离线/一次性**作业，与常驻服务解耦；服务端只读这些产物。`/api/refresh` 是唯一服务端触发的写入（重拉 people.json，60 秒/owner 限流）。
+管道全是**离线/一次性**作业，与常驻服务解耦；服务端只读这些产物。`/api/refresh` 是唯一服务端触发的写入（重拉 people.json，60 秒/owner 限流）。`daily-scan.sh` 是唯一聚合多个脚本的编排入口，供定时任务调用。
 
 ---
 
@@ -215,7 +217,7 @@ Lume 框架对单响应体有硬上限（历史：release 版实测 64KB 塌陷�
 React Agent.tsx ──SSE──► Lume LLM 桥 ──► 配置的 OpenAI 兼容端点（LLM_API_URL）
                               │
                               ▼
-              工具注册表（tools.lume 的 10 个 repo_*/github_*）
+              工具注册表（tools.lume 的 11 个 repo_*/github_*/radar_insights 等）
               LLM 请求工具 → fork worker 读本地快照 → 结果回填对话
 ```
 

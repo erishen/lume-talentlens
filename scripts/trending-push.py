@@ -84,6 +84,18 @@ def _valid_lang(lang: str) -> bool:
     return bool(lang) and len(lang) <= 30 and all(c in VALID_LANGS for c in lang)
 
 
+def _repo_url(it: dict) -> str:
+    """Clickable repo URL: prefer the payload's ``url`` (html_url), else rebuild
+    from ``full_name``. Plain-text transports (DingTalk/WeCom/Server酱) only
+    auto-link a full ``https://`` URL, so a scheme is always emitted."""
+    url = (it.get("url") or "").strip()
+    if url:
+        return url
+    name = (it.get("full_name") or it.get("name") or "").strip()
+    return f"https://github.com/{name}" if "/" in name else ""
+
+
+
 def _server_base_url(explicit: str) -> str:
     if explicit:
         return explicit.rstrip("/")
@@ -96,7 +108,9 @@ def _server_base_url(explicit: str) -> str:
 
 def fetch_from_server(base_url: str, since: str, lang: str, owner: str,
                       tr: str, timeout: float) -> dict:
-    qp = {"since": since, "tr": tr}
+    # refresh=1 bypasses the server's TTL cache so every push is a fresh board
+    # (github.com/trending reorders every few minutes).
+    qp = {"since": since, "tr": tr, "refresh": "1"}
     if lang:
         qp["lang"] = lang
     if owner:
@@ -180,9 +194,12 @@ def render_message(payload: dict, top: int) -> str:
         desc = (it.get("desc_zh") or it.get("desc") or "").strip()
         if desc:
             lines.append(f"   {desc}")
+        link = _repo_url(it)
+        if link:
+            lines.append(f"   {link}")
     total = payload.get("count", len(items))
     lines.append("")
-    lines.append(f"共 {total} 项 · github.com/trending")
+    lines.append(f"共 {total} 项 · https://github.com/trending")
     return "\n".join(lines)
 
 

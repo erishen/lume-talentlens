@@ -60,3 +60,27 @@ case ",${LUME_NO_PROXY:-}," in
   *,127.0.0.1,*) : ;;
   *) export LUME_NO_PROXY="${LUME_NO_PROXY:+$LUME_NO_PROXY,}127.0.0.1,localhost" ;;
 esac
+
+# Route the shell scripts' curl calls through the same proxy Lume's
+# http_get/http_put use. LUME_HTTP_PROXY is a project-specific override read
+# by the .lume server; plain curl does NOT see it and would otherwise go
+# DIRECT to api.github.com — unstable behind an egress-restricted network
+# (TLS resets / HTTP2 framing errors / 20s timeouts). Curl honors the standard
+# HTTPS_PROXY / HTTP_PROXY vars, so bridge the two. NO_PROXY keeps the
+# loopback LLM gateway direct. Only when a proxy is actually configured —
+# otherwise the scripts keep their existing (global) proxy behavior.
+if [ -n "${LUME_HTTP_PROXY:-}" ]; then
+  export HTTP_PROXY="$LUME_HTTP_PROXY"
+  export HTTPS_PROXY="$LUME_HTTP_PROXY"
+  export http_proxy="$LUME_HTTP_PROXY"
+  export https_proxy="$LUME_HTTP_PROXY"
+  # keep the loopback LLM gateway direct; append only the missing entries
+  NP="${NO_PROXY:-${no_proxy:-}}"
+  need=""
+  case ",$NP," in *,127.0.0.1,*) : ;; *) need="${need:+$need,}127.0.0.1" ;; esac
+  case ",$NP," in *,localhost,*) : ;; *) need="${need:+$need,}localhost" ;; esac
+  if [ -n "$need" ]; then
+    NP="${NP:+$NP,}$need"
+    export NO_PROXY="$NP" no_proxy="$NP"
+  fi
+fi

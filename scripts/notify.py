@@ -27,6 +27,7 @@ Usage:
     python3 scripts/notify.py --text "hello"
     echo "multi-line" | python3 scripts/notify.py          # text from stdin
     python3 scripts/notify.py --text "$(cat logs/daily/2026-10-18.md)"
+    python3 scripts/notify.py --text "hi" --dry-run       # print, never send
 Exits non-zero (and prints why) when the push fails or nothing is configured.
 """
 from __future__ import annotations
@@ -37,6 +38,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -158,6 +160,32 @@ def _display_url(url: str) -> str:
     return f"{base}?…" if p.query else base
 
 
+# A GitHub login wrapped in markdown backticks (daily-scan renders every login
+# that way). The charset/length mirror shared.lume's valid_login so unrelated
+# backticked words (e.g. `make daily`) are not touched.
+_LOGIN_RE = re.compile(r"`([A-Za-z0-9][A-Za-z0-9_-]{0,38})`")
+
+
+def _mask_login(login: str) -> str:
+    n = len(login)
+    if n <= 2:
+        return "*" * n
+    if n <= 5:
+        return login[0] + "***" + login[-1]
+    return login[:2] + "***" + login[-2:]
+
+
+def redact_logins(text: str) -> str:
+    """Mask GitHub logins in backticks (``erishen`` -> ``er***en``).
+
+    Used by the daily push when ``REDACT_LOGINS=1`` / ``--redact-logins``: the
+    summary lists third parties (new/lost followers, mutual high scorers,
+    unfollowed water accounts), so an operator may want to publish only masked
+    names. Must run BEFORE :func:`md_to_text`, which strips the backticks.
+    """
+    return _LOGIN_RE.sub(lambda m: "`" + _mask_login(m.group(1)) + "`", text)
+
+
 def md_to_text(md: str) -> str:
     """Flatten a markdown summary to plain text for a text message.
 
@@ -273,18 +301,33 @@ def main() -> int:
     ap.add_argument("--text", help="要推送的文本；省略则从 stdin 读")
     ap.add_argument("--markdown", action="store_true",
                     help="把输入当 markdown 摘要，先拍平成纯文本再发")
+    ap.add_argument("--redact-logins", action="store_true",
+                    help="把反引号包裹的 GitHub 登录名打码后再发（如 `er***en`）")
+    ap.add_argument("--dry-run", action="store_true",
+                    default=os.environ.get("DRY_RUN", "")
+                            not in ("", "0", "false", "False", "no", "No"),
+                    help="只打印将发送的内容，不真正推送（或 DRY_RUN=1）")
     args = ap.parse_args()
 
     if args.text is not None:
         content = args.text
     else:
         content = sys.stdin.read()
+    # redact before md_to_text: the latter strips the backticks we key on.
+    if args.redact_logins:
+        content = redact_logins(content)
     if args.markdown:
         content = md_to_text(content)
 
     if not content.strip():
         print("notify: 没有可推送的内容", file=sys.stderr)
         return 2
+
+    if args.dry_run:
+        # No webhook read, no network: safe to run when only checking output.
+        print("notify: [dry-run] 未发送。内容如下：")
+        print(content)
+        return 0
 
     ok, msg = send_text(content)
     print(("notify: " + msg))

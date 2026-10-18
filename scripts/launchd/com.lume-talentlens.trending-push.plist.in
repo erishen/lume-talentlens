@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template for the daily GitHub-trending push LaunchAgent. Do NOT edit in place:
+  scripts/schedule.sh renders it (substituting the @@…@@ placeholders with your
+  repo path / hour / minute) into ~/Library/LaunchAgents/ and loads it.
+  Install:   make schedule-install            (default 09:00)
+             make schedule-install HOUR=8 MIN=30
+  Uninstall: make schedule-uninstall
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>@@LABEL@@</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>@@WRAPPER@@</string>
+  </array>
+
+  <!-- repo root; the wrapper also cd's there for safety -->
+  <key>WorkingDirectory</key>
+  <string>@@REPO_ROOT@@</string>
+
+  <!-- daily at HH:MM local time; launchd runs a missed slot once after wake -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>@@HOUR@@</integer>
+    <key>Minute</key>
+    <integer>@@MIN@@</integer>
+  </dict>
+
+  <!-- do not fire immediately on install/login; only at the scheduled time -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>@@PATH@@</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>@@LOG@@</string>
+  <key>StandardErrorPath</key>
+  <string>@@LOG@@</string>
+</dict>
+</plist>

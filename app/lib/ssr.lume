@@ -131,7 +131,8 @@ get "/api", (req) => {
       el("ul", {},
         el("li", {}, ui.t(lang, "api_tool_1")),
         el("li", {}, ui.t(lang, "api_tool_2")),
-        el("li", {}, ui.t(lang, "api_tool_3"))
+        el("li", {}, ui.t(lang, "api_tool_3")),
+        el("li", {}, ui.t(lang, "api_tool_4"))
       )
     ),
     el("section", { class: "panel" },

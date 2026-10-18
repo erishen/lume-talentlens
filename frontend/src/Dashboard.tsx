@@ -7,6 +7,7 @@ import { RepoRow, BrowsePage } from "./dashboard/lists";
 import { PeopleSection } from "./dashboard/people-section";
 import { TrendingPanel } from "./dashboard/trending";
 import { ClassifyPanel } from "./dashboard/classify";
+import { TabBar } from "./dashboard/tabbar";
 import { useFollowActions } from "./dashboard/useFollowActions";
 import { deriveTalent } from "./talent";
 import { useLang, useT } from "./i18n";
@@ -35,9 +36,9 @@ export function Dashboard() {
 
   const {
     owner, cached, weights, setWeights,
-    ov, live, liveInfo, noSnap, loading, liveLoading, liveErr, liveProgress, repoErr,
+    ov, live, liveInfo, noSnap, noOwner, loading, liveLoading, liveErr, liveProgress, repoErr,
     err, q, setQ, hits, hitsTotal, searched, searching, limit, setLimit,
-    people, setPeople, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, radar, stargazers,
+    people, setPeople, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, peopleHistory, radar, stargazers,
     cmp, setCmp,
     poolInput, setPoolInput, poolLoading, poolProgress, pool, setPool,
     rankedPool, poolFrac,
@@ -65,9 +66,22 @@ export function Dashboard() {
   // top repos + compare/pool), repos (search + full paged list), people
   // (followers/following/radar/mutual + the action toolbar).
   const [tab, setTab] = React.useState<"overview" | "repos" | "people" | "trending" | "classify">("overview");
+  // ARIA tabs: the buttons below get role=tab and the panels get role=tabpanel
+  // + id, the tablist handles Left/Right/Home/End (roving tabindex). Screen
+  // readers + keyboard users get the same navigation the mouse does.
+  const tabKeys: Array<"overview" | "repos" | "people" | "trending" | "classify"> = [
+    "overview", "repos", "people", "trending", "classify",
+  ];
+  const tabLabels: Record<(typeof tabKeys)[number], string> = {
+    overview: t("tabs.overview"),
+    repos: t("tabs.repos"),
+    people: t("tabs.people"),
+    trending: t("tabs.trending"),
+    classify: t("tabs.classify"),
+  };
   // people tab is split into three sub-views — relations (mutual + worth),
   // insights (radar + stargazers), lists (diff + followers + following)
-  const [peopleView, setPeopleView] = React.useState<"relation" | "insight" | "list">("relation");
+  const [peopleView, setPeopleView] = React.useState<"relation" | "insight" | "list" | "timeline">("relation");
   // Insights (radar + stargazer profiles) only exist for the default owner;
   // lists and relations work for every account. A stale "insight" view on a
   // non-default owner falls back to relations.
@@ -105,29 +119,27 @@ export function Dashboard() {
 
       <OwnerPicker value={owner} cached={cached} onPick={handleOwnerPick} onAnalyze={loadOverview} busy={loading} />
 
-      <div className="tabs">
-        <button className={tab === "overview" ? "tab active" : "tab"} onClick={() => setTab("overview")}>
-          {t("tabs.overview")}
-        </button>
-        <button className={tab === "repos" ? "tab active" : "tab"} onClick={() => setTab("repos")}>
-          {t("tabs.repos")}
-        </button>
-        <button className={tab === "people" ? "tab active" : "tab"} onClick={() => setTab("people")}>
-          {t("tabs.people")}
-        </button>
-        <button className={tab === "trending" ? "tab active" : "tab"} onClick={() => setTab("trending")}>
-          {t("tabs.trending")}
-        </button>
-        <button className={tab === "classify" ? "tab active" : "tab"} onClick={() => setTab("classify")}>
-          {t("tabs.classify")}
-        </button>
-      </div>
+      <TabBar
+        idPrefix="gh"
+        ariaLabel={t("tabs.role")}
+        tabs={tabKeys.map((k) => ({ key: k, label: tabLabels[k] }))}
+        active={tab}
+        onSelect={setTab}
+      />
 
-      {tab === "trending" && <TrendingPanel owner={owner} />}
-      {tab === "classify" && <ClassifyPanel owner={owner} />}
+      {tab === "trending" && (
+        <div role="tabpanel" id="gh-panel-trending" aria-labelledby="gh-tab-trending">
+          <TrendingPanel owner={owner} ov={ov} />
+        </div>
+      )}
+      {tab === "classify" && (
+        <div role="tabpanel" id="gh-panel-classify" aria-labelledby="gh-tab-classify">
+          <ClassifyPanel owner={owner} />
+        </div>
+      )}
 
       {tab === "overview" && (
-        <>
+        <div role="tabpanel" id="gh-panel-overview" aria-labelledby="gh-tab-overview">
       <div className="pool-row">
         <span className="muted">{t("pool.label")}</span>
         <input
@@ -137,7 +149,7 @@ export function Dashboard() {
           onChange={(e) => setPoolInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !poolLoading && loadPool(poolInput)}
         />
-        <button className="btn" onClick={() => loadPool(poolInput)} disabled={poolLoading}>
+        <button className="btn" onClick={() => loadPool(poolInput)} disabled={poolLoading} aria-busy={poolLoading}>
           {poolLoading ? "…" : t("pool.rank")}
         </button>
         {pool.length > 0 && (
@@ -148,7 +160,7 @@ export function Dashboard() {
       </div>
 
       {poolLoading && poolProgress && (
-        <div className="panel pool-progress">
+        <div className="panel pool-progress" role="status" aria-live="polite">
           <h2>{t("pool.loading_title")}</h2>
           <div className="pool-prog-bar">
             <div className="pool-prog-fill" style={{ width: `${poolFrac * 100}%` }} />
@@ -221,7 +233,7 @@ export function Dashboard() {
           onChange={(e) => setCmp((c) => ({ ...c, target: e.target.value }))}
           onKeyDown={(e) => e.key === "Enter" && loadCompare(cmp.target)}
         />
-        <button className="btn" onClick={() => loadCompare(cmp.target)} disabled={cmp.loading}>
+        <button className="btn" onClick={() => loadCompare(cmp.target)} disabled={cmp.loading} aria-busy={cmp.loading}>
           {cmp.loading ? "…" : t("cmp.btn")}
         </button>
         {cmp.ov && (
@@ -235,19 +247,19 @@ export function Dashboard() {
           <span className="chip live-info">{t("cmp.fresh_ms", { ms: cmp.ms })}</span>
         ) : null}
       </div>
-      {cmp.err && <div className="panel error">{t("cmp.failed")}: {cmp.err}</div>}
+      {cmp.err && <div className="panel error" role="alert">{t("cmp.failed")}: {cmp.err}</div>}
       {ov && cmp.ov && ov.owner !== cmp.target ? (
         <ComparePanel ovA={ov} ovB={cmp.ov} weights={weights} />
       ) : null}
-        </>
+        </div>
       )}
 
-      {err && <div className="panel error">{err}</div>}
+      {err && <div className="panel error" role="alert">{err}</div>}
 
       {loading && <div className="panel">{t("misc.loading")}</div>}
 
       {(liveLoading || refreshing || (liveProgress && liveProgress.kind === "people")) && (
-        <div className="panel">
+        <div className="panel" role="status" aria-live="polite">
           <h2>{t("live.fetching", { owner })}</h2>
           {liveProgress && liveProgress.kind === "people" ? (
             <p className="muted">
@@ -284,7 +296,7 @@ export function Dashboard() {
       )}
 
       {liveErr && !liveLoading && (
-        <div className="panel error">
+        <div className="panel error" role="alert">
           <h2>{t("live.failed", { owner: owner ? "@" + owner : "" })}</h2>
           <p>{liveErr}</p>
           {owner && (
@@ -310,6 +322,14 @@ export function Dashboard() {
           <p className="muted">
             {ghAuthed ? t("live.proxy_note_authed") : t("live.proxy_note_anon")}
           </p>
+        </div>
+      )}
+
+      {noOwner && !loading && (
+        <div className="panel no-snap">
+          <h2>{t("live.no_owner")}</h2>
+          <p>{t("live.no_owner_hint")}</p>
+          <code className="hint-cmd">OWNER=&lt;login&gt; make fetch</code>
         </div>
       )}
 
@@ -389,9 +409,9 @@ export function Dashboard() {
           )}
 
           {tab === "repos" && (
-            <>
+            <div role="tabpanel" id="gh-panel-repos" aria-labelledby="gh-tab-repos">
           {repoErr && (
-            <div className="panel error" style={{ gridColumn: "1 / -1" }}>
+            <div className="panel error" role="alert" style={{ gridColumn: "1 / -1" }}>
               <h2>{t("live.repos_failed")}</h2>
               <p>{repoErr}</p>
               <div className="no-snap-actions">
@@ -416,7 +436,7 @@ export function Dashboard() {
                     onChange={(e) => setQ(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && onSearch()}
                   />
-                  <button className="btn" onClick={onSearch} disabled={searching || !owner}>
+                  <button className="btn" onClick={onSearch} disabled={searching || !owner} aria-busy={searching}>
                     {searching ? "…" : t("search.btn")}
                   </button>
                 </div>
@@ -438,10 +458,11 @@ export function Dashboard() {
               </section>
             </>
           )}
-            </>
+            </div>
           )}
 
           {tab === "people" && (
+          <div role="tabpanel" id="gh-panel-people" aria-labelledby="gh-tab-people">
           <PeopleSection
             people={people}
             peopleLoading={peopleLoading}
@@ -451,6 +472,7 @@ export function Dashboard() {
             owner={owner}
             defaultOwner={defaultOwner}
             peopleDiff={peopleDiff}
+            peopleHistory={peopleHistory}
             radar={radar}
             stargazers={stargazers}
             refreshMsg={refreshMsg}
@@ -466,6 +488,7 @@ export function Dashboard() {
             unfollowWater={unfollowWater}
             t={t}
           />
+          </div>
           )}
         </>
       )}

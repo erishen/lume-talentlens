@@ -1,0 +1,80 @@
+// tests/trending_html_guard.lume — unit tests for lib/trending_html.lume, the
+// github.com/trending HTML scraper, plus the trending URL/slug helpers.
+//
+// Run from the repo root:  lume tests/trending_html_guard.lume
+// Prints "PASS <ok>/<total>" on success; every failure prints a
+// "FAIL: <name>" line first. The Makefile test target greps for ^PASS.
+//
+// The fixture mirrors github.com/trending's `<article class="Box-row">` markup
+// (including a linkified description and an HTML entity) so that a markup change
+// upstream fails loudly here instead of silently emptying the trending tab.
+
+import "../app/lib/trending_html.lume" as th;
+import "../app/lib/trending.lume" as trending;
+
+let stats = { ok: 0, total: 0 };
+
+func check(name, cond) {
+  put(stats, "total", get(stats, "total", 0) + 1);
+  if (cond) {
+    put(stats, "ok", get(stats, "ok", 0) + 1);
+  } else {
+    print("FAIL: " + name);
+  }
+}
+
+// two real-shape articles: one with a language + a linkified desc + entities,
+// one with a plain `pr-4` desc class and no language span.
+let a1 = "<article class=\"Box-row\">"
+  + "<h2 class=\"h3 lh-condensed\"><a href=\"/acme/tool\" class=\"Link\">acme / tool</a></h2>"
+  + "<p class=\"col-9 color-fg-muted my-1 tmp-pr-4\">A <a href=\"https://x.example\" class=\"Link--inTextBlock\">https://x.example</a> &amp; more</p>"
+  + "<span class=\"d-inline-block\"><span itemprop=\"programmingLanguage\">Go</span></span>"
+  + "<a href=\"/acme/tool/stargazers\" class=\"Link\"><svg></svg>\n        1,234</a>"
+  + "<a href=\"/acme/tool/forks\" class=\"Link\"><svg></svg>\n        56</a>"
+  + "</article>";
+let a2 = "<article class=\"Box-row\">"
+  + "<h2 class=\"h3 lh-condensed\"><a href=\"/bob/lib\">bob / lib</a></h2>"
+  + "<p class=\"col-9 color-fg-muted my-1 pr-4\">no language, no link</p>"
+  + "<a href=\"/bob/lib/stargazers\"><svg></svg> 9,001</a>"
+  + "</article>";
+let junk = "<article class=\"Box-row\">no heading link here</article>";
+let html = "<html>preamble</html>" + a1 + junk + a2
+  + "<footer><a href=\"/x/y\">foot</a></footer>";
+
+let items = th.parse_trending(html);
+check("parses the repo articles (skips junk)", len(items) == 2);
+
+let it0 = get(items, 0, {});
+check("full_name from <h2> href", str(get(it0, "full_name", "")) == "acme/tool");
+check("owner split", str(get(it0, "owner", "")) == "acme");
+check("name split", str(get(it0, "name", "")) == "tool");
+check("url rebuilt", str(get(it0, "url", "")) == "https://github.com/acme/tool");
+check("language span", str(get(it0, "lang", "")) == "Go");
+check("stars strip commas", int(get(it0, "stars", 0), 0) == 1234);
+check("forks strip commas", int(get(it0, "forks", 0), 0) == 56);
+check("desc strips tags + decodes entities",
+  str(get(it0, "desc", "")) == "A https://x.example & more");
+
+let it1 = get(items, 1, {});
+check("missing language -> empty", str(get(it1, "lang", "")) == "");
+check("pr-4 desc class still parsed", str(get(it1, "desc", "")) == "no language, no link");
+check("stars without svg-less anchor", int(get(it1, "stars", 0), 0) == 9001);
+check("fields the page lacks stay empty",
+  str(get(it1, "created_at", "")) == "" and len(get(it1, "topics", [])) == 0);
+
+// page that is not a trending listing at all -> [] (caller falls back to search)
+check("non-trending html -> empty", len(th.parse_trending("<html>nope</html>")) == 0);
+
+// ---- URL + language slug ----
+check("scrape url global", trending.trending_scrape_url("daily", "") == "https://github.com/trending?since=daily");
+check("scrape url lang", trending.trending_scrape_url("weekly", "python") == "https://github.com/trending/python?since=weekly");
+check("slug lowercases", trending.trending_lang_slug("Python") == "python");
+check("slug hyphenates spaces", trending.trending_lang_slug("Jupyter Notebook") == "jupyter-notebook");
+check("slug rejects C++ (no path)", trending.trending_lang_slug("C++") == "");
+check("slug rejects C#", trending.trending_lang_slug("C#") == "");
+
+if (get(stats, "ok", 0) == get(stats, "total", 0)) {
+  print("PASS " + str(get(stats, "ok", 0)) + "/" + str(get(stats, "total", 0)));
+} else {
+  print("GUARD TESTS FAILED");
+}

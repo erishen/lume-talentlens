@@ -2,6 +2,9 @@
 // (/discovery) and the follow/unfollow proxies that act on the user's GitHub
 // account via the PAT.
 
+// safe_json: malformed request bodies must 400, not 500 (json() throws)
+import "shared.lume" as sh;
+
 // ------------------------------------------------ /discovery
 // Boot-time capability catalog. The framework builtins discovery_endpoints /
 // skills / tools / mcps do NOT exist in the full build we run on — and Lume
@@ -18,7 +21,8 @@ get "/discovery", (req) => {
                "/api/people_diff", "/api/refresh", "/api/live/github", "/api/github_auth",
                "/api/trending", "/api/classify", "/discovery", "/overview", "/repos", "/api"],
       tools: ["repo_insights", "repo_search", "repo_language", "repo_recency", "repo_year",
-              "repo_stats", "github_story", "github_owners", "github_radar", "github_people"],
+              "repo_stats", "github_story", "github_owners", "github_radar", "github_people",
+              "radar_insights"],
       note: "framework agent-catalog builtins (discovery_endpoints/skills/tools/mcps) are absent from this build; app catalog attached instead",
     },
   };
@@ -37,16 +41,14 @@ get "/discovery", (req) => {
 // simple text/plain fetches are rejected here before the body is parsed.
 // Headerless local calls (curl with -d) still work: empty body -> 400.
 post "/api/follow", (req) => {
-  let ct = str(get(req, "content_type", ""));
-  let ct_ok = ct == "" or len(replace(ct, "application/json", "")) < len(ct);
-  if (!ct_ok) {
+  if (not sh.write_ct_ok(get(req, "content_type", ""))) {
     return { ok: false, status: 403, err: "write actions require Content-Type: application/json" };
   }
   let b = str(get(req, "body", ""));
   if (b == "") {
     return { ok: false, status: 400, err: "missing login" };
   }
-  let d = json(b);
+  let d = sh.safe_json(b);
   if (d == null or str(get(d, "login", "")) == "") {
     return { ok: false, status: 400, err: "missing login" };
   }
@@ -56,7 +58,11 @@ post "/api/follow", (req) => {
   }
   let headers = { "Accept": "application/vnd.github+json", "User-Agent": "lume-talentlens",
                   "Authorization": "Bearer " + str(tok) };
-  let url = "https://api.github.com/user/following/" + str(get(d, "login", ""));
+  let login = str(get(d, "login", ""));
+  if (not sh.valid_login(login)) {
+    return { ok: false, status: 400, err: "invalid login" };
+  }
+  let url = "https://api.github.com/user/following/" + login;
   // GitHub's edge is flaky (TLS handshake / HTTP2 hiccups) and a failed PUT
   // can drop the connection entirely, so retry a few times with a shorter
   // per-attempt window — first success wins, worst case ~24s then a clear err.
@@ -75,16 +81,14 @@ post "/api/follow", (req) => {
 // <login> with the PAT (204 whether you just unfollowed or never followed).
 // Same Content-Type CSRF guard as /api/follow (see above).
 delete "/api/unfollow", (req) => {
-  let ct = str(get(req, "content_type", ""));
-  let ct_ok = ct == "" or len(replace(ct, "application/json", "")) < len(ct);
-  if (!ct_ok) {
+  if (not sh.write_ct_ok(get(req, "content_type", ""))) {
     return { ok: false, status: 403, err: "write actions require Content-Type: application/json" };
   }
   let b = str(get(req, "body", ""));
   if (b == "") {
     return { ok: false, status: 400, err: "missing login" };
   }
-  let d = json(b);
+  let d = sh.safe_json(b);
   if (d == null or str(get(d, "login", "")) == "") {
     return { ok: false, status: 400, err: "missing login" };
   }
@@ -94,7 +98,11 @@ delete "/api/unfollow", (req) => {
   }
   let headers = { "Accept": "application/vnd.github+json", "User-Agent": "lume-talentlens",
                   "Authorization": "Bearer " + str(tok) };
-  let url = "https://api.github.com/user/following/" + str(get(d, "login", ""));
+  let login = str(get(d, "login", ""));
+  if (not sh.valid_login(login)) {
+    return { ok: false, status: 400, err: "invalid login" };
+  }
+  let url = "https://api.github.com/user/following/" + login;
   // same flaky-edge retry as /api/follow (short per-attempt window, 3 tries)
   let r = http_delete(url, { headers: headers, timeout: 8, max_bytes: 1024 });
   for (let i = 1; i < 3; i = i + 1) {

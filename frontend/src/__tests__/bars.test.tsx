@@ -40,6 +40,8 @@ describe("Bars", () => {
     expect(fills[0].style.width).toBe("100%");
     expect(fills[1].style.width).toBe("60%");
     expect(fills[2].style.width).toBe("20%");
+    // default fill must reference a real token (regression: var(--color-accent) was undefined)
+    expect(fills[0].style.background).toContain("var(--accent)");
   });
   it("renders empty data without crashing", () => {
     render(<Bars title="空" data={{}} />);

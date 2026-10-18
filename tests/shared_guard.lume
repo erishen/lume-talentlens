@@ -1,0 +1,70 @@
+// tests/shared_guard.lume — unit tests for lib/shared.lume's safe_json.
+import "../app/lib/shared.lume" as sh;
+
+let stats = { ok: 0, total: 0 };
+func check(name, cond) {
+  put(stats, "total", get(stats, "total", 0) + 1);
+  if (cond) {
+    put(stats, "ok", get(stats, "ok", 0) + 1);
+  } else {
+    print("FAIL: " + name);
+  }
+}
+
+check("safe_json empty -> null", sh.safe_json("") == null);
+check("safe_json whitespace -> null", sh.safe_json("   ") == null);
+check("safe_json null input -> null", sh.safe_json(null) == null);
+check("safe_json html -> null", sh.safe_json("<html>500</html>") == null);
+check("safe_json prose -> null", sh.safe_json("Here you go: [1]") == null);
+check("safe_json truncated array -> null", sh.safe_json("[\"a\",") == null);
+check("safe_json truncated object -> null", sh.safe_json("{\"a\":") == null);
+let so = sh.safe_json("{\"items\": []}");
+check("safe_json object parses", so != null and len(get(so, "items", [])) == 0);
+let sa = sh.safe_json("  [1, 2]  ");
+check("safe_json array parses", sa != null and len(sa) == 2);
+
+// ---- search helpers (shared by trending + classify) ----
+check("search_enc space -> +", sh.search_enc("a b") == "a+b");
+check("search_enc colon/gt encoded", sh.search_enc("created:>x") == "created%3A%3Ex");
+check("search_enc plus encoded", sh.search_enc("C++") == "C%2B%2B");
+check("search_days weekly", sh.search_days("weekly") == 7);
+check("search_days monthly", sh.search_days("monthly") == 30);
+check("search_days quarterly", sh.search_days("quarterly") == 90);
+check("search_days year", sh.search_days("year") == 365);
+check("search_days default daily", sh.search_days("nope") == 1);
+check("created qualifier prefix", contains(sh.search_created_qualifier(7), "created:>"));
+
+// ---- valid_login: guards the login interpolated into follow/unfollow URLs ----
+check("valid_login normal", sh.valid_login("octocat"));
+check("valid_login hyphen mid", sh.valid_login("some-user-42"));
+check("valid_login 39 chars", sh.valid_login("abcdefghijklmnopqrstuvwxyz0123456789012"));
+check("valid_login empty -> false", not sh.valid_login(""));
+check("valid_login null -> false", not sh.valid_login(null));
+check("valid_login 40 chars -> false", not sh.valid_login("abcdefghijklmnopqrstuvwxyz01234567890123"));
+check("valid_login path traversal -> false", not sh.valid_login("../starred/victim/repo"));
+check("valid_login slash -> false", not sh.valid_login("a/b"));
+check("valid_login dot -> false", not sh.valid_login("a.b"));
+check("valid_login percent -> false", not sh.valid_login("a%2Fb"));
+check("valid_login question -> false", not sh.valid_login("a?x=1"));
+check("valid_login space -> false", not sh.valid_login("a b"));
+check("valid_login CRLF -> false", not sh.valid_login("a\r\nHost: evil"));
+check("valid_login at-colon -> false", not sh.valid_login("a@b:c"));
+check("valid_login leading hyphen -> false", not sh.valid_login("-abc"));
+check("valid_login trailing hyphen -> false", not sh.valid_login("abc-"));
+check("valid_login double hyphen -> false", not sh.valid_login("a--b"));
+
+// ---- write_ct_ok: the CSRF guard on follow/unfollow/refresh ----
+check("write_ct_ok json", sh.write_ct_ok("application/json"));
+check("write_ct_ok json+charset", sh.write_ct_ok("application/json; charset=utf-8"));
+check("write_ct_ok mixed-case json", sh.write_ct_ok("Application/JSON"));
+check("write_ct_ok empty (curl) -> true", sh.write_ct_ok(""));
+check("write_ct_ok null -> true", sh.write_ct_ok(null));
+check("write_ct_ok text/plain -> false", not sh.write_ct_ok("text/plain"));
+check("write_ct_ok form -> false", not sh.write_ct_ok("application/x-www-form-urlencoded"));
+check("write_ct_ok multipart -> false", not sh.write_ct_ok("multipart/form-data; boundary=x"));
+
+if (get(stats, "ok", 0) == get(stats, "total", 0)) {
+  print("PASS " + str(get(stats, "ok", 0)) + "/" + str(get(stats, "total", 0)));
+} else {
+  print("GUARD TESTS FAILED");
+}

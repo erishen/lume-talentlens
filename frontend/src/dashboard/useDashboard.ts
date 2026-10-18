@@ -4,7 +4,7 @@
 // ranking. Dashboard.tsx now only renders JSX against this hook.
 import React from "react";
 import { api } from "../api";
-import type { Overview, RepoView, NoSnapshot, People, PeopleDiff, Radar, Stargazers } from "../types";
+import type { Overview, RepoView, NoSnapshot, People, PeopleDiff, PeopleHistory, HealthHistory, Radar, Stargazers } from "../types";
 import { isNoSnapshot } from "../types";
 import { fetchLive, fetchLiveProfile, fetchLiveRepos, buildOverviewPartial, buildOverviewFull, ovRepos, writeLiveCacheResult, fetchLivePeople, searchLocal, type LiveResult, type LiveProgress } from "../live";
 import { readLiveCache } from "../live-core";
@@ -49,6 +49,7 @@ export function useDashboardData(t: T, lang: Lang) {
   // { cached, ms } — cache hits are instant, fresh fetches carry wall time.
   const [liveInfo, setLiveInfo] = React.useState<{ cached: boolean; ms: number } | null>(null);
   const [noSnap, setNoSnap] = React.useState<NoSnapshot | null>(null);
+  const [noOwner, setNoOwner] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [liveLoading, setLiveLoading] = React.useState(false);
   const [liveErr, setLiveErr] = React.useState("");
@@ -65,6 +66,8 @@ export function useDashboardData(t: T, lang: Lang) {
   const [peopleLoading, setPeopleLoading] = React.useState(false);
   const [peopleError, setPeopleError] = React.useState("");
   const [peopleDiff, setPeopleDiff] = React.useState<PeopleDiff | null>(null);
+  const [peopleHistory, setPeopleHistory] = React.useState<PeopleHistory | null>(null);
+  const [healthHistory, setHealthHistory] = React.useState<HealthHistory | null>(null);
   const [radar, setRadar] = React.useState<Radar | null>(null);
   const [stargazers, setStargazers] = React.useState<Stargazers | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -100,10 +103,9 @@ export function useDashboardData(t: T, lang: Lang) {
     // label there until the snapshot reload completes.
     setLiveProgress({ page: 0, total: 0, repos: 0, kind: "refresh" });
     try {
-      const res = await fetch("/api/refresh?owner=" + encodeURIComponent(target));
-      const j = await res.json().catch(() => null);
+      const j = await api.refresh(target);
       if (j && j.ok) {
-        setRefreshMsg(t("people.refresh_ok", { followers: j.followers, following: j.following }));
+        setRefreshMsg(t("people.refresh_ok", { followers: j.followers ?? 0, following: j.following ?? 0 }));
         loadPeople(target, !!live);
         if (!live) setLiveProgress(null);
       } else if (j && j.status === 429) {
@@ -135,8 +137,7 @@ export function useDashboardData(t: T, lang: Lang) {
     lastAutoSnapshot.current[target] = Date.now();
     setLiveProgress({ page: 0, total: 0, repos: 0, kind: "refresh" });
     try {
-      const res = await fetch("/api/refresh?owner=" + encodeURIComponent(target));
-      const j = await res.json().catch(() => null);
+      const j = await api.refresh(target);
       if (j && j.ok) {
         // the owner now has a snapshot — refresh the dropdown list so it
         // shows up immediately instead of after the next manual refresh
@@ -153,6 +154,7 @@ export function useDashboardData(t: T, lang: Lang) {
     setPeopleLoading(true);
     setRadar(null);
     setStargazers(null);
+    setPeopleHistory(null);
     // any people pull (snapshot or live) shows on the shared progress panel,
     // so the pull is visible from the overview tab instead of a bare
     // "loading…" note on the people tab.
@@ -175,6 +177,13 @@ export function useDashboardData(t: T, lang: Lang) {
       // network change diff rides along — best-effort, failures are silent
       api.peopleDiff(target).then((d) => {
         if (seq === peopleSeq.current && d && d.ok) setPeopleDiff(d);
+      }).catch(() => {});
+      // daily follower/following timeline — best-effort; an owner with no
+      // history yet simply gets an empty series (the panel shows a hint).
+      api.peopleHistory(target).then((h) => {
+        if (seq === peopleSeq.current && h && h.ok && Array.isArray(h.points)) {
+          setPeopleHistory(h);
+        }
       }).catch(() => {});
       // talent-radar profit patterns — best-effort; 404 (no make radar yet)
       // just leaves the panel hidden. Guard the shape too: a 404 object or a
@@ -241,12 +250,16 @@ export function useDashboardData(t: T, lang: Lang) {
       // panel up, then reload from the freshly written snapshot.
       setPeople(null);
       setLiveProgress({ page: 0, total: 0, repos: 0, kind: "refresh" });
-      fetch("/api/refresh?owner=" + encodeURIComponent(target))
+      fetch("/api/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owner: target }),
+      })
         .then((r) => r.json().catch(() => null))
         .then((j) => {
           if (s !== peopleSeq.current) return;
           if (j && j.ok) {
-            setRefreshMsg(t("people.refresh_ok", { followers: j.followers, following: j.following }));
+        setRefreshMsg(t("people.refresh_ok", { followers: j.followers ?? 0, following: j.following ?? 0 }));
             loadPeople(target, false); // snapshot now exists — normal load path
           } else {
             setPeopleError((j && j.err) || t("live.error_failed"));
@@ -267,14 +280,30 @@ export function useDashboardData(t: T, lang: Lang) {
   // browser (so ANY typed owner works without a pre-baked snapshot).
   function loadOverview(o: string) {
     const target = o.trim();
-    if (!target) return;
+    if (!target) {
+      // No owner configured (fresh clone, no OWNER/last_owner). Without this the
+      // initial loading=true never clears and the user stares at a spinner with
+      // no way forward; show an explicit "pick an owner" panel instead.
+      ++reqSeq.current; // supersede any in-flight load
+      setNoOwner(true);
+      setErr("");
+      setNoSnap(null);
+      setOv(null);
+      setLive(null);
+      setLiveErr("");
+      setHealthHistory(null);
+      setLoading(false);
+      return;
+    }
     const seq = ++reqSeq.current;
+    setNoOwner(false);
     setLoading(true);
     setErr("");
     setNoSnap(null);
     setOv(null);
     setLive(null);
     setLiveErr("");
+    setHealthHistory(null);
     api.overview(target).then((r) => {
       if (seq !== reqSeq.current) return; // superseded by a newer load
       if (isNoSnapshot(r)) {
@@ -286,6 +315,13 @@ export function useDashboardData(t: T, lang: Lang) {
       setOv(r as Overview);
       loadPeople(target, false);
       setLoading(false);
+      // /api/overview records a daily health point server-side; pull the
+      // series for the sparkline. Best-effort — a brand-new owner has none.
+      api.healthHistory(target).then((h) => {
+        if (seq === reqSeq.current && h && h.ok && Array.isArray(h.points)) {
+          setHealthHistory(h);
+        }
+      }).catch(() => {});
     }).catch((e) => {
       if (seq !== reqSeq.current) return;
       setErr(e.message);
@@ -487,6 +523,9 @@ export function useDashboardData(t: T, lang: Lang) {
     // so a stale panel never flashes old data while the new one loads.
     setRadar(null);
     setStargazers(null);
+    setPeopleDiff(null);
+    setPeopleHistory(null);
+    setHealthHistory(null);
   }
 
   // Clicking a follower/following name analyzes that person in-app:
@@ -545,9 +584,9 @@ export function useDashboardData(t: T, lang: Lang) {
   return {
     owner, setOwner, cached, defaultOwner,
     weights, setWeights,
-    ov, live, liveInfo, noSnap, loading, liveLoading, liveErr, liveProgress, repoErr,
+    ov, live, liveInfo, noSnap, noOwner, loading, liveLoading, liveErr, liveProgress, repoErr,
     err, q, setQ, hits, hitsTotal, searched, searching, limit, setLimit,
-    people, setPeople, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, radar, stargazers,
+    people, setPeople, peopleLoading, peopleError, refreshing, refreshMsg, peopleDiff, peopleHistory, radar, stargazers, healthHistory,
     cmp, setCmp,
     poolInput, setPoolInput, poolLoading, poolProgress, pool, setPool,
     rankedPool, poolFrac,

@@ -107,7 +107,7 @@ func s(v) {
 // projected map/array back to JSON text for the same `data` envelope.
 func slim_body(p, body) {
   if (body == "" or body == "null") { return body; }
-  let d = json(body);
+  let d = sh.safe_json(body);
   if (d == null) { return body; }
   if (sh.contains(p, "/repos")) {
     let out = [];
@@ -203,7 +203,7 @@ func live_disk_read(p) {
   if (f == "") { return null; }
   let raw = read_file("data/github/live/" + f);
   if (raw == null or raw == "") { return null; }
-  return json(raw);
+  return sh.safe_json(raw);
 }
 
 func live_disk_write(p, status, body) {

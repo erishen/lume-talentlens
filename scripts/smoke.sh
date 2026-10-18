@@ -72,6 +72,8 @@ assert_code  "GET /api/year"          200 "/api/year?owner=$OWNER"
 assert_code  "GET /api/search"        200 "/api/search?owner=$OWNER&q="
 assert_code  "GET /api/people"        200 "/api/people?owner=$OWNER"
 assert_code  "GET /api/people_diff"   200 "/api/people_diff?owner=$OWNER"
+assert_code  "GET /api/people_history" 200 "/api/people_history?owner=$OWNER"
+assert_code  "GET /api/health_history" 200 "/api/health_history?owner=$OWNER"
 assert_code  "GET /api/radar"         200 "/api/radar?owner=$OWNER"
 assert_code  "GET /discovery"         200 "/discovery"
 assert_code  "GET /api/github_auth"   200 "/api/github_auth"
@@ -119,6 +121,8 @@ fi
 echo "-- payload shape --"
 assert_contains "overview has repo count" "/api/overview?owner=$OWNER" '"count"'
 assert_contains "people has totals"      "/api/people?owner=$OWNER" '"totals"'
+assert_contains "people_history has points" "/api/people_history?owner=$OWNER" '"points"'
+assert_contains "health_history has points" "/api/health_history?owner=$OWNER" '"points"'
 assert_contains "discovery has app catalog" "/discovery" '"app"'
 assert_contains "trending has ok envelope" "/api/trending?since=daily" '"ok":'
 assert_contains "classify has ok envelope" "/api/classify?owner=$OWNER&since=quarterly" '"ok":'

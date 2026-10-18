@@ -7,6 +7,29 @@
 
 import "analyze.lume" as gh;
 
+// ------------------------------------------------ safe JSON
+// Lume has no try/catch, json() aborts the whole request on malformed input,
+// and get() throws on a null map. Parsing an upstream/model body speculatively
+// therefore 500s the route on an empty body, an HTML error page or a prose
+// reply. This wrapper returns null unless the trimmed string is provably a
+// complete object/array, so callers can degrade instead of crashing.
+export func safe_json(x) {
+  if (x == null) { return null; }
+  let t = trim(str(x));
+  let n = len(t);
+  if (n == 0) { return null; }
+  let first = substr(t, 0, 1);
+  let last = substr(t, n - 1, 1);
+  if (first == "[") {
+    if (last != "]") { return null; }
+  } else if (first == "{") {
+    if (last != "}") { return null; }
+  } else {
+    return null;
+  }
+  return json(t);
+}
+
 // ------------------------------------------------ owner resolution
 // Lume module exports do not propagate mutations into the importer, so every
 // route/tool resolves its owner + snapshot locally and passes them into the
@@ -43,6 +66,43 @@ export func sanitize_owner(s) {
   return s;
 }
 
+// Strict GitHub-login validation for logins interpolated into an authenticated
+// GitHub URL (follow/unfollow). A login is 1..39 chars of [A-Za-z0-9-] and may
+// not start/end with '-' or contain '--'. Unlike sanitize_owner (which only
+// guards path traversal for local snapshots), this rejects request-splitting
+// chars (\r, \n, /, ?, #, @, :, space, %) so a crafted {login} can never
+// redirect the PUT/DELETE at another path under the user's PAT.
+export func valid_login(s) {
+  if (s == null) { return false; }
+  s = str(s);
+  let n = len(s);
+  if (n == 0 or n > 39) { return false; }
+  let i = 0;
+  while (i < n) {
+    if (not contains("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-", substr(s, i, 1))) {
+      return false;
+    }
+    i = i + 1;
+  }
+  if (substr(s, 0, 1) == "-" or substr(s, n - 1, 1) == "-") { return false; }
+  if (contains(s, "--")) { return false; }
+  return true;
+}
+
+// Browser CSRF guard shared by every write endpoint (/api/follow,
+// /api/unfollow, /api/refresh): only application/json is accepted. A cross-site
+// HTML form cannot set that Content-Type, and a cross-origin fetch that does
+// triggers a CORS preflight this server never approves (it sends no CORS
+// headers). An empty Content-Type stays allowed for headerless local
+// curl/scripts. Note: this Lume build does not expose request headers, so an
+// Origin/Referer allowlist cannot be layered on top here — keep this guard.
+export func write_ct_ok(ct) {
+  if (ct == null) { return true; }
+  let c = lower(str(ct));
+  if (c == "") { return true; }
+  return len(replace(c, "application/json", "")) < len(c);
+}
+
 // owner from ?owner= (req-based); empty string when the param is absent.
 // (Lume `.` member access requires the field to exist; use get() with a
 // default so a missing owner param yields "".)
@@ -70,7 +130,7 @@ export func owner_arg(arg) {
 export func load_snap(owner) {
   let raw = read_file("data/github/" + owner + "/snapshot.json");
   if (raw == null) { return null; }
-  let s = json(raw);
+  let s = safe_json(raw);
   if (s == null) { return null; }
   return s;
 }
@@ -164,4 +224,33 @@ export func gh_get(url, headers) {
     i = i + 1;
   }
   return last;
+}
+
+// ------------------------------------------------ GitHub Search encoding
+// The outbound request line carries the query verbatim (http builtin does
+// no percent-encoding). Encode symbols that matter for GitHub search.
+export func search_enc(x) {
+  x = replace(x, "+", "%2B");
+  x = replace(x, "#", "%23");
+  x = replace(x, ":", "%3A");
+  x = replace(x, ">", "%3E");
+  x = replace(x, "/", "%2F");
+  x = replace(x, " ", "+");
+  return x;
+}
+
+// Window name -> days back. The trending and classify routes share the same
+// cutoff semantics; only the default window differs (caller's job).
+export func search_days(since) {
+  if (since == "weekly") { return 7; }
+  if (since == "monthly") { return 30; }
+  if (since == "quarterly") { return 90; }
+  if (since == "year") { return 365; }
+  return 1; // daily
+}
+
+// The `created:>` qualifier for a window: "created:>YYYY-MM-DD".
+export func search_created_qualifier(days) {
+  let date = str(strftime("%Y-%m-%d", int(now(), 0) - int(days, 1) * 86400));
+  return "created:>" + date;
 }

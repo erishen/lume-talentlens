@@ -1,0 +1,141 @@
+// lib/trending_html.lume — parse github.com/trending's server-rendered HTML.
+//
+// github.com/trending has NO API and NO embedded JSON: the page is plain HTML
+// with one `<article class="Box-row">` per repo. This module pulls the handful
+// of fields the dashboard renders out of that markup — name/owner, url,
+// description, language, total stars, forks. It is deliberately tolerant: a
+// missing field becomes an empty string / 0, and an unrecognised page yields []
+// so the caller (lib/trending.lume) can fall back to the GitHub Search API.
+//
+// The page and the Search API are NOT the same list: github.com/trending ranks
+// by star *velocity* over the window (older repos included), whereas the Search
+// API ranks repos *created* in the window by total stars. Fields the page does
+// not expose (topics, homepage, created/pushed dates, open issues) are left
+// empty here; the frontend renders those as absent.
+//
+// Lume has no regex and no index-of, so extraction is built purely on `split`:
+// `after`/`upto` slice around the first marker, `tail_text` takes the trailing
+// text node (after the last '>') so a leading <svg> icon is dropped.
+
+import "shared.lume" as sh;
+
+// everything AFTER the first `mark`, or null when `mark` is absent.
+func after(s, mark) {
+  let parts = split(s, mark);
+  if (len(parts) < 2) { return null; }
+  let out = parts[1];
+  let i = 2;
+  while (i < len(parts)) { out = out + mark + parts[i]; i = i + 1; }
+  return out;
+}
+
+// everything BEFORE the first `mark` (the whole string when absent).
+func upto(s, mark) {
+  return split(s, mark)[0];
+}
+
+// trimmed text after the LAST '>' in `s` (drops a leading icon <svg>…</svg>).
+func tail_text(s) {
+  let parts = split(s, ">");
+  return trim(parts[len(parts) - 1]);
+}
+
+func digits_only(s) {
+  return replace(s, ",", "");
+}
+
+// drop HTML tags, keeping their inner text: GitHub linkifies URLs inside a
+// description as `<a href="…">https://…</a>`, so the raw <p> body is not plain
+// text. Splits on '<' and, for each piece that closes with '>', keeps only what
+// follows the first '>'; a stray '<' with no '>' is preserved literally.
+func strip_tags(s) {
+  let parts = split(s, "<");
+  let out = parts[0];
+  let i = 1;
+  while (i < len(parts)) {
+    let p = parts[i];
+    if (sh.contains(p, ">")) {
+      out = out + after(p, ">");
+    } else {
+      out = out + "<" + p;
+    }
+    i = i + 1;
+  }
+  return out;
+}
+
+// decode the entities GitHub writes into descriptions. &amp; is decoded last so
+// an already-decoded "&" is never turned into "<" etc. (no real unescaper in
+// Lume; this covers the entities GitHub actually emits).
+func unescape(s) {
+  s = replace(s, "&#39;", "'");
+  s = replace(s, "&#x27;", "'");
+  s = replace(s, "&quot;", "\"");
+  s = replace(s, "&lt;", "<");
+  s = replace(s, "&gt;", ">");
+  s = replace(s, "&nbsp;", " ");
+  s = replace(s, "&amp;", "&");
+  return s;
+}
+
+// text of the first element whose opening tag contains `open_mark`, up to the
+// first `close` (skips the remainder of the opening tag).
+func inner(art, open_mark, close) {
+  let seg = after(art, open_mark);
+  if (seg == null) { return ""; }
+  let body = after(seg, ">");
+  if (body == null) { return ""; }
+  return trim(upto(body, close));
+}
+
+// the number in a `<a href="…/stargazers">… 42,233</a>` style stats anchor.
+func stat_num(art, path_mark) {
+  let seg = after(art, path_mark);
+  if (seg == null) { return 0; }
+  return int(digits_only(tail_text(upto(seg, "</a>"))), 0);
+}
+
+export func parse_trending(html) {
+  let arts = split(str(html), "<article class=\"Box-row");
+  let out = [];
+  let i = 1;                       // parts[0] is the page preamble
+  while (i < len(arts)) {
+    let art = arts[i];
+    let full = "";
+    let h2 = after(art, "<h2 class=\"h3 lh-condensed\">");
+    if (h2 != null) {
+      let h = after(h2, "href=\"/");
+      if (h != null) { full = upto(h, "\""); }
+    }
+    // a valid repo id is exactly "owner/repo": one slash, no spaces/quotes.
+    let ok = full != "" and sh.contains(full, "/") and not sh.contains(full, " ")
+      and not sh.contains(full, "\"");
+    if (ok and len(split(full, "/")) != 2) { ok = false; }
+    if (ok) {
+      let pair = split(full, "/");
+      let owner = pair[0];
+      let name = pair[1];
+      let lang = "";
+      let lseg = after(art, "<span itemprop=\"programmingLanguage\">");
+      if (lseg != null) { lang = trim(upto(lseg, "<")); }
+      push(out, {
+        full_name: full,
+        name: name,
+        owner: owner,
+        owner_avatar: "https://github.com/" + owner + ".png",
+        url: "https://github.com/" + full,
+        desc: unescape(strip_tags(inner(art, "<p class=\"col-9 color-fg-muted my-1", "</p>"))),
+        lang: lang,
+        stars: stat_num(art, "/stargazers\""),
+        forks: stat_num(art, "/forks\""),
+        issues: 0,
+        topics: [],
+        homepage: "",
+        created_at: "",
+        pushed_at: "",
+      });
+    }
+    i = i + 1;
+  }
+  return out;
+}

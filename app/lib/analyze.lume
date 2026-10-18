@@ -308,6 +308,76 @@ export func insight(repos, snap) {
   };
 }
 
+// ------------------------------------------------ health score (server mirror)
+// Server-side mirror of frontend/src/talent.ts pillarScores + healthScore with
+// the DEFAULT weights (0.4/0.3/0.2/0.1). /api/overview records the result into
+// data/github/<owner>/health_history.jsonl so the dashboard can draw a health
+// trend even for owners whose overview was never open in the browser.
+// KEEP IN SYNC with frontend/src/talent.ts — the shape must stay comparable.
+func clamp01(x) {
+  return min(1, max(0, x));
+}
+
+// log10(x) — Lume ships natural log only.
+func log10(x) {
+  return log(x) / 2.302585092994046;
+}
+
+// round to 3 decimals (enough for a 0-100 sparkline, keeps JSONL small)
+func r3(x) {
+  return round(x * 1000) / 1000;
+}
+
+// {total, pillars(0..1)} from an analyze_lite bundle. Pillars are
+// weight-independent, so the UI can re-score history with the user's weights.
+export func health_from_overview(ov) {
+  let n = int(get(ov, "count", 0), 0);
+  if (n < 1) { n = 1; }
+  let recency = get(ov, "recency", {});
+  let active = int(get(recency, "active", 0), 0);
+  let t = get(ov, "talent", {});
+  let with_desc = int(get(t, "with_desc", 0), 0);
+  let with_license = int(get(t, "with_license", 0), 0);
+  let with_topics = int(get(t, "with_topics", 0), 0);
+  let avg_push = get(t, "avg_days_since_push", 0);
+
+  // primary + secondary language share
+  let langs = get(ov, "languages", {});
+  let t1 = 0;
+  let t2 = 0;
+  for (let k in langs) {
+    let v = int(get(langs, k, 0), 0);
+    if (v > t1) { t2 = t1; t1 = v; }
+    else if (v > t2) { t2 = v; }
+  }
+
+  let prof = get(ov, "profile", {});
+  let followers = int(get(prof, "followers", 0), 0);
+  let top = get(get(ov, "top_by_stars", []), 0, {});
+  let top_stars = int(get(top, "stars", 0), 0);
+
+  let recency_factor = 0.5;
+  if (avg_push >= 0) { recency_factor = clamp01(max(0.5, 1 - avg_push / 730)); }
+  let activity = clamp01(0.8 * (active / n) + 0.2 * recency_factor);
+  let rigor = clamp01((with_desc / n + with_license / n + with_topics / n) / 3);
+  let focus = clamp01((t1 + t2) / n);
+  let inf_followers = clamp01(log10(followers + 1) / 2);
+  let top_star_r = 0;
+  if (top_stars > 0) { top_star_r = clamp01(top_stars / 20); }
+  let influence = clamp01(0.6 * inf_followers + 0.4 * top_star_r);
+
+  let total = round((activity * 0.4 + rigor * 0.3 + focus * 0.2 + influence * 0.1) * 100);
+  return {
+    total: total,
+    pillars: {
+      activity: r3(activity),
+      rigor: r3(rigor),
+      focus: r3(focus),
+      influence: r3(influence),
+    },
+  };
+}
+
 // ------------------------------------------------ career-story pack
 // Resume-grade material for the LLM agent to turn into interview stories:
 // the owner's top repos (name/language/stars/forks/recency/description),

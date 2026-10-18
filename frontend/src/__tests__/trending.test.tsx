@@ -78,7 +78,7 @@ describe("TrendingPanel", () => {
     trendingMock.mockResolvedValue(payload());
     renderPanel();
     expect(await screen.findByText("acme/rocket")).toBeInTheDocument();
-    expect(trendingMock).toHaveBeenCalledWith("daily", "", "", undefined);
+    expect(trendingMock).toHaveBeenCalledWith("daily", "", "", undefined, undefined);
   });
 
   it("re-fetches once per window switch, not repeatedly", async () => {
@@ -90,7 +90,20 @@ describe("TrendingPanel", () => {
     await waitFor(() => expect(trendingMock).toHaveBeenCalledTimes(2));
     await settle();
     expect(trendingMock).toHaveBeenCalledTimes(2);
-    expect(trendingMock).toHaveBeenLastCalledWith("weekly", "", "", undefined);
+    expect(trendingMock).toHaveBeenLastCalledWith("weekly", "", "", undefined, undefined);
+  });
+
+  it("forces a fresh fetch (refresh=1) when the refresh button is clicked", async () => {
+    trendingMock.mockResolvedValue(payload());
+    renderPanel();
+    await waitFor(() => expect(trendingMock).toHaveBeenCalledTimes(1));
+
+    // plain auto/window loads read the TTL cache (no 5th arg); the refresh
+    // button passes force=true so the server bypasses both cache tiers.
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    await waitFor(() =>
+      expect(trendingMock).toHaveBeenLastCalledWith("daily", "", "", undefined, true)
+    );
   });
 
   it("requests zh translation when the UI is Chinese and renders desc_zh", async () => {
@@ -108,7 +121,7 @@ describe("TrendingPanel", () => {
     renderPanel("zh");
 
     expect(await screen.findByText("快速的东西")).toBeInTheDocument();
-    expect(trendingMock).toHaveBeenCalledWith("daily", "", "zh", undefined);
+    expect(trendingMock).toHaveBeenCalledWith("daily", "", "zh", undefined, undefined);
     // original English is kept as the tooltip, not shown inline
     expect(screen.queryByText("fast things")).not.toBeInTheDocument();
     expect(screen.getByText("机翻")).toBeInTheDocument();
@@ -124,7 +137,7 @@ describe("TrendingPanel", () => {
   it("does not request translation in English (tr omitted)", async () => {
     trendingMock.mockResolvedValue(payload());
     renderPanel("en");
-    await waitFor(() => expect(trendingMock).toHaveBeenCalledWith("daily", "", "", undefined));
+    await waitFor(() => expect(trendingMock).toHaveBeenCalledWith("daily", "", "", undefined, undefined));
   });
 
   it("hides the owner scope toggle when no owner is set", async () => {
@@ -139,11 +152,11 @@ describe("TrendingPanel", () => {
     renderPanel("en", "acme");
     // defaults to the global feed (no owner arg)
     await waitFor(() => expect(trendingMock).toHaveBeenCalledTimes(1));
-    expect(trendingMock).toHaveBeenCalledWith("daily", "", "", undefined);
+    expect(trendingMock).toHaveBeenCalledWith("daily", "", "", undefined, undefined);
 
     fireEvent.click(screen.getByRole("button", { name: "@acme's new repos" }));
     // owner scope bumps daily→monthly so the first hit isn't almost always empty
-    await waitFor(() => expect(trendingMock).toHaveBeenLastCalledWith("monthly", "", "", "acme"));
+    await waitFor(() => expect(trendingMock).toHaveBeenLastCalledWith("monthly", "", "", "acme", undefined));
   });
 
   it("shows an owner-specific empty message", async () => {

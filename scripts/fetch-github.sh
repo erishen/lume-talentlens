@@ -238,6 +238,44 @@ people = {
     "note": "paginated (up to 100/page) followers/following; totals from the owner profile",
 }
 json.dump(people, open(os.path.join(d, "people.json"), "w"), indent=2)
+
+# people_history.jsonl — one record per calendar day (upsert by date) so the
+# dashboard can diff any two days ("who followed / unfollowed last week").
+# Bare login lists per day; counts mirror people.totals.
+def upsert_people_history(hist_path, rec):
+    rows = []
+    if os.path.exists(hist_path):
+        try:
+            with open(hist_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        m = json.loads(line)
+                    except Exception:
+                        continue  # skip a corrupt line, keep the rest
+                    rows.append(m)
+        except Exception:
+            rows = []
+    rows = [r for r in rows if r.get("date") != rec["date"]]
+    rows.append(rec)
+    rows.sort(key=lambda r: r.get("date", ""))
+    rows = rows[-400:]  # cap so the file can't grow without bound
+    with open(hist_path, "w") as f:
+        for r in rows:
+            f.write(json.dumps(r, separators=(",", ":")) + "\n")
+
+upsert_people_history(os.path.join(d, "people_history.jsonl"), {
+    "date": now.strftime("%Y-%m-%d"),
+    "ts": ts,
+    "followers": [u["login"] for u in people["followers"] if u.get("login")],
+    "following": [u["login"] for u in people["following"] if u.get("login")],
+    "counts": {
+        "followers": len(people["followers"]),
+        "following": len(people["following"]),
+    },
+})
 for f in glob.glob(os.path.join(d, ".followers.p*.tmp")) + glob.glob(os.path.join(d, ".following.p*.tmp")):
     try:
         os.remove(f)

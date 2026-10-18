@@ -3,15 +3,19 @@
 #   docker compose up -d --build
 #   open http://127.0.0.1:18091
 #
-# The container runs with `network_mode: host` so it shares the host network
-# stack: the GitHub proxy (127.0.0.1:7897) and the LLM gateway
-# (127.0.0.1:19070) are reached exactly like the native `make dev` install.
-# (The published-port alternative `127.0.0.1:18091:8091` used host.docker.internal
-# for the proxy, which proved slow and flaky on this machine — 1-2s locally vs
-# 29-40s or timeouts through that link.) The server still binds loopback only.
-#
-# Configuration is read from .env (OWNER / GH_TOKEN / LLM_* / AGENTHTTPD_CSP_IMG_SRC
-# / LIVE_* / LUME_GITHUB_PORT). Add or edit .env, then `docker compose up -d`.
+# The container runs on the default bridge network and publishes its port to
+# host loopback (`127.0.0.1:18091:18091`), so the mapping is visible in
+# `docker ps` / OrbStack Info. Host services the server depends on — the GitHub
+# proxy (127.0.0.1:7897) and the LLM gateway (127.0.0.1:19070) — are reached via
+# `host.docker.internal`, which OrbStack forwards to the host's loopback.
+#   (An earlier variant used `network_mode: host` to share the host stack
+#   directly; that works too but leaves the PORTS column empty and hides the
+#   port from OrbStack's Info panel. Bridge + published port is just as fast:
+#   measured ~0.3s to api.github.com through the proxy via host.docker.internal.)
+# The server binds 0.0.0.0 inside the container so the published port can reach
+# it; host-side exposure stays loopback-only. Configuration is read from .env
+# (OWNER / GH_TOKEN / LLM_* / AGENTHTTPD_CSP_IMG_SRC / LIVE_* / LUME_GITHUB_PORT).
+# Add or edit .env, then `docker compose up -d`.
 
 services:
   app:
@@ -23,16 +27,17 @@ services:
         LUME_REPO: https://github.com/erishen/lume.git
     image: lume-talentlens:latest
     container_name: lume-talentlens
-    # host networking: 127.0.0.1 inside the container IS the host loopback,
-    # so the host's Clash/V2Ray proxy and LLM gateway are reachable directly
-    # (no host.docker.internal hop). Loopback-only bind keeps it private.
-    network_mode: host
+    # publish to host loopback only: reachable at 127.0.0.1:18091, not on the LAN.
+    # A published port needs the app to bind 0.0.0.0 inside the container,
+    # otherwise the bridge forward (which targets the container IP) gets refused.
+    ports:
+      - "127.0.0.1:18091:18091"
     env_file:
       - .env
     environment:
-      # loopback-only, on a port that does not collide with the native
-      # `make dev` install (8091)
-      - LUME_GITHUB_BIND=127.0.0.1
+      # bind all interfaces so the published port works; the host mapping is
+      # loopback-only, so this stays private.
+      - LUME_GITHUB_BIND=0.0.0.0
       - LUME_GITHUB_PORT=18091
       # dev.sh aliases GH_TOKEN -> GH_ANALYZER_PAT (the server only reads the
       # masked name); the container runs lume directly, so inject the alias.
@@ -41,14 +46,14 @@ services:
       # same alias trick for the LLM key used by the trending translator:
       # env() masks LLM_API_KEY, so the server reads LLM_ANALYZER_KEY.
       - LLM_ANALYZER_KEY=${LLM_API_KEY:-}
-      # host-mode: .env's 127.0.0.1 values now mean the host loopback, so the
-      # proxy and LLM endpoint work verbatim. Override only when a host
-      # service listens elsewhere.
-      - LUME_HTTP_PROXY=${LUME_HTTP_PROXY_HOST:-http://127.0.0.1:7897}
-      - LLM_API_URL=${LLM_API_URL_HOST:-http://127.0.0.1:19070/v1/chat/completions}
+      # bridge mode: the container's 127.0.0.1 is itself, so host services must
+      # be addressed via host.docker.internal. Override with LUME_HTTP_PROXY_HOST
+      # / LLM_API_URL_HOST in .env only when a host service listens elsewhere.
+      - LUME_HTTP_PROXY=${LUME_HTTP_PROXY_HOST:-http://host.docker.internal:7897}
+      - LLM_API_URL=${LLM_API_URL_HOST:-http://host.docker.internal:19070/v1/chat/completions}
       # the LLM gateway is on loopback — bypass the proxy for it so the
       # translator talks to it directly (direct is also faster)
-      - LUME_NO_PROXY=127.0.0.1,localhost
+      - LUME_NO_PROXY=host.docker.internal,127.0.0.1,localhost
     volumes:
       - ./data:/app/data   # snapshots + live-cache disk tier (persist across rebuilds)
       - ./logs:/app/logs

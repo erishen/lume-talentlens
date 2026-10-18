@@ -12,6 +12,7 @@ import {
   type LiveCacheStore,
   type LiveResult,
 } from "../live-core";
+import { deriveTalent, pillarScores } from "../talent";
 
 function memStore(): LiveCacheStore {
   const m = new Map<string, string>();
@@ -142,6 +143,52 @@ describe("buildOverview", () => {
     expect(ov.count).toBe(0);
     expect(ov.profile.followers).toBe(10);
     expect(ov.profile.last_push).toBe("2026-09-01");
+  });
+
+  // Regression: force refresh rebuilds the overview client-side. Without a
+  // `talent` field, rigor + the activity recency bonus silently collapse to 0
+  // (deriveTalent falls back to zeros on a missing `talent`).
+  it("populates talent counters so force-refresh rigor is not 0", () => {
+    const reposRaw = [
+      sampleRepo(), // desc + MIT + topics
+      sampleRepo({ name: "bare", description: null, license: null, topics: [] }),
+      sampleRepo({ name: "arch", archived: true, description: null, license: null, topics: [] }),
+    ];
+    const ov = buildOverview("me", { followers: 5 }, "", reposRaw, false);
+    // archived repo is excluded from `all`, so only the first two count
+    expect(ov.talent).toEqual({
+      with_desc: 1,
+      with_license: 1,
+      with_topics: 1,
+      avg_days_since_push: expect.any(Number),
+    });
+    expect(ov.talent!.avg_days_since_push).toBeGreaterThanOrEqual(0);
+  });
+
+  it("license 'None' and empty license are both unlicensed", () => {
+    const ov = buildOverview(
+      "me",
+      {},
+      "",
+      [sampleRepo({ license: null }), sampleRepo({ name: "x", license: null })],
+      false
+    );
+    // toView maps a missing license to the "None" placeholder
+    expect(ov.talent!.with_license).toBe(0);
+  });
+
+  it("empty repo list yields zero talent counters, not undefined", () => {
+    const ov = buildOverview("me", {}, "", [], false);
+    expect(ov.talent).toEqual({ with_desc: 0, with_license: 0, with_topics: 0, avg_days_since_push: 0 });
+  });
+
+  it("feeds deriveTalent a non-zero rigor (cross-check with the live path)", () => {
+    const ov = buildOverview("me", { followers: 5 }, "", [sampleRepo()], false);
+    const t = deriveTalent(ov);
+    expect(t.desc_ratio).toBe(1);
+    expect(t.license_ratio).toBe(1);
+    expect(t.topics_ratio).toBe(1);
+    expect(pillarScores(t).rigor).toBe(1);
   });
 
   it("fills profile fields from the raw user object", () => {

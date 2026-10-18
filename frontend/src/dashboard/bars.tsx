@@ -42,7 +42,7 @@ function Bars({ title, data, color }: { title: string; data: Record<string, numb
             <div className="bar-track">
               <div
                 className="bar-fill"
-                style={{ width: `${(v / max) * 100}%`, background: color || "var(--color-accent)" }}
+                style={{ width: `${(v / max) * 100}%`, background: color || "var(--accent)" }}
               />
             </div>
             <span className="bar-val">{v}</span>

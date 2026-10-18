@@ -1,5 +1,6 @@
 import React from "react";
 import type { PersonView, People } from "../types";
+import { api } from "../api";
 
 // Follow/unfollow actions for the people tab, extracted from Dashboard.tsx.
 // Owns the busy/done/failed progress state, the one-retry-per-action network
@@ -77,8 +78,7 @@ export function useFollowActions({
   // next manual refresh finishes the job).
   async function bestEffortRefresh() {
     try {
-      const res = await fetch("/api/refresh?owner=" + encodeURIComponent(owner));
-      const j = await res.json().catch(() => null);
+      const j = await api.refresh(owner);
       if (j && j.ok) loadPeople(owner, viaLive);
     } catch { /* keep optimistic */ }
   }
