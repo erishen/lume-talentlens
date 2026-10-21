@@ -59,7 +59,8 @@ services:
       - ./logs:/app/logs
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:18091/api/owners"]
+      # scratch 运行时无 curl —— busybox nc 端口检查（镜像内 HEALTHCHECK 同款）
+      test: ["CMD", "/bin/busybox", "nc", "-z", "127.0.0.1", "18091"]
       interval: 30s
       timeout: 5s
       retries: 3
