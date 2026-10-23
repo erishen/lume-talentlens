@@ -245,6 +245,17 @@ schedule-status:
 schedule-print:
 	@HOUR="$(HOUR)" MIN="$(MIN)" bash scripts/schedule.sh print
 
+# ---- daily-scan launchd (每日雷达摘要 logs/daily/, 看板 lume-talentlens.daily 看护项) ----
+# 与 schedule-install(trending) 同机制; 默认 14:00。安装: make daily-schedule-install
+daily-schedule-install:
+	@TASK=daily HOUR="$(HOUR)" MIN="$(MIN)" bash scripts/schedule.sh install
+
+daily-schedule-uninstall:
+	@TASK=daily bash scripts/schedule.sh uninstall
+
+daily-schedule-status:
+	@TASK=daily bash scripts/schedule.sh status
+
 # Remove build artifacts + runtime logs (all regenerable). Never touches
 # data/github/ (your snapshots) or .env (your credentials).
 clean:

@@ -28,6 +28,37 @@
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# 并发锁: launchd 触发 与 手动 make daily 可能重叠(本任务 ~10min), 重叠会把
+# 代理连接池 + GitHub 配额打爆 → TLS 重置雪崩。后到者直接跳过, 已跑的那条继续。
+#
+# 残留锁自愈: 锁目录里记持有者 pid。被 pkill / SIGKILL 杀掉的实例不会走 EXIT
+# trap(锁目录残留), 若直接信任残留锁, 下一轮(14:00 launchd)会被永久挡住 →
+# 摘要又断更。所以: 持锁者 pid 已死 → 夺锁; pid 还活着 → 真并发, 跳过。
+# flock 版(Linux) 由内核保证进程死亡即释放, 无需此逻辑。
+LOCK="$ROOT/.data/daily-scan.lock"
+if command -v flock >/dev/null 2>&1 && [ "$(uname -s)" != "Darwin" ]; then
+  exec 9>"$LOCK"
+  flock -n 9 || { echo "daily-scan: 已有实例在跑(.data/daily-scan.lock)——跳过本轮" >&2; exit 0; }
+else
+  lock_takeover_if_stale() {
+    [ -d "$LOCK" ] || return 0
+    local holder
+    holder="$(cat "$LOCK/pid" 2>/dev/null || true)"
+    if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then
+      echo "daily-scan: 已有实例在跑 (pid $holder)——跳过本轮" >&2
+      exit 0
+    fi
+    # 持锁者已死(无 pid 记录 / pid 不存在) → 残留锁, 清除并接管
+    rm -rf "$LOCK" 2>/dev/null || true
+    echo "daily-scan: 清除残留锁(持有者已退出)后接管" >&2
+  }
+  lock_takeover_if_stale
+  mkdir "$LOCK" 2>/dev/null || { echo "daily-scan: 锁竞争(双启动), 跳过本轮" >&2; exit 0; }
+  echo "$$" > "$LOCK/pid"
+  trap 'rm -f "$LOCK/pid" 2>/dev/null; rmdir "$LOCK" 2>/dev/null || true' EXIT
+fi
+
 . "$ROOT/scripts/env.sh"
 
 OWNER="${OWNER:-}"

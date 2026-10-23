@@ -62,7 +62,10 @@ N=0
 while IFS= read -r u && { [ "$LIMIT" -eq 0 ] || [ "$N" -lt "$LIMIT" ]; }; do
   [ -z "$u" ] && continue
   N=$((N + 1))
-  BODY="$(curl -sS -m 20 "${AUTH[@]+"${AUTH[@]}"}" \
+  # --retry 3: 走代理连 GitHub 时偶发 TLS 重置(SSL_ERROR_SYSCALL / HTTP2
+  # framing), 单次失败会让整个 profile 记 0 分; 重试 3 次吃掉瞬时故障,
+  # 真失败(无 token 限流/账号 404)才落空 body。
+  BODY="$(curl -sS -m 20 --retry 3 --retry-delay 1 "${AUTH[@]+"${AUTH[@]}"}" \
     -H "Accept: application/vnd.github+json" -H "User-Agent: lume-talentlens" \
     "https://api.github.com/users/$u" || true)"
   # derive the same fields the dashboard uses

@@ -25,14 +25,31 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CMD="${1:-}"
 [ $# -gt 0 ] && shift || true
 
-LABEL="${LABEL:-com.lume-talentlens.trending-push}"
-HOUR="${HOUR:-9}"
+# Two schedulable tasks. Both reuse the same generic .plist.in template; only
+# the label / wrapper / log path / default time differ.
+TASK="${TASK:-trending}"
+case "$TASK" in
+  trending)
+    LABEL="${LABEL:-com.lume-talentlens.trending-push}"
+    WRAPPER="$ROOT/scripts/trending-push-scheduled.sh"
+    LOG="$ROOT/logs/trending-push/scheduled.log"
+    DEF_HOUR=9
+    ;;
+  daily)
+    # 每日雷达摘要 (make daily): 写 logs/daily/<date>.md。lume-orbstack 看板
+    # 的 lume-talentlens.daily 看护项盯的就是这个目录, 默认 14:00 本地。
+    LABEL="${LABEL:-com.lume-talentlens.daily}"
+    WRAPPER="$ROOT/scripts/daily-scan-scheduled.sh"
+    LOG="$ROOT/logs/daily/scheduled.log"
+    DEF_HOUR=14
+    ;;
+  *) die "unknown TASK '$TASK' (trending|daily)" ;;
+esac
+HOUR="${HOUR:-$DEF_HOUR}"
 MIN="${MIN:-0}"
 TEMPLATE="$ROOT/scripts/launchd/com.lume-talentlens.trending-push.plist.in"
-WRAPPER="$ROOT/scripts/trending-push-scheduled.sh"
 DEST_DIR="$HOME/Library/LaunchAgents"
 DEST="$DEST_DIR/$LABEL.plist"
-LOG="$ROOT/logs/trending-push/scheduled.log"
 PATH_VAL="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 DOMAIN="gui/$(id -u)"
 
@@ -81,8 +98,11 @@ cmd_install() {
   echo "schedule: installed $LABEL -> $DEST"
   printf 'schedule: runs daily at %02d:%02d (local); wake-missed slot runs once on next wake\n' "$HOUR" "$MIN"
   echo "schedule: log -> $LOG"
-  echo "schedule: push now (test)  -> launchctl kickstart -k $DOMAIN/$LABEL"
-  echo "schedule: needs TREND_WEBHOOK_URL in .env (see README 'Push to a group robot')"
+  echo "schedule: run now (test)  -> launchctl kickstart -k $DOMAIN/$LABEL"
+  case "$TASK" in
+    trending) echo "schedule: needs TREND_WEBHOOK_URL in .env (see README 'Push to a group robot')" ;;
+    daily)    echo "schedule: writes logs/daily/<date>.md (offline pipeline; NOTIFY=1 in .env to also push the summary)" ;;
+  esac
 }
 
 cmd_uninstall() {

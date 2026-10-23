@@ -59,14 +59,15 @@ AUTH=()
 [ -n "$TOK" ] && AUTH=(-H "Authorization: Bearer $TOK")
 : > /tmp/radar-scan.raw.ndjson
 for login in "${LOGINS[@]}"; do
-  UP="$(curl -sS -m 20 "${AUTH[@]+"${AUTH[@]}"}" -H "Accept: application/vnd.github+json" -H "User-Agent: lume-talentlens" "https://api.github.com/users/$login" || true)"
-  RE="$(curl -sS -m 25 "${AUTH[@]+"${AUTH[@]}"}" -H "Accept: application/vnd.github+json" -H "User-Agent: lume-talentlens" "https://api.github.com/users/$login/repos?sort=stars&per_page=100" || true)"
+  # --retry 3: 走代理偶发 TLS 重置(SSL_ERROR_SYSCALL / HTTP2 framing), 重试吃掉瞬时故障
+  UP="$(curl -sS -m 20 --retry 3 --retry-delay 1 "${AUTH[@]+"${AUTH[@]}"}" -H "Accept: application/vnd.github+json" -H "User-Agent: lume-talentlens" "https://api.github.com/users/$login" || true)"
+  RE="$(curl -sS -m 25 --retry 3 --retry-delay 1 "${AUTH[@]+"${AUTH[@]}"}" -H "Accept: application/vnd.github+json" -H "User-Agent: lume-talentlens" "https://api.github.com/users/$login/repos?sort=stars&per_page=100" || true)"
   # Sponsors probe via GraphQL (only with a token; login is [a-z0-9-] so
   # string interpolation into the JSON query is safe). A failed probe is
   # reported as sponsor=null ("unknown"), never as a false negative.
   SP=""
   if [ -n "$TOK" ]; then
-    SP="$(curl -sS -m 15 "${AUTH[@]+"${AUTH[@]}"}" -H "Content-Type: application/json" -H "Accept: application/json" \
+    SP="$(curl -sS -m 15 --retry 3 --retry-delay 1 "${AUTH[@]+"${AUTH[@]}"}" -H "Content-Type: application/json" -H "Accept: application/json" \
       -d "{\"query\":\"query { user(login: \\\"${login}\\\") { hasSponsorsListing } }\"}" \
       https://api.github.com/graphql || true)"
   fi
