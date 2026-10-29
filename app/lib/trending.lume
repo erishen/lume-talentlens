@@ -444,7 +444,7 @@ get "/api/trending", (req) => {
 
   let days = trending_days(since);
   let today = str(strftime("%Y-%m-%d", int(now(), 0)));
-  let items = null;
+  let items: any = null;
   let source = "";
 
   // 1) scrape github.com/trending for the global feed — the exact list, order

@@ -204,7 +204,7 @@ export func kpi(value, label) {
 
 // a horizontal bar row for a histogram entry: label, value, relative width
 export func bar(label, value, max) {
-  let pct = 0;
+  let pct = 0.0;
   if (max > 0) { pct = value * 100 / max; }
   return el("div", { class: "bar-row" },
     el("span", { class: "bar-label" }, label),
