@@ -36,29 +36,39 @@ COPY www/ ./www/
 RUN bash ./scripts/build-ui.sh
 
 # --- stage 2: build the Lume binary (fork with outbound-HTTP builtins, static) ---
-FROM debian:bookworm-slim AS lume-build
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      git gcc libc6-dev libcrypt-dev libssl-dev zlib1g-dev libsqlite3-dev pkg-config ca-certificates make m4 \
-    && rm -rf /var/lib/apt/lists/*
-# the fork repo carries agent-httpd as a submodule — the HTTP builtins live
-# there, so a plain shallow clone would produce a binary that dies with
-# "undefined variable 'http_get'". `make` is the fork's build entry point
-# (same as CI); it drops the binary at bin/lume.
-# 静态链：-static + libssl.a/libcrypto.a/libz.a —— 出站 HTTPS 需要 TLS，
-# 动态库不进运行时（与 medical-stats/history 同款 flags）。
-ARG LUME_REPO=https://github.com/erishen/lume.git
-RUN git clone --recurse-submodules --depth 1 "$LUME_REPO" /lume \
-    && rm -rf /lume/lume-core/bin /lume/bin \
-    && make -C /lume -j"$(nproc)" \
-        CFLAGS_EXTRA="-D_GNU_SOURCE -DHAVE_CRYPT -DHAVE_CRYPT_H -ffunction-sections -fdata-sections -Wno-format-truncation -Wno-stringop-truncation" \
-        LDFLAGS_EXTRA="-lcrypt -lm -lssl -lcrypto -lz -static -Wl,--gc-sections" \
-    && strip /lume/bin/lume
+# ---- stage 2: 取 lume 二进制 ----
+# 从 release 下载, 不再 git clone + 源码重编。
+# 原做法是 clone --depth 1 后 make, 问题是**不锁版本**: 每次构建拉到的是
+# master 的最新 commit, 同一个 Dockerfile 在不同日子产出不同二进制 ——
+# 出了问题无法复现, 也没法回答"线上跑的是哪版"。
+# 改成按 tag 取静态包: 版本可查、sha256 可校验、构建更快(省掉编译)。
+#
+# 之前重编的理由(需要位运算 / for-in / 新内建)在 v0.12 系列都已发布。
+# ARG 必须在 FROM **之后**重新声明才进得了 RUN 的作用域。
+# 只在最顶层写一次的话, 第二个 FROM 起的 stage 里它是空的 ——
+# 于是 URL 变成 .../download//lume-linux-... 报 404,
+# 而报错只有一句 "curl: (22) ... 404", 看不出是变量没传进来。
+FROM alpine:3.20 AS lume-fetch
+ARG LUME_VERSION=v0.12.2
+RUN apk add --no-cache curl tar ca-certificates \
+ && case "$(uname -m)" in \
+      x86_64) carch=x64 ;; \
+      aarch64|arm64) carch=arm64 ;; \
+      *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;; \
+    esac \
+ && base="https://github.com/erishen/lume/releases/download/${LUME_VERSION}" \
+ && curl -fsSL --retry 3 --retry-delay 2 -o /tmp/l.tgz "${base}/lume-linux-${carch}-static.tar.gz" \
+ && curl -fsSL --retry 3 -o /tmp/l.sha256 "${base}/lume-linux-${carch}-static.sha256" \
+ && (cd /tmp && sed "s|lume-linux-${carch}-static.tar.gz|l.tgz|" l.sha256 | sha256sum -c -) \
+ && mkdir -p /out && tar -xzf /tmp/l.tgz -C /out \
+ && install -m 0755 "/out/lume-linux-${carch}-static/bin/lume" /out/lume \
+ && /out/lume --version
 
 # --- stage 3: runtime (scratch+busybox，lume:v0.6.3 基础镜像) --------------------
 FROM lume:v0.6.3
 USER 0
 WORKDIR /app
-COPY --from=lume-build /lume/bin/lume ./bin/lume
+COPY --from=lume-fetch /out/lume ./bin/lume
 COPY app/ ./app/
 COPY --from=ui /src/www/ ./www/
 RUN mkdir -p /app/data /app/logs
